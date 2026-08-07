@@ -1,0 +1,19 @@
+[package]
+name = "xiao-esp32s3"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
+esp-hal = { version = "0.20", features = ["esp32s3", "async"] }
+esp-hal-embassy = { version = "0.3", features = ["esp32s3", "integrated-timers"] }
+esp-println = { version = "0.12", default-features = false, features = ["esp32s3", "jtag-serial"] }
+embassy-executor = { version = "0.6", features = ["task-arena-size-20480"] }
+embassy-sync = "0.6"
+embassy-time = "0.3"
+static_cell = { version = "2", features = ["nightly"] }
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
