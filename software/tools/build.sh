@@ -2,6 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${ROOT_DIR}/.env"
+
+# Load the Wi-Fi credentials, if they were configured. `set -a` exports every
+# variable the file assigns, so they reach the compiler as build-time
+# environment variables. See .env.example for the expected contents.
+if [[ -f "${ENV_FILE}" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "${ENV_FILE}"
+    set +a
+else
+    echo "note: ${ENV_FILE} not found; building without Wi-Fi credentials." >&2
+    echo "      Copy .env.example to .env to enable the web server." >&2
+fi
 
 # Load the Espressif compiler environment when it is available. If it is
 # already loaded, this is harmless; otherwise fail with a useful message.

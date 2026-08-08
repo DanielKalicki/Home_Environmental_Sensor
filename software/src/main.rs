@@ -2,6 +2,7 @@
 #![no_main]
 
 use embassy_executor::Spawner;
+use embassy_net::{Config as NetConfig, Stack};
 use embassy_sync::mutex::Mutex;
 use esp_backtrace as _;
 use esp_hal::{
@@ -9,17 +10,21 @@ use esp_hal::{
     delay::Delay,
     gpio::{AnyPin, Io, Level, Output},
     peripherals::Peripherals,
+    rng::Rng,
     system::SystemControl,
-    timer::{timg::TimerGroup, ErasedTimer, OneShotTimer},
+    timer::{timg::TimerGroup, ErasedTimer, OneShotTimer, PeriodicTimer},
 };
 use esp_println::println;
+use esp_wifi::{initialize, wifi::WifiStaDevice, EspWifiInitFor};
 use static_cell::StaticCell;
 
 mod drivers;
 mod tasks;
+mod utils;
 
 use drivers::i2c_bus::{print_scan_result, I2cBus, SharedI2cBus, I2C_SCL_PIN, I2C_SDA_PIN};
-use tasks::{blink_task, scd41_task, sps30_task};
+use tasks::web_server_task::{WifiStack, WifiStackResources};
+use tasks::{blink_task, scd41_task, sps30_task, web_server_task};
 
 /// Embassy needs one hardware timer to drive `embassy_time`.
 static TIMERS: StaticCell<[OneShotTimer<ErasedTimer>; 1]> = StaticCell::new();
@@ -27,6 +32,10 @@ static TIMERS: StaticCell<[OneShotTimer<ErasedTimer>; 1]> = StaticCell::new();
 static CLOCKS: StaticCell<Clocks<'static>> = StaticCell::new();
 /// The I2C bus shared by the sensor tasks.
 static BUS: StaticCell<SharedI2cBus> = StaticCell::new();
+/// Socket and buffer bookkeeping owned by the network stack.
+static NET_RESOURCES: StaticCell<WifiStackResources> = StaticCell::new();
+/// The network stack itself, shared by the runner and the web server.
+static NET_STACK: StaticCell<WifiStack> = StaticCell::new();
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
@@ -68,4 +77,38 @@ async fn main(spawner: Spawner) {
     spawner.spawn(blink_task::blink_task(led)).ok();
     spawner.spawn(sps30_task::measure_task(bus)).ok();
     spawner.spawn(scd41_task::measure_task(bus)).ok();
+
+    // The Wi-Fi driver needs its own timer, plus entropy for the radio and
+    // for the TCP initial sequence numbers.
+    let timg1 = TimerGroup::new(peripherals.TIMG1, clocks);
+    let mut rng = Rng::new(peripherals.RNG);
+    let stack_seed = ((rng.random() as u64) << 32) | rng.random() as u64;
+
+    let wifi_init = initialize(
+        EspWifiInitFor::Wifi,
+        PeriodicTimer::new(ErasedTimer::from(timg1.timer0)),
+        rng,
+        peripherals.RADIO_CLK,
+        clocks,
+    )
+    .expect("Wi-Fi initialisation failed");
+
+    let (wifi_device, wifi_controller) =
+        esp_wifi::wifi::new_with_mode(&wifi_init, peripherals.WIFI, WifiStaDevice)
+            .expect("could not create the Wi-Fi station interface");
+
+    // The address is obtained from the network's DHCP server; the assigned
+    // address is printed once the lease arrives.
+    let stack: &'static WifiStack = NET_STACK.init(Stack::new(
+        wifi_device,
+        NetConfig::dhcpv4(Default::default()),
+        NET_RESOURCES.init(WifiStackResources::new()),
+        stack_seed,
+    ));
+
+    spawner
+        .spawn(web_server_task::wifi_connection_task(wifi_controller))
+        .ok();
+    spawner.spawn(web_server_task::net_task(stack)).ok();
+    spawner.spawn(web_server_task::web_server_task(stack)).ok();
 }

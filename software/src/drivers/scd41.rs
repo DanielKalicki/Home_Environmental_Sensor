@@ -35,7 +35,7 @@ const REINIT_DELAY_MS: u64 = 30;
 /// Execution time of `wake_up`, per the datasheet.
 const WAKE_UP_DELAY_MS: u64 = 30;
 /// Execution time of a full single-shot measurement, per the datasheet.
-const MEASURE_SINGLE_SHOT_DELAY_MS: u64 = 5000;
+pub const SINGLE_SHOT_MEASUREMENT_DELAY_MS: u64 = 5000;
 /// Execution time of an RH/T-only single-shot measurement, per the datasheet.
 const MEASURE_SINGLE_SHOT_RHT_ONLY_DELAY_MS: u64 = 50;
 /// Execution time of short commands such as `read_measurement`.
@@ -204,12 +204,23 @@ where
         })
     }
 
+    /// Start an on-demand CO2 + RH/T conversion without waiting for its result.
+    ///
+    /// Call [`Scd41::read_measurement`] after
+    /// [`SINGLE_SHOT_MEASUREMENT_DELAY_MS`] has elapsed. This split operation
+    /// lets callers release a shared I2C bus while the sensor converts.
+    pub fn start_single_shot(&mut self) -> Result<(), Error> {
+        self.i2c
+            .write(self.address, &CMD_MEASURE_SINGLE_SHOT.to_be_bytes())
+            .map_err(Error::from)
+    }
+
     /// Trigger one on-demand CO2 + RH/T conversion and return its result.
     ///
     /// This yields to the executor for roughly 5 seconds while the sensor converts.
     pub async fn measure_single_shot(&mut self) -> Result<Measurement, Error> {
-        self.send_command(CMD_MEASURE_SINGLE_SHOT, MEASURE_SINGLE_SHOT_DELAY_MS)
-            .await?;
+        self.start_single_shot()?;
+        Timer::after_millis(SINGLE_SHOT_MEASUREMENT_DELAY_MS).await;
         self.read_measurement().await
     }
 

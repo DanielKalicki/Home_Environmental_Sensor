@@ -1,47 +1,63 @@
 //! Periodic SPS30 particulate-matter read-out.
 
-use embassy_time::Timer;
-use esp_hal::i2c::Instance;
+use embassy_time::{Duration, Ticker, Timer};
 use esp_println::println;
 
 use crate::drivers::i2c_bus::SharedI2cBus;
 use crate::drivers::sps30::{Error, Measurement, Sps30};
+use crate::utils::history::MeasurementHistory;
+use crate::utils::shared_state;
 
-/// Idle time between two read-outs.
+/// Time between scheduled read-out deadlines.
 const MEASUREMENT_INTERVAL_MS: u64 = 5000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
 /// How long to wait for the sensor to flag a fresh result.
 const DATA_READY_POLL_ATTEMPTS: usize = 30;
 const DATA_READY_POLL_DELAY_MS: u64 = 100;
+/// Number of successful readings retained in memory.
+const HISTORY_CAPACITY: usize = 60;
 
 /// Wait for the sensor to flag a fresh result, then read it.
 ///
 /// If no flag appears within the poll window the last values are read anyway;
 /// a genuine bus problem still surfaces as an error from the read itself.
-async fn read_when_ready<T: Instance>(sensor: &mut Sps30<'_, '_, T>) -> Result<Measurement, Error> {
+async fn read_when_ready(bus: &'static SharedI2cBus) -> Result<Measurement, Error> {
     for _ in 0..DATA_READY_POLL_ATTEMPTS {
-        if sensor.is_data_ready().await? {
+        let ready = {
+            let mut bus = bus.lock().await;
+            let mut i2c = bus.acquire();
+            let mut sensor = Sps30::new(&mut i2c);
+            sensor.is_data_ready().await?
+        };
+
+        if ready {
             break;
         }
         Timer::after_millis(DATA_READY_POLL_DELAY_MS).await;
     }
 
+    let mut bus = bus.lock().await;
+    let mut i2c = bus.acquire();
+    let mut sensor = Sps30::new(&mut i2c);
     sensor.read_measured_values().await
 }
 
 /// Periodically read the SPS30 and print the result.
 ///
-/// The shared bus is locked for the whole transaction and released while the
-/// task waits for the next interval, so the SCD41 task can use it meanwhile.
+/// The shared bus is held only for individual transfers. In particular, it is
+/// released between readiness polls and while waiting for the next deadline.
 #[embassy_executor::task]
 pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming it is still in the idle state.
     let mut needs_init = true;
+    let mut history = MeasurementHistory::<Measurement, HISTORY_CAPACITY>::new();
+    let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
-        let result = {
+        let reinitialized = needs_init;
+        let initialized = {
             let mut bus = bus.lock().await;
             let mut i2c = bus.acquire();
             let mut sensor = Sps30::new(&mut i2c);
@@ -76,16 +92,20 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                 true
             };
 
-            if initialized {
-                Some(read_when_ready(&mut sensor).await)
-            } else {
-                None
-            }
+            initialized
+        };
+
+        let result = if initialized {
+            Some(read_when_ready(bus).await)
+        } else {
+            None
         };
 
         match result {
             Some(Ok(measurement)) => {
                 needs_init = false;
+                history.push(measurement);
+                shared_state::publish_sps30(measurement).await;
                 println!(
                     "PM1.0: {} ug/m3, PM2.5: {} ug/m3, PM4.0: {} ug/m3, PM10: {} ug/m3",
                     measurement.pm1_0, measurement.pm2_5, measurement.pm4_0, measurement.pm10
@@ -113,7 +133,14 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
         if needs_init {
             Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
         } else {
-            Timer::after_millis(MEASUREMENT_INTERVAL_MS).await;
+            // Reset after initialization so the current read-out establishes
+            // the first deadline of a new fixed schedule.
+            if reinitialized {
+                ticker.reset();
+            }
+            // `Ticker` advances from its previous deadline instead of from
+            // this call, equivalent to FreeRTOS `vTaskDelayUntil()`.
+            ticker.next().await;
         }
     }
 }
