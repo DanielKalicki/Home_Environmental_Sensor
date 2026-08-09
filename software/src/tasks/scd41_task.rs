@@ -4,16 +4,13 @@ use embassy_time::{Duration, Ticker, Timer};
 use esp_println::println;
 
 use crate::drivers::i2c_bus::SharedI2cBus;
-use crate::drivers::scd41::{Measurement, Scd41, SINGLE_SHOT_MEASUREMENT_DELAY_MS};
-use crate::utils::history::MeasurementHistory;
+use crate::drivers::scd41::{Scd41, SINGLE_SHOT_MEASUREMENT_DELAY_MS};
 use crate::utils::shared_state;
 
 /// Time between the starts of two single-shot conversions.
-const MEASUREMENT_INTERVAL_MS: u64 = 10_000;
+pub const MEASUREMENT_INTERVAL_MS: u64 = 10_000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
-/// Number of successful readings retained in memory.
-const HISTORY_CAPACITY: usize = 60;
 
 /// Periodically read the SCD41 and print the result.
 ///
@@ -25,7 +22,6 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming it is still in the idle state.
     let mut needs_init = true;
-    let mut history = MeasurementHistory::<Measurement, HISTORY_CAPACITY>::new();
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
@@ -90,7 +86,6 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
         match result {
             Ok(measurement) => {
                 needs_init = false;
-                history.push(measurement);
                 shared_state::publish_scd41(measurement).await;
                 println!(
                     "CO2: {} ppm, temperature: {} C, humidity: {} %",

@@ -5,18 +5,15 @@ use esp_println::println;
 
 use crate::drivers::i2c_bus::SharedI2cBus;
 use crate::drivers::sps30::{Error, Measurement, Sps30};
-use crate::utils::history::MeasurementHistory;
 use crate::utils::shared_state;
 
 /// Time between scheduled read-out deadlines.
-const MEASUREMENT_INTERVAL_MS: u64 = 5000;
+pub const MEASUREMENT_INTERVAL_MS: u64 = 5000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
 /// How long to wait for the sensor to flag a fresh result.
 const DATA_READY_POLL_ATTEMPTS: usize = 30;
 const DATA_READY_POLL_DELAY_MS: u64 = 100;
-/// Number of successful readings retained in memory.
-const HISTORY_CAPACITY: usize = 60;
 
 /// Wait for the sensor to flag a fresh result, then read it.
 ///
@@ -52,7 +49,6 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming it is still in the idle state.
     let mut needs_init = true;
-    let mut history = MeasurementHistory::<Measurement, HISTORY_CAPACITY>::new();
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
@@ -104,7 +100,6 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
         match result {
             Some(Ok(measurement)) => {
                 needs_init = false;
-                history.push(measurement);
                 shared_state::publish_sps30(measurement).await;
                 println!(
                     "PM1.0: {} ug/m3, PM2.5: {} ug/m3, PM4.0: {} ug/m3, PM10: {} ug/m3",

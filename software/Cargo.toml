@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
-esp-hal = { version = "0.20", features = ["esp32s3", "async"] }
+# `opsram-8m` matches the ESP32-S3R8 module on the XIAO: 8 MB of octal-SPI
+# PSRAM. The measurement history lives there instead of in internal RAM.
+esp-hal = { version = "0.20", features = ["esp32s3", "async", "opsram-8m"] }
 esp-hal-embassy = { version = "0.3", features = ["esp32s3", "integrated-timers"] }
 esp-println = { version = "0.12", default-features = false, features = ["esp32s3", "jtag-serial"] }
 esp-wifi = { version = "0.9", default-features = false, features = ["esp32s3", "wifi", "async", "embassy-net", "phy-enable-usb", "wifi-default"] }

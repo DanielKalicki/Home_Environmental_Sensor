@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Home Environmental Sensor</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #eef1f6;
+        --panel: #ffffff;
+        --text: #16202c;
+        --muted: #64748b;
+        --line: #dde3ec;
+        --accent: #2563eb;
+        --good: #16a34a;
+        --warn: #d97706;
+        --bad: #dc2626;
+        --shadow: 0 1px 2px rgba(15, 23, 42, 0.06),
+          0 8px 24px rgba(15, 23, 42, 0.06);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1420;
+          --panel: #151e2d;
+          --text: #e6ecf5;
+          --muted: #93a3b8;
+          --line: #243247;
+          --accent: #60a5fa;
+          --good: #4ade80;
+          --warn: #fbbf24;
+          --bad: #f87171;
+          --shadow: none;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem 1rem 3rem;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        line-height: 1.5;
+      }
+
+      main {
+        max-width: 84rem;
+        margin: 0 auto;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        letter-spacing: -0.01em;
+      }
+
+      #status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+
+      #status::before {
+        content: "";
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      #status.online::before {
+        background: var(--good);
+      }
+
+      #status.offline::before {
+        background: var(--bad);
+      }
+
+      section {
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        margin: 0 0 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        gap: 1rem;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        padding: 1rem 1.125rem;
+        box-shadow: var(--shadow);
+      }
+
+      .card .label {
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+
+      .card .value {
+        margin-top: 0.35rem;
+        font-size: 1.75rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+      }
+
+      .card .unit {
+        margin-left: 0.25rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--muted);
+      }
+
+      .card.good .value {
+        color: var(--good);
+      }
+
+      .card.warn .value {
+        color: var(--warn);
+      }
+
+      .card.bad .value {
+        color: var(--bad);
+      }
+
+      .note {
+        margin-top: 0.5rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+
+      .chart {
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.5rem 0.5rem;
+        box-shadow: var(--shadow);
+      }
+
+      /* Two charts per row on wide screens, stacked on narrow ones. */
+      .chart-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+        gap: 1rem;
+      }
+
+      .chart-row + .chart-row {
+        margin-top: 1rem;
+      }
+
+      .chart-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.25rem 1rem;
+        margin-bottom: 0.5rem;
+        padding: 0 0.375rem;
+      }
+
+      .chart-title {
+        font-size: 0.9375rem;
+        font-weight: 600;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .legend i {
+        width: 0.75rem;
+        height: 0.1875rem;
+        border-radius: 0.1rem;
+        background: currentColor;
+      }
+
+      /* A fixed canvas height keeps every chart identical, whatever the
+         heading and legend above it wrap to. */
+      canvas {
+        display: block;
+        width: 100%;
+        height: 14rem;
+        flex: 0 0 14rem;
+        margin-top: auto;
+      }
+
+      footer {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.8125rem;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Home Environmental Sensor</h1>
+        <span id="status">connecting</span>
+      </header>
+
+      <section>
+        <h2>Air quality &mdash; SCD41</h2>
+        <div class="cards">
+          <div class="card" id="card-co2">
+            <div class="label">Carbon dioxide</div>
+            <div class="value"><span data-field="co2">--</span><span class="unit">ppm</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Temperature</div>
+            <div class="value"><span data-field="temperature">--</span><span class="unit">&deg;C</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Relative humidity</div>
+            <div class="value"><span data-field="humidity">--</span><span class="unit">%</span></div>
+          </div>
+        </div>
+        <p class="note" id="note-scd41" hidden>Waiting for the first reading.</p>
+      </section>
+
+      <section>
+        <h2>Particulate matter &mdash; SPS30</h2>
+        <div class="cards">
+          <div class="card" id="card-pm25">
+            <div class="label">PM2.5</div>
+            <div class="value"><span data-field="pm2_5">--</span><span class="unit">&micro;g/m&sup3;</span></div>
+          </div>
+          <div class="card" id="card-pm10">
+            <div class="label">PM10</div>
+            <div class="value"><span data-field="pm10">--</span><span class="unit">&micro;g/m&sup3;</span></div>
+          </div>
+          <div class="card">
+            <div class="label">PM1.0</div>
+            <div class="value"><span data-field="pm1_0">--</span><span class="unit">&micro;g/m&sup3;</span></div>
+          </div>
+          <div class="card">
+            <div class="label">PM4.0</div>
+            <div class="value"><span data-field="pm4_0">--</span><span class="unit">&micro;g/m&sup3;</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Typical particle size</div>
+            <div class="value"><span data-field="particle_size">--</span><span class="unit">&micro;m</span></div>
+          </div>
+        </div>
+        <p class="note" id="note-sps30" hidden>Waiting for the first reading.</p>
+      </section>
+
+      <section>
+        <h2>History</h2>
+
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Carbon dioxide</span>
+              <span class="legend">
+                <span style="color: #2563eb"><i></i>CO&sup2; (ppm)</span>
+              </span>
+            </div>
+            <canvas id="chart-co2"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Temperature and humidity</span>
+              <span class="legend">
+                <span style="color: #dc2626"><i></i>Temperature (&deg;C)</span>
+                <span style="color: #0891b2"><i></i>Humidity (%)</span>
+              </span>
+            </div>
+            <canvas id="chart-climate"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Fine particulate matter</span>
+              <span class="legend">
+                <span style="color: #0891b2"><i></i>PM1.0 (&micro;g/m&sup3;)</span>
+                <span style="color: #7c3aed"><i></i>PM2.5 (&micro;g/m&sup3;)</span>
+              </span>
+            </div>
+            <canvas id="chart-pm-fine"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Coarse particulate matter</span>
+              <span class="legend">
+                <span style="color: #16a34a"><i></i>PM4.0 (&micro;g/m&sup3;)</span>
+                <span style="color: #d97706"><i></i>PM10 (&micro;g/m&sup3;)</span>
+              </span>
+            </div>
+            <canvas id="chart-pm-coarse"></canvas>
+          </div>
+        </div>
+
+        <p class="note" id="note-history">
+          The device keeps the newest <span id="window">--</span> of readings
+          per sensor in its external PSRAM. This page downloads that history
+          once, then asks only for the readings taken since its last update, so
+          the charts show every retained reading at full resolution.
+        </p>
+      </section>
+
+      <footer>
+        Values refresh every 5 seconds. Last update:
+        <span id="updated">never</span>.
+      </footer>
+    </main>
+
+    <script>
+      "use strict";
+
+      // How often the page asks the device whether it has new readings.
+      var REFRESH_INTERVAL_MS = 5000;
+      // Readings requested per /api/readings call. The firmware caps a page at
+      // 2000 readings, so asking for more would silently return fewer.
+      var PAGE_SIZE = 2000;
+      // Upper bound on the number of /api/readings calls one sync pass makes,
+      // so a misunderstanding about sequence numbers cannot turn into an
+      // endless request loop.
+      var MAX_PAGES_PER_SYNC = 40;
+      // The sensors to keep, in the order they are fetched.
+      var SENSORS = ["scd41", "sps30"];
+
+      function setField(name, value, digits) {
+        var node = document.querySelector('[data-field="' + name + '"]');
+        if (!node) {
+          return;
+        }
+        node.textContent =
+          typeof value === "number" && isFinite(value)
+            ? value.toFixed(digits)
+            : "--";
+      }
+
+      // Apply a colour class from thresholds; `null` clears the colouring.
+      function setLevel(cardId, level) {
+        var card = document.getElementById(cardId);
+        if (!card) {
+          return;
+        }
+        card.classList.remove("good", "warn", "bad");
+        if (level) {
+          card.classList.add(level);
+        }
+      }
+
+      function levelFor(value, warnAbove, badAbove) {
+        if (typeof value !== "number" || !isFinite(value)) {
+          return null;
+        }
+        if (value >= badAbove) {
+          return "bad";
+        }
+        if (value >= warnAbove) {
+          return "warn";
+        }
+        return "good";
+      }
+
+      function setStatus(text, state) {
+        var status = document.getElementById("status");
+        status.textContent = text;
+        status.className = state;
+      }
+
+      function render(data) {
+        var scd41 = data.scd41;
+        document.getElementById("note-scd41").hidden = !!scd41;
+        setField("co2", scd41 ? scd41.co2_ppm : null, 0);
+        setField("temperature", scd41 ? scd41.temperature_celsius : null, 1);
+        setField("humidity", scd41 ? scd41.humidity_percent : null, 1);
+        // Thresholds follow the common indoor guidance: below 1000 ppm is
+        // comfortable, above 1400 ppm calls for ventilation.
+        setLevel("card-co2", scd41 ? levelFor(scd41.co2_ppm, 1000, 1400) : null);
+
+        var sps30 = data.sps30;
+        document.getElementById("note-sps30").hidden = !!sps30;
+        setField("pm1_0", sps30 ? sps30.pm1_0 : null, 1);
+        setField("pm2_5", sps30 ? sps30.pm2_5 : null, 1);
+        setField("pm4_0", sps30 ? sps30.pm4_0 : null, 1);
+        setField("pm10", sps30 ? sps30.pm10 : null, 1);
+        setField(
+          "particle_size",
+          sps30 ? sps30.typical_particle_size : null,
+          2
+        );
+        // WHO 24-hour guideline values: 15 ug/m3 for PM2.5, 45 for PM10.
+        setLevel("card-pm25", sps30 ? levelFor(sps30.pm2_5, 15, 35) : null);
+        setLevel("card-pm10", sps30 ? levelFor(sps30.pm10, 45, 100) : null);
+
+        document.getElementById("updated").textContent =
+          new Date().toLocaleTimeString();
+      }
+
+      // ---------------------------------------------------------------------
+      // Reading store and synchronisation
+      //
+      // The device retains a full day of readings, which is far too much to
+      // re-download every few seconds. Instead the page downloads it once, a
+      // page at a time, keeps it here, and afterwards asks only for the
+      // readings taken since the last one it holds.
+      //
+      // Each reading is identified by a sequence number that the device never
+      // reuses, so "the readings I am missing" is exactly the range from the
+      // sequence number after my newest one up to the device's next one.
+      // ---------------------------------------------------------------------
+
+      var store = {
+        // Browser clock time, in epoch milliseconds, at which the device
+        // booted. The board has no real-time clock and dates its readings by
+        // its own uptime, so this offset turns those uptimes into wall-clock
+        // times the charts can plot.
+        bootTime: null,
+        // Highest device uptime seen so far, used to notice a reboot.
+        lastUptimeMs: -1,
+        // How far back the device retains readings, from /api/status.
+        windowMs: 0,
+        scd41: emptySeries(),
+        sps30: emptySeries(),
+      };
+
+      function emptySeries() {
+        return {
+          // Readings held here, oldest first, each with an added `time` field.
+          readings: [],
+          // Sequence number of the first reading this page does not have.
+          nextSequence: 0,
+          // Sequence number the device will give its next reading; the page is
+          // up to date once `nextSequence` has caught up with this.
+          targetSequence: 0,
+          // Readings the device can retain, so the page can drop what the
+          // device has already discarded.
+          capacity: 0,
+          intervalMs: 0,
+        };
+      }
+
+      // GET `url` and parse it as JSON, noting when the response arrived.
+      function fetchJson(url) {
+        return fetch(url, { cache: "no-store" }).then(function (response) {
+          if (!response.ok) {
+            throw new Error("HTTP " + response.status);
+          }
+          var receivedAt = Date.now();
+          return response.json().then(function (data) {
+            data.receivedAt = receivedAt;
+            return data;
+          });
+        });
+      }
+
+      // Take in an /api/status response and work out what is missing.
+      function applyStatus(status) {
+        // A reboot restarts both the uptime and the sequence numbers, so the
+        // readings held here can no longer be lined up with the new ones.
+        if (status.uptime_ms < store.lastUptimeMs) {
+          store.bootTime = null;
+          SENSORS.forEach(function (name) {
+            store[name] = emptySeries();
+          });
+        }
+        store.lastUptimeMs = status.uptime_ms;
+        store.windowMs = status.window_ms;
+
+        // Request and response travel time only ever makes the device look
+        // like it booted later than it did, so the smallest estimate seen so
+        // far is the most accurate one. Keeping one estimate instead of using
+        // the latest also stops every plotted reading from shifting sideways
+        // whenever a response happens to be slow.
+        var bootTime = status.receivedAt - status.uptime_ms;
+        if (store.bootTime === null || bootTime < store.bootTime) {
+          store.bootTime = bootTime;
+        }
+
+        SENSORS.forEach(function (name) {
+          var series = store[name];
+          var reported = status.sensors[name];
+          series.capacity = reported.capacity;
+          series.intervalMs = reported.interval_ms;
+          series.targetSequence = reported.next_sequence;
+
+          // The device has overwritten readings this page never received, so
+          // the readings it holds and the ones it can still fetch would have a
+          // gap between them. Start again from what is still retained.
+          if (series.nextSequence < reported.first_sequence) {
+            series.readings = [];
+            series.nextSequence = reported.first_sequence;
+          }
+        });
+      }
+
+      // Fetch the pages one sensor is missing, one request at a time.
+      function syncSensor(name, pagesLeft) {
+        var series = store[name];
+        if (series.nextSequence >= series.targetSequence || pagesLeft <= 0) {
+          return Promise.resolve();
+        }
+
+        var url =
+          "/api/readings?sensor=" +
+          name +
+          "&from=" +
+          series.nextSequence +
+          "&limit=" +
+          PAGE_SIZE;
+
+        return fetchJson(url).then(function (page) {
+          appendPage(series, page);
+
+          // The first visit downloads a whole day, which takes several
+          // requests; show each page as it arrives instead of a blank chart.
+          if (series.nextSequence < series.targetSequence) {
+            setStatus("loading history", "online");
+            renderAll();
+            return syncSensor(name, pagesLeft - 1);
+          }
+          return undefined;
+        });
+      }
+
+      function appendPage(series, page) {
+        // The device moves `from` up to its oldest retained reading, so a page
+        // can start later than it was asked to. Anything held here would then
+        // be separated from the new readings by a gap.
+        if (page.from > series.nextSequence) {
+          series.readings = [];
+        }
+
+        page.readings.forEach(function (reading) {
+          // A reading overwritten while the page was being sent arrives as
+          // null; it still occupies its place, so the sequence numbers of the
+          // readings after it stay correct.
+          if (!reading) {
+            return;
+          }
+          reading.time = store.bootTime + reading.taken_at_ms;
+          series.readings.push(reading);
+        });
+
+        series.nextSequence = page.from + page.count;
+
+        // Drop what the device itself no longer retains, so a page left open
+        // for days does not grow without bound.
+        if (series.capacity > 0 && series.readings.length > series.capacity) {
+          series.readings.splice(0, series.readings.length - series.capacity);
+        }
+      }
+
+      // Set while a sync pass is in flight. The device answers one connection
+      // at a time and the first pass downloads a whole day, which takes longer
+      // than the refresh interval, so passes must not overlap.
+      var syncing = false;
+
+      function refresh() {
+        if (syncing) {
+          return;
+        }
+        syncing = true;
+
+        // One status request says what is missing; the reading requests that
+        // follow fetch exactly that, which after the first visit is usually
+        // nothing at all or a single reading per sensor.
+        fetchJson("/api/status")
+          .then(function (status) {
+            applyStatus(status);
+            return syncSensor("scd41", MAX_PAGES_PER_SYNC);
+          })
+          .then(function () {
+            return syncSensor("sps30", MAX_PAGES_PER_SYNC);
+          })
+          .then(function () {
+            renderAll();
+            setStatus("online", "online");
+          })
+          .catch(function () {
+            setStatus("no connection", "offline");
+          })
+          .then(function () {
+            syncing = false;
+          });
+      }
+
+      function renderAll() {
+        document.getElementById("window").textContent = formatWindow(
+          store.windowMs
+        );
+        render({
+          scd41: newest(store.scd41.readings),
+          sps30: newest(store.sps30.readings),
+        });
+        drawCharts();
+      }
+
+      // Readings are held oldest first, so the current one is the last
+      // element; an empty series yields `null`, which renders as dashes.
+      function newest(readings) {
+        return readings.length ? readings[readings.length - 1] : null;
+      }
+
+      // Describe the retention window in whole hours, or in minutes while it
+      // is still shorter than an hour.
+      function formatWindow(windowMs) {
+        if (typeof windowMs !== "number" || !isFinite(windowMs)) {
+          return "--";
+        }
+        var hours = windowMs / 3600000;
+        if (hours >= 1) {
+          return hours.toFixed(hours < 10 ? 1 : 0) + " hours";
+        }
+        return Math.round(windowMs / 60000) + " minutes";
+      }
+
+      // ---------------------------------------------------------------------
+      // Charts
+      //
+      // Everything is drawn with the 2D canvas API; the device serves the page
+      // from its own flash, so no external charting library can be loaded.
+      // ---------------------------------------------------------------------
+
+      function cssVar(name) {
+        return getComputedStyle(document.documentElement)
+          .getPropertyValue(name)
+          .trim();
+      }
+
+      // Turn stored readings into plottable points, dropping any whose value
+      // is missing. `time` was worked out from the device uptime when the
+      // reading arrived, so it does not have to be recomputed on every redraw.
+      function toPoints(readings, field) {
+        var points = [];
+        for (var index = 0; index < readings.length; index++) {
+          var value = readings[index][field];
+          if (typeof value === "number" && isFinite(value)) {
+            points.push({ time: readings[index].time, value: value });
+          }
+        }
+        return points;
+      }
+
+      function formatTimeLabel(timestamp, spanMs) {
+        var date = new Date(timestamp);
+        var time = date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        // Add the calendar date once the window is long enough to cross days.
+        if (spanMs >= 12 * 3600 * 1000) {
+          return (
+            date.toLocaleDateString([], { day: "2-digit", month: "2-digit" }) +
+            " " +
+            time
+          );
+        }
+        return time;
+      }
+
+      // Pick a "nice" step so the axis gets round numbers.
+      function niceStep(range, targetSteps) {
+        var raw = range / targetSteps;
+        var magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+        var normalized = raw / magnitude;
+        var step = normalized >= 5 ? 10 : normalized >= 2 ? 5 : normalized >= 1 ? 2 : 1;
+        return step * magnitude;
+      }
+
+      /**
+       * Draw a line chart.
+       *
+       * @param canvas   target canvas element
+       * @param series   [{ color, points: [{time, value}] }, ...]
+       * @param xMin     left edge of the x axis, in epoch milliseconds
+       * @param xMax     right edge of the x axis, in epoch milliseconds
+       * @param axis     optional { min, max } pinning the y axis; each bound
+       *                 that is omitted is derived from the data instead
+       */
+      function drawChart(canvas, series, xMin, xMax, axis) {
+        var ratio = window.devicePixelRatio || 1;
+        var width = canvas.clientWidth;
+        var heightPx = canvas.clientHeight;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(heightPx * ratio);
+
+        var ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.clearRect(0, 0, width, heightPx);
+
+        var text = cssVar("--muted") || "#64748b";
+        var line = cssVar("--line") || "#dde3ec";
+        // Only enough margin for the axis labels themselves.
+        var pad = { top: 6, right: 4, bottom: 22, left: 34 };
+        var plotW = width - pad.left - pad.right;
+        var plotH = heightPx - pad.top - pad.bottom;
+        if (plotW <= 0 || plotH <= 0) {
+          return;
+        }
+
+        // Scanned with a loop rather than `Math.min.apply(null, values)`:
+        // a day of readings is tens of thousands of values, and passing that
+        // many arguments at once overflows the call stack in some browsers.
+        var extent = valueExtent(series);
+
+        ctx.font =
+          "11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+        ctx.strokeStyle = line;
+        ctx.fillStyle = text;
+        ctx.lineWidth = 1;
+
+        if (extent === null) {
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("No readings yet", width / 2, heightPx / 2);
+          return;
+        }
+
+        var fixedMin = axis && typeof axis.min === "number" ? axis.min : null;
+        var fixedMax = axis && typeof axis.max === "number" ? axis.max : null;
+
+        var yMin = fixedMin !== null ? fixedMin : extent.min;
+        var yMax = fixedMax !== null ? fixedMax : extent.max;
+        if (yMax - yMin < 1e-6) {
+          yMin -= 1;
+          yMax += 1;
+        }
+        var step = niceStep(yMax - yMin, 6);
+        // Only the data-derived bounds are widened to the grid step; a pinned
+        // bound is kept exactly as given.
+        if (fixedMin === null) {
+          yMin = Math.floor(yMin / step) * step;
+        }
+        if (fixedMax === null) {
+          yMax = Math.ceil(yMax / step) * step;
+        }
+
+        function x(time) {
+          return pad.left + ((time - xMin) / (xMax - xMin)) * plotW;
+        }
+        function y(value) {
+          return pad.top + plotH - ((value - yMin) / (yMax - yMin)) * plotH;
+        }
+
+        // Horizontal grid lines and their value labels.
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (var value = yMin; value <= yMax + 1e-9; value += step) {
+          var gy = Math.round(y(value)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, gy);
+          ctx.lineTo(pad.left + plotW, gy);
+          ctx.stroke();
+          var digits = step >= 10 ? 0 : step >= 1 ? 1 : 2;
+          ctx.fillText(value.toFixed(digits), pad.left - 6, gy);
+        }
+
+        // Time axis: five evenly spaced labels across the whole window.
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        var spanMs = xMax - xMin;
+        var ticks = 5;
+        for (var i = 0; i <= ticks; i++) {
+          var time = xMin + (spanMs * i) / ticks;
+          var gx = Math.round(x(time)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(gx, pad.top + plotH);
+          ctx.lineTo(gx, pad.top + plotH + 4);
+          ctx.stroke();
+          var align = i === 0 ? "left" : i === ticks ? "right" : "center";
+          ctx.textAlign = align;
+          ctx.fillText(
+            formatTimeLabel(time, spanMs),
+            gx,
+            pad.top + plotH + 7
+          );
+        }
+
+        // One polyline plus, when the history is sparse enough for them to be
+        // distinguishable, a dot per reading, so individual samples stay
+        // visible when the history is nearly empty. Clipping keeps a reading
+        // outside a pinned axis from being drawn over the labels.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pad.left, pad.top, plotW, plotH);
+        ctx.clip();
+        series.forEach(function (entry) {
+          if (entry.points.length === 0) {
+            return;
+          }
+          ctx.strokeStyle = entry.color;
+          ctx.fillStyle = entry.color;
+          ctx.lineWidth = 2;
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          entry.points.forEach(function (point, index) {
+            var px = x(point.time);
+            var py = y(point.value);
+            if (index === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          });
+          ctx.stroke();
+
+          // Beyond roughly one dot per six pixels the markers merge into a
+          // band and hide the curve, so they are dropped.
+          if (entry.points.length > plotW / 6) {
+            return;
+          }
+          entry.points.forEach(function (point) {
+            ctx.beginPath();
+            ctx.arc(x(point.time), y(point.value), 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        });
+        ctx.restore();
+      }
+
+      function drawCharts() {
+        if (store.bootTime === null) {
+          return;
+        }
+
+        // The right edge is the device's own "now", not the browser's, so a
+        // reading taken moments ago lands at the edge rather than slightly
+        // inside or outside it.
+        var now = store.bootTime + store.lastUptimeMs;
+        // The x axis always covers the full retained window, so a partially
+        // filled history is visibly partial instead of being stretched.
+        var windowStart = now - store.windowMs;
+
+        var scd41 = store.scd41.readings;
+        drawChart(
+          document.getElementById("chart-co2"),
+          [{ color: "#2563eb", points: toPoints(scd41, "co2_ppm") }],
+          windowStart,
+          now,
+          { min: 0 }
+        );
+        drawChart(
+          document.getElementById("chart-climate"),
+          [
+            {
+              color: "#dc2626",
+              points: toPoints(scd41, "temperature_celsius"),
+            },
+            {
+              color: "#0891b2",
+              points: toPoints(scd41, "humidity_percent"),
+            },
+          ],
+          windowStart,
+          now,
+          // Both series share one axis, so it is pinned to the full 0-100
+          // range they are expressed in.
+          { min: 0, max: 100 }
+        );
+
+        var sps30 = store.sps30.readings;
+        var pmFine = [
+          { color: "#0891b2", points: toPoints(sps30, "pm1_0") },
+          { color: "#7c3aed", points: toPoints(sps30, "pm2_5") },
+        ];
+        var pmCoarse = [
+          { color: "#16a34a", points: toPoints(sps30, "pm4_0") },
+          { color: "#d97706", points: toPoints(sps30, "pm10") },
+        ];
+        // Both particulate charts share one axis maximum, derived from every
+        // plotted fraction, so their curves stay directly comparable while the
+        // scale still follows the data.
+        var pmAxis = { min: 0, max: sharedMax(pmFine.concat(pmCoarse)) };
+
+        drawChart(
+          document.getElementById("chart-pm-fine"),
+          pmFine,
+          windowStart,
+          now,
+          pmAxis
+        );
+        drawChart(
+          document.getElementById("chart-pm-coarse"),
+          pmCoarse,
+          windowStart,
+          now,
+          pmAxis
+        );
+      }
+
+      // Smallest and largest value across several series, or `null` when none
+      // of them holds a value.
+      function valueExtent(series) {
+        var min = Infinity;
+        var max = -Infinity;
+        var seen = false;
+
+        for (var s = 0; s < series.length; s++) {
+          var points = series[s].points;
+          for (var p = 0; p < points.length; p++) {
+            var value = points[p].value;
+            if (value < min) {
+              min = value;
+            }
+            if (value > max) {
+              max = value;
+            }
+            seen = true;
+          }
+        }
+
+        return seen ? { min: min, max: max } : null;
+      }
+
+      // Highest value across several series, rounded up to a round number.
+      // Returns `undefined` when there is no data, which leaves the axis to be
+      // derived per chart instead.
+      function sharedMax(series) {
+        var extent = valueExtent(series);
+        if (extent === null) {
+          return undefined;
+        }
+        if (extent.max <= 0) {
+          return 1;
+        }
+        var step = niceStep(extent.max, 6);
+        return Math.ceil(extent.max / step) * step;
+      }
+
+      window.addEventListener("resize", drawCharts);
+
+      refresh();
+      setInterval(refresh, REFRESH_INTERVAL_MS);
+    </script>
+  </body>
+</html>

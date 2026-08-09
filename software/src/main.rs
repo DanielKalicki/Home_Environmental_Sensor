@@ -25,6 +25,8 @@ mod utils;
 use drivers::i2c_bus::{print_scan_result, I2cBus, SharedI2cBus, I2C_SCL_PIN, I2C_SDA_PIN};
 use tasks::web_server_task::{WifiStack, WifiStackResources};
 use tasks::{blink_task, scd41_task, sps30_task, web_server_task};
+use utils::psram::Psram;
+use utils::shared_state;
 
 /// Embassy needs one hardware timer to drive `embassy_time`.
 static TIMERS: StaticCell<[OneShotTimer<ErasedTimer>; 1]> = StaticCell::new();
@@ -40,6 +42,12 @@ static NET_STACK: StaticCell<WifiStack> = StaticCell::new();
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     let peripherals = Peripherals::take();
+
+    // Map the external PSRAM before anything else: the routine retunes the
+    // memory-SPI timing and reconfigures the data cache, so it has to run
+    // before the clocks are raised and before any other peripheral is set up.
+    let mut psram = Psram::init(peripherals.PSRAM);
+
     let system = SystemControl::new(peripherals.SYSTEM);
     let clocks = CLOCKS.init(ClockControl::max(system.clock_control).freeze());
 
@@ -69,6 +77,20 @@ async fn main(spawner: Spawner) {
 
     let devices = bus.scan();
     print_scan_result(&devices);
+
+    // Reserve the measurement histories before any reading can be published;
+    // readings taken before this would be dropped.
+    match shared_state::init(&mut psram).await {
+        Some(bytes) => println!(
+            "History: {} SCD41 and {} SPS30 readings ({} h) in {} KiB of PSRAM, {} KiB free",
+            shared_state::SCD41_CAPACITY,
+            shared_state::SPS30_CAPACITY,
+            shared_state::HISTORY_WINDOW_MS / 3_600_000,
+            bytes / 1024,
+            psram.free_bytes() / 1024
+        ),
+        None => println!("History: PSRAM too small, readings will not be retained"),
+    }
 
     // Hand the bus to the sensor tasks; each one locks it for a whole
     // transaction, so their transfers can never interleave.
