@@ -27,6 +27,14 @@ const CMD_MEASURE_SINGLE_SHOT: u16 = 0x219D;
 const CMD_MEASURE_SINGLE_SHOT_RHT_ONLY: u16 = 0x2196;
 const CMD_READ_MEASUREMENT: u16 = 0xEC05;
 const CMD_GET_SERIAL_NUMBER: u16 = 0x3682;
+const CMD_GET_SENSOR_VARIANT: u16 = 0x202F;
+const CMD_GET_TEMPERATURE_OFFSET: u16 = 0x2318;
+const CMD_GET_SENSOR_ALTITUDE: u16 = 0x2322;
+const CMD_GET_AMBIENT_PRESSURE: u16 = 0xE000;
+const CMD_GET_AUTOMATIC_SELF_CALIBRATION_ENABLED: u16 = 0x2313;
+const CMD_GET_AUTOMATIC_SELF_CALIBRATION_TARGET: u16 = 0x233F;
+const CMD_GET_AUTOMATIC_SELF_CALIBRATION_INITIAL_PERIOD: u16 = 0x2340;
+const CMD_GET_AUTOMATIC_SELF_CALIBRATION_STANDARD_PERIOD: u16 = 0x234B;
 
 /// Execution time of `stop_periodic_measurement`, per the datasheet.
 const STOP_PERIODIC_MEASUREMENT_DELAY_MS: u64 = 500;
@@ -56,6 +64,33 @@ pub enum Error {
 impl From<I2cError> for Error {
     fn from(error: I2cError) -> Self {
         Error::Bus(error)
+    }
+}
+
+/// Sensor type reported by `get_sensor_variant` (0x202F).
+///
+/// The variant is encoded in bits 15..12 of the returned word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensorVariant {
+    /// Bits 15..12 == 0b0000.
+    Scd40,
+    /// Bits 15..12 == 0b0001.
+    Scd41,
+    /// Bits 15..12 == 0b0101.
+    Scd43,
+    /// Any other encoding, carrying the raw 4-bit field.
+    Unknown(u8),
+}
+
+impl SensorVariant {
+    /// Decode the raw word returned by `get_sensor_variant`.
+    fn from_raw(raw: u16) -> Self {
+        match (raw >> 12) as u8 & 0x0F {
+            0b0000 => SensorVariant::Scd40,
+            0b0001 => SensorVariant::Scd41,
+            0b0101 => SensorVariant::Scd43,
+            other => SensorVariant::Unknown(other),
+        }
     }
 }
 
@@ -131,6 +166,23 @@ where
         Ok(())
     }
 
+    /// Send a command and read one CRC-checked word back.
+    ///
+    /// The SCD4x requires the write and the read to be separate transactions,
+    /// so this is deliberately not a repeated-start `write_read`.
+    async fn read_word(&mut self, command: u16, execution_delay_ms: u64) -> Result<u16, Error> {
+        self.send_command(command, execution_delay_ms).await?;
+
+        let mut buffer = [0u8; 3];
+        self.i2c.read(self.address, &mut buffer)?;
+
+        if crc8(&buffer[..2]) != buffer[2] {
+            return Err(Error::Crc);
+        }
+
+        Ok(u16::from_be_bytes([buffer[0], buffer[1]]))
+    }
+
     /// Send a command and read three CRC-checked words back.
     ///
     /// The SCD4x requires the write and the read to be separate transactions,
@@ -189,6 +241,96 @@ where
             .read_three_words(CMD_GET_SERIAL_NUMBER, SHORT_COMMAND_DELAY_MS)
             .await?;
         Ok(((words[0] as u64) << 32) | ((words[1] as u64) << 16) | (words[2] as u64))
+    }
+
+    /// Read which SCD4x variant is attached. The sensor must be idle.
+    pub async fn sensor_variant(&mut self) -> Result<SensorVariant, Error> {
+        let raw = self
+            .read_word(CMD_GET_SENSOR_VARIANT, SHORT_COMMAND_DELAY_MS)
+            .await?;
+        Ok(SensorVariant::from_raw(raw))
+    }
+
+    /// Read the configured temperature offset in degrees Celsius.
+    ///
+    /// The raw word is converted with `175 * raw / 2^16`. The offset is only
+    /// applied to the reported temperature and humidity, not to CO2.
+    /// The sensor must be idle.
+    pub async fn temperature_offset_celsius(&mut self) -> Result<f32, Error> {
+        let raw = self
+            .read_word(CMD_GET_TEMPERATURE_OFFSET, SHORT_COMMAND_DELAY_MS)
+            .await?;
+        Ok(175.0 * (raw as f32) / 65535.0)
+    }
+
+    /// Read the configured sensor altitude in metres above sea level.
+    ///
+    /// The sensor must be idle.
+    pub async fn sensor_altitude_meters(&mut self) -> Result<u16, Error> {
+        self.read_word(CMD_GET_SENSOR_ALTITUDE, SHORT_COMMAND_DELAY_MS)
+            .await
+    }
+
+    /// Read the ambient pressure used for CO2 compensation, in pascals.
+    ///
+    /// The sensor stores the pressure in hectopascals, so the returned value
+    /// is the raw word multiplied by 100.
+    pub async fn ambient_pressure_pascals(&mut self) -> Result<u32, Error> {
+        let raw = self
+            .read_word(CMD_GET_AMBIENT_PRESSURE, SHORT_COMMAND_DELAY_MS)
+            .await?;
+        Ok(raw as u32 * 100)
+    }
+
+    /// Read whether automatic self-calibration (ASC) is enabled.
+    ///
+    /// The sensor returns 1 when ASC is active and 0 when it is off.
+    /// The sensor must be idle.
+    pub async fn automatic_self_calibration_enabled(&mut self) -> Result<bool, Error> {
+        let raw = self
+            .read_word(
+                CMD_GET_AUTOMATIC_SELF_CALIBRATION_ENABLED,
+                SHORT_COMMAND_DELAY_MS,
+            )
+            .await?;
+        Ok(raw != 0)
+    }
+
+    /// Read the CO2 concentration in ppm that ASC assumes for fresh air.
+    ///
+    /// The sensor must be idle.
+    pub async fn automatic_self_calibration_target_ppm(&mut self) -> Result<u16, Error> {
+        self.read_word(
+            CMD_GET_AUTOMATIC_SELF_CALIBRATION_TARGET,
+            SHORT_COMMAND_DELAY_MS,
+        )
+        .await
+    }
+
+    /// Read the ASC initial period in hours.
+    ///
+    /// This is the operating time after a reset before the first automatic
+    /// self-calibration is applied; it is always a multiple of 4 hours.
+    /// The sensor must be idle.
+    pub async fn automatic_self_calibration_initial_period_hours(&mut self) -> Result<u16, Error> {
+        self.read_word(
+            CMD_GET_AUTOMATIC_SELF_CALIBRATION_INITIAL_PERIOD,
+            SHORT_COMMAND_DELAY_MS,
+        )
+        .await
+    }
+
+    /// Read the ASC standard period in hours.
+    ///
+    /// This is the operating time between two automatic self-calibrations
+    /// after the initial period; it is always a multiple of 4 hours.
+    /// The sensor must be idle.
+    pub async fn automatic_self_calibration_standard_period_hours(&mut self) -> Result<u16, Error> {
+        self.read_word(
+            CMD_GET_AUTOMATIC_SELF_CALIBRATION_STANDARD_PERIOD,
+            SHORT_COMMAND_DELAY_MS,
+        )
+        .await
     }
 
     /// Read the result of a conversion that has already completed.

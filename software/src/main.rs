@@ -24,7 +24,7 @@ mod utils;
 
 use drivers::i2c_bus::{print_scan_result, I2cBus, SharedI2cBus, I2C_SCL_PIN, I2C_SDA_PIN};
 use tasks::web_server_task::{WifiStack, WifiStackResources};
-use tasks::{blink_task, scd41_task, sps30_task, web_server_task};
+use tasks::{bme690_task, blink_task, scd41_task, sps30_task, web_server_task};
 use utils::psram::Psram;
 use utils::shared_state;
 
@@ -99,6 +99,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(blink_task::blink_task(led)).ok();
     spawner.spawn(sps30_task::measure_task(bus)).ok();
     spawner.spawn(scd41_task::measure_task(bus)).ok();
+    spawner.spawn(bme690_task::measure_task(bus)).ok();
 
     // The Wi-Fi driver needs its own timer, plus entropy for the radio and
     // for the TCP initial sequence numbers.

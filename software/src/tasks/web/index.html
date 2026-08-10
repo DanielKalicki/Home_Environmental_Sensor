@@ -303,13 +303,22 @@
 
           <div class="chart">
             <div class="chart-head">
-              <span class="chart-title">Temperature and humidity</span>
+              <span class="chart-title">Temperature</span>
               <span class="legend">
                 <span style="color: #dc2626"><i></i>Temperature (&deg;C)</span>
+              </span>
+            </div>
+            <canvas id="chart-temperature"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Humidity</span>
+              <span class="legend">
                 <span style="color: #0891b2"><i></i>Humidity (%)</span>
               </span>
             </div>
-            <canvas id="chart-climate"></canvas>
+            <canvas id="chart-humidity"></canvas>
           </div>
         </div>
 
@@ -880,23 +889,26 @@
           now,
           { min: 0 }
         );
+        var temperature = toPoints(scd41, "temperature_celsius");
         drawChart(
-          document.getElementById("chart-climate"),
-          [
-            {
-              color: "#dc2626",
-              points: toPoints(scd41, "temperature_celsius"),
-            },
-            {
-              color: "#0891b2",
-              points: toPoints(scd41, "humidity_percent"),
-            },
-          ],
+          document.getElementById("chart-temperature"),
+          [{ color: "#dc2626", points: temperature }],
           windowStart,
           now,
-          // Both series share one axis, so it is pinned to the full 0-100
-          // range they are expressed in.
-          { min: 0, max: 100 }
+          // The axis follows the readings, so a few degrees of variation fill
+          // the chart instead of being flattened against a fixed range.
+          paddedAxis(temperature)
+        );
+
+        var humidity = toPoints(scd41, "humidity_percent");
+        drawChart(
+          document.getElementById("chart-humidity"),
+          [{ color: "#0891b2", points: humidity }],
+          windowStart,
+          now,
+          // Derived the same way, then clamped to the 0-100 range humidity is
+          // expressed in so the axis cannot run past a meaningless value.
+          clampAxis(paddedAxis(humidity), 0, 100)
         );
 
         var sps30 = store.sps30.readings;
@@ -966,6 +978,40 @@
         }
         var step = niceStep(extent.max, 6);
         return Math.ceil(extent.max / step) * step;
+      }
+
+      // Bounds that follow one series: its own smallest and largest value,
+      // with a tenth of the spread added above and below so the curve does not
+      // touch the frame. A flat series is given a fixed one-unit margin,
+      // because a tenth of nothing is nothing. Both bounds are then moved out
+      // to the nearest grid step, which is what keeps the axis labels round.
+      // Returns `undefined` when there is no data, which leaves `drawChart` to
+      // print its "No readings yet" message.
+      function paddedAxis(points) {
+        var extent = valueExtent([{ points: points }]);
+        if (extent === null) {
+          return undefined;
+        }
+        var spread = extent.max - extent.min;
+        var margin = spread > 1e-6 ? spread / 10 : 1;
+        var low = extent.min - margin;
+        var high = extent.max + margin;
+        var step = niceStep(high - low, 6);
+        return {
+          min: Math.floor(low / step) * step,
+          max: Math.ceil(high / step) * step,
+        };
+      }
+
+      // Keep an axis inside the range its quantity is defined over.
+      function clampAxis(axis, lowest, highest) {
+        if (!axis) {
+          return axis;
+        }
+        return {
+          min: Math.max(axis.min, lowest),
+          max: Math.min(axis.max, highest),
+        };
       }
 
       window.addEventListener("resize", drawCharts);

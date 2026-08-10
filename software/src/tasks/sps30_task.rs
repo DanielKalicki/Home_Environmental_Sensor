@@ -15,11 +15,46 @@ const ERROR_RETRY_DELAY_MS: u64 = 1000;
 const DATA_READY_POLL_ATTEMPTS: usize = 30;
 const DATA_READY_POLL_DELAY_MS: u64 = 100;
 
+/// Bring the sensor into a known state and verify it responds.
+///
+/// Returns `false` if any check failed, in which case the caller should
+/// retry later.
+async fn initialize(bus: &SharedI2cBus) -> bool {
+    let mut bus = bus.lock().await;
+    let mut i2c = bus.acquire();
+    let mut sensor = Sps30::new(&mut i2c);
+
+    let (serial, len) = match sensor.serial_number().await {
+        Ok(serial) => serial,
+        Err(error) => {
+            println!("SPS30: initialisation failed: {:?}", error);
+            return false;
+        }
+    };
+    let serial = core::str::from_utf8(&serial[..len]).unwrap_or("<non-ascii>");
+    println!("SPS30 found, serial number: {}", serial);
+
+    // The sensor rejects start_measurement while it is already measuring,
+    // so return it to idle first.
+    let _ = sensor.stop_measurement().await;
+
+    match sensor.start_measurement().await {
+        Ok(()) => {
+            println!("SPS30: measurement started");
+            true
+        }
+        Err(error) => {
+            println!("SPS30: initialisation failed: {:?}", error);
+            false
+        }
+    }
+}
+
 /// Wait for the sensor to flag a fresh result, then read it.
 ///
 /// If no flag appears within the poll window the last values are read anyway;
 /// a genuine bus problem still surfaces as an error from the read itself.
-async fn read_when_ready(bus: &'static SharedI2cBus) -> Result<Measurement, Error> {
+async fn read_once(bus: &'static SharedI2cBus) -> Result<Measurement, Error> {
     for _ in 0..DATA_READY_POLL_ATTEMPTS {
         let ready = {
             let mut bus = bus.lock().await;
@@ -52,53 +87,14 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
+        if needs_init && !initialize(bus).await {
+            Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
+            continue;
+        }
         let reinitialized = needs_init;
-        let initialized = {
-            let mut bus = bus.lock().await;
-            let mut i2c = bus.acquire();
-            let mut sensor = Sps30::new(&mut i2c);
 
-            let initialized = if needs_init {
-                match sensor.serial_number().await {
-                    Ok((serial, len)) => {
-                        let serial = core::str::from_utf8(&serial[..len]).unwrap_or("<non-ascii>");
-                        println!("SPS30 found, serial number: {}", serial);
-
-                        // The sensor rejects start_measurement while it is
-                        // already measuring, so return it to idle first.
-                        let _ = sensor.stop_measurement().await;
-
-                        match sensor.start_measurement().await {
-                            Ok(()) => {
-                                println!("SPS30: measurement started");
-                                true
-                            }
-                            Err(error) => {
-                                println!("SPS30: start_measurement failed: {:?}", error);
-                                false
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        println!("SPS30: initialisation failed: {:?}", error);
-                        false
-                    }
-                }
-            } else {
-                true
-            };
-
-            initialized
-        };
-
-        let result = if initialized {
-            Some(read_when_ready(bus).await)
-        } else {
-            None
-        };
-
-        match result {
-            Some(Ok(measurement)) => {
+        match read_once(bus).await {
+            Ok(measurement) => {
                 needs_init = false;
                 shared_state::publish_sps30(measurement).await;
                 println!(
@@ -117,25 +113,21 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                     "Typical particle size: {} um",
                     measurement.typical_particle_size
                 );
+
+                // Begin a fresh fixed schedule after recovery; this read-out
+                // becomes the first deadline of the new schedule.
+                if reinitialized {
+                    ticker.reset();
+                }
+                // `Ticker` advances from its previous deadline instead of from
+                // this call, equivalent to FreeRTOS `vTaskDelayUntil()`.
+                ticker.next().await;
             }
-            Some(Err(error)) => {
+            Err(error) => {
                 needs_init = true;
                 println!("SPS30: measurement failed: {:?}, recovering bus", error);
+                Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
             }
-            None => needs_init = true,
-        }
-
-        if needs_init {
-            Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
-        } else {
-            // Reset after initialization so the current read-out establishes
-            // the first deadline of a new fixed schedule.
-            if reinitialized {
-                ticker.reset();
-            }
-            // `Ticker` advances from its previous deadline instead of from
-            // this call, equivalent to FreeRTOS `vTaskDelayUntil()`.
-            ticker.next().await;
         }
     }
 }
