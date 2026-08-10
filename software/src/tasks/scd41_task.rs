@@ -14,6 +14,15 @@ use crate::utils::shared_state;
 pub const MEASUREMENT_INTERVAL_MS: u64 = 10_000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
+/// How many readings are dropped after the sensor is started.
+///
+/// The first single-shot conversion runs before the sensor's own temperature
+/// has settled, so its result is not representative. Discarded readings are
+/// still read and printed, they are only kept out of the published history, so
+/// one unsettled value cannot distort the charts. The count restarts after
+/// every re-initialisation, including the one following a bus error. Set to 0
+/// to publish every reading.
+const DISCARDED_WARMUP_READINGS: u32 = 1;
 
 /// Checks run against an idle sensor before measurements are started.
 ///
@@ -108,24 +117,40 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming it is still in the idle state.
     let mut needs_init = true;
+    // Counts down the readings still to be dropped, restarted every time the
+    // sensor is initialised.
+    let mut warmup_remaining = DISCARDED_WARMUP_READINGS;
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
-        if needs_init && !initialize(bus).await {
-            Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
-            continue;
+        if needs_init {
+            if !initialize(bus).await {
+                Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
+                continue;
+            }
+            warmup_remaining = DISCARDED_WARMUP_READINGS;
         }
         let reinitialized = needs_init;
 
         match read_once(bus).await {
             Ok(measurement) => {
                 needs_init = false;
-                shared_state::publish_scd41(measurement).await;
+
+                // Reported either way, but withheld from the history until the
+                // sensor has settled.
+                let settling = warmup_remaining > 0;
+                if settling {
+                    warmup_remaining -= 1;
+                } else {
+                    shared_state::publish_scd41(measurement).await;
+                }
+
                 println!(
-                    "CO2: {} ppm, temperature: {} C, humidity: {} %",
+                    "CO2: {} ppm, temperature: {} C, humidity: {} %{}",
                     measurement.co2_ppm,
                     measurement.temperature_celsius(),
-                    measurement.humidity_percent()
+                    measurement.humidity_percent(),
+                    if settling { " (warm-up, discarded)" } else { "" }
                 );
 
                 // Begin a fresh fixed schedule after recovery; this read-out

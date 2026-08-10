@@ -54,9 +54,10 @@ serial interface is `/dev/ttyACM0` on this system.
 ## Measurement history and PSRAM
 
 The board keeps a full day of readings per sensor: 8640 SCD41 readings at one
-every 10 seconds, and 17280 SPS30 readings at one every 5 seconds. That is far
-more than the internal RAM can spare next to the Wi-Fi driver and the network
-stack, so both ring buffers live in the external PSRAM.
+every 10 seconds, 17280 SPS30 readings at one every 5 seconds, and 17280 BME690
+readings at one every 5 seconds. That is far more than the internal RAM can
+spare next to the Wi-Fi driver and the network stack, so all three ring buffers
+live in the external PSRAM.
 
 - The XIAO carries an ESP32-S3R8 module, so `esp-hal` is built with its
   `opsram-8m` feature (8 MB of octal-SPI PSRAM). A module with a different
@@ -79,6 +80,32 @@ taken. The board has no real-time clock, so a client subtracts the `uptime_ms`
 reported with each response from its own clock to learn when the device booted,
 and adds each reading's `taken_at_ms` to that to place it on a wall-clock
 timeline.
+
+## Discarded warm-up readings
+
+Every sensor needs a moment to settle after it is started, and the readings it
+gives before then are not representative. Each task therefore drops a number of
+readings after every initialisation. Those readings are still taken and printed
+to the serial log, marked `(warm-up, discarded)`, but they are not published to
+the history, so a single unsettled value cannot stretch a chart axis and hide
+the real data.
+
+The count is a constant named `DISCARDED_WARMUP_READINGS` at the top of each
+task module, and it is the only thing to change to adjust the behaviour:
+
+| Sensor | File | Default | Covers |
+| --- | --- | --- | --- |
+| SCD41 | `src/tasks/scd41_task.rs` | 1 | The first single-shot conversion, taken before the sensor's own temperature has settled. |
+| SPS30 | `src/tasks/sps30_task.rs` | 6 | Roughly the first 30 seconds, while the fan and laser spin up. |
+| BME690 | `src/tasks/bme690_task.rs` | 2 | The first measurements, taken before the gas heater plate reaches its target. |
+
+Setting a count to 0 publishes every reading. The countdown restarts on every
+re-initialisation, not only at boot, so the readings taken right after a bus
+error is recovered from are discarded as well.
+
+The BME690 default is not arbitrary: the first reading after start-up measured
+386 kΩ of gas resistance against a steady 11-16 kΩ afterwards, and it reported
+its heater as stable, so the sensor's own stability flag does not identify it.
 
 ## Web API
 
@@ -106,7 +133,7 @@ The single-page application, served from flash as `text/html`. `GET
 
 ### `GET /api/status`
 
-The device's uptime and the state of both histories. This is the endpoint to
+The device's uptime and the state of every history. This is the endpoint to
 poll: it is small, of known length, and tells a client which sequence numbers
 are available so it can work out exactly what it is missing before asking for
 anything.
@@ -129,6 +156,13 @@ anything.
       "len": 720,
       "first_sequence": 0,
       "next_sequence": 720
+    },
+    "bme690": {
+      "interval_ms": 5000,
+      "capacity": 17280,
+      "len": 720,
+      "first_sequence": 0,
+      "next_sequence": 720
     }
   }
 }
@@ -144,7 +178,7 @@ anything.
 | `sensors.<name>.first_sequence` | Sequence number of the oldest retained reading. |
 | `sensors.<name>.next_sequence` | Sequence number the next reading will be given. Equals `first_sequence + len`. |
 
-The sensor names are `scd41` and `sps30`.
+The sensor names are `scd41`, `sps30` and `bme690`.
 
 A client detects a device reboot by `uptime_ms` being lower than the value it
 saw previously, and must then discard everything it holds, because the sequence
@@ -156,7 +190,7 @@ One page of a single sensor's readings, oldest first.
 
 | Parameter | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `sensor` | yes | — | `scd41` or `sps30`. Any other value is answered `400 Bad Request`. |
+| `sensor` | yes | — | `scd41`, `sps30` or `bme690`. Any other value is answered `400 Bad Request`. |
 | `from` | no | `0` | Lowest sequence number wanted. Raised to `first_sequence` if it names a reading that has already been overwritten. |
 | `limit` | no | `2000` | Largest number of readings to return. Values above 2000 are capped at 2000. |
 
@@ -198,14 +232,22 @@ number of every following element stays correct.
 The SCD41 reading fields are `taken_at_ms`, `co2_ppm` (integer),
 `temperature_celsius` and `humidity_percent`. The SPS30 reading fields are
 `taken_at_ms`, `pm1_0`, `pm2_5`, `pm4_0`, `pm10` (all micrograms per cubic
-metre) and `typical_particle_size` (micrometres).
+metre) and `typical_particle_size` (micrometres). The BME690 reading fields are
+`taken_at_ms`, `temperature_celsius`, `pressure_pascals` (pascals, not
+hectopascals), `humidity_percent` and `gas_resistance_ohms`.
+
+`gas_resistance_ohms` is the raw resistance of the sensor's heated gas-sensing
+film, not an air-quality index. It falls as volatile compounds increase, but it
+also moves with humidity and drifts as the film ages, so only its change over
+time is meaningful. The BME690 measures temperature and humidity independently
+of the SCD41, so the two sensors will not report identical values.
 
 ### How the page uses these
 
 On its first load the page fetches `/api/status`, then walks each sensor's
 history with `/api/readings` in pages of 2000, which is 5 requests for the
-SCD41 and 9 for the SPS30 when a full day is retained. It keeps every reading
-in the browser and redraws after each page arrives.
+SCD41 and 9 each for the SPS30 and the BME690 when a full day is retained. It
+keeps every reading in the browser and redraws after each page arrives.
 
 Afterwards it polls `/api/status` every 5 seconds and requests only the
 readings whose sequence numbers it does not yet have, which is normally none or

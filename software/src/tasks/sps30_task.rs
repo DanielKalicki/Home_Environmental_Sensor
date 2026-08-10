@@ -11,6 +11,17 @@ use crate::utils::shared_state;
 pub const MEASUREMENT_INTERVAL_MS: u64 = 5000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
+/// How many readings are dropped after the measurement is started.
+///
+/// The fan and laser need tens of seconds of continuous operation before the
+/// optical measurement settles, so the readings taken right after the start
+/// command are not representative; at the interval above, six of them cover
+/// roughly the first half minute. Discarded readings are still read and
+/// printed, they are only kept out of the published history, so the settling
+/// period cannot distort the charts. The count restarts after every
+/// re-initialisation, including the one following a bus error. Set to 0 to
+/// publish every reading.
+const DISCARDED_WARMUP_READINGS: u32 = 6;
 /// How long to wait for the sensor to flag a fresh result.
 const DATA_READY_POLL_ATTEMPTS: usize = 30;
 const DATA_READY_POLL_DELAY_MS: u64 = 100;
@@ -84,22 +95,41 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming it is still in the idle state.
     let mut needs_init = true;
+    // Counts down the readings still to be dropped, restarted every time the
+    // sensor is initialised.
+    let mut warmup_remaining = DISCARDED_WARMUP_READINGS;
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
-        if needs_init && !initialize(bus).await {
-            Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
-            continue;
+        if needs_init {
+            if !initialize(bus).await {
+                Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
+                continue;
+            }
+            warmup_remaining = DISCARDED_WARMUP_READINGS;
         }
         let reinitialized = needs_init;
 
         match read_once(bus).await {
             Ok(measurement) => {
                 needs_init = false;
-                shared_state::publish_sps30(measurement).await;
+
+                // Reported either way, but withheld from the history until the
+                // sensor has settled.
+                let settling = warmup_remaining > 0;
+                if settling {
+                    warmup_remaining -= 1;
+                } else {
+                    shared_state::publish_sps30(measurement).await;
+                }
+
                 println!(
-                    "PM1.0: {} ug/m3, PM2.5: {} ug/m3, PM4.0: {} ug/m3, PM10: {} ug/m3",
-                    measurement.pm1_0, measurement.pm2_5, measurement.pm4_0, measurement.pm10
+                    "PM1.0: {} ug/m3, PM2.5: {} ug/m3, PM4.0: {} ug/m3, PM10: {} ug/m3{}",
+                    measurement.pm1_0,
+                    measurement.pm2_5,
+                    measurement.pm4_0,
+                    measurement.pm10,
+                    if settling { " (warm-up, discarded)" } else { "" }
                 );
                 println!(
                     "NC0.5: {} #/cm3, NC1.0: {} #/cm3, NC2.5: {} #/cm3, NC4.0: {} #/cm3, NC10: {} #/cm3",

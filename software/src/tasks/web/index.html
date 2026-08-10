@@ -288,6 +288,37 @@
       </section>
 
       <section>
+        <h2>Pressure and gas &mdash; BME690</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="label">Barometric pressure</div>
+            <div class="value"><span data-field="pressure">--</span><span class="unit">hPa</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Gas resistance</div>
+            <div class="value"><span data-field="gas_resistance">--</span><span class="unit">k&#8486;</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Temperature</div>
+            <div class="value"><span data-field="bme_temperature">--</span><span class="unit">&deg;C</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Relative humidity</div>
+            <div class="value"><span data-field="bme_humidity">--</span><span class="unit">%</span></div>
+          </div>
+        </div>
+        <p class="note" id="note-bme690" hidden>Waiting for the first reading.</p>
+        <p class="note">
+          Gas resistance is the raw resistance of the sensor's heated film. It
+          falls as volatile compounds in the air increase, but it also moves
+          with humidity and drifts as the film ages, so only its change over
+          time carries meaning &mdash; it is not an absolute air-quality figure.
+          Temperature and humidity are measured independently of the SCD41, so
+          the two sections will not agree exactly.
+        </p>
+      </section>
+
+      <section>
         <h2>History</h2>
 
         <div class="chart-row">
@@ -305,7 +336,8 @@
             <div class="chart-head">
               <span class="chart-title">Temperature</span>
               <span class="legend">
-                <span style="color: #dc2626"><i></i>Temperature (&deg;C)</span>
+                <span style="color: #dc2626"><i></i>SCD41 (&deg;C)</span>
+                <span style="color: #f59e0b"><i></i>BME690 (&deg;C)</span>
               </span>
             </div>
             <canvas id="chart-temperature"></canvas>
@@ -315,7 +347,8 @@
             <div class="chart-head">
               <span class="chart-title">Humidity</span>
               <span class="legend">
-                <span style="color: #0891b2"><i></i>Humidity (%)</span>
+                <span style="color: #0891b2"><i></i>SCD41 (%)</span>
+                <span style="color: #f59e0b"><i></i>BME690 (%)</span>
               </span>
             </div>
             <canvas id="chart-humidity"></canvas>
@@ -346,6 +379,28 @@
           </div>
         </div>
 
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Barometric pressure</span>
+              <span class="legend">
+                <span style="color: #7c3aed"><i></i>Pressure (hPa)</span>
+              </span>
+            </div>
+            <canvas id="chart-pressure"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Gas resistance</span>
+              <span class="legend">
+                <span style="color: #ca8a04"><i></i>Resistance (k&#8486;)</span>
+              </span>
+            </div>
+            <canvas id="chart-gas"></canvas>
+          </div>
+        </div>
+
         <p class="note" id="note-history">
           The device keeps the newest <span id="window">--</span> of readings
           per sensor in its external PSRAM. This page downloads that history
@@ -373,7 +428,7 @@
       // endless request loop.
       var MAX_PAGES_PER_SYNC = 40;
       // The sensors to keep, in the order they are fetched.
-      var SENSORS = ["scd41", "sps30"];
+      var SENSORS = ["scd41", "sps30", "bme690"];
 
       function setField(name, value, digits) {
         var node = document.querySelector('[data-field="' + name + '"]');
@@ -442,6 +497,23 @@
         setLevel("card-pm25", sps30 ? levelFor(sps30.pm2_5, 15, 35) : null);
         setLevel("card-pm10", sps30 ? levelFor(sps30.pm10, 45, 100) : null);
 
+        var bme690 = data.bme690;
+        document.getElementById("note-bme690").hidden = !!bme690;
+        // Pascals and ohms are reported as they are measured; hectopascals and
+        // kilohms are the units these two are normally read in.
+        setField("pressure", bme690 ? bme690.pressure_pascals / 100 : null, 1);
+        setField(
+          "gas_resistance",
+          bme690 ? bme690.gas_resistance_ohms / 1000 : null,
+          1
+        );
+        setField(
+          "bme_temperature",
+          bme690 ? bme690.temperature_celsius : null,
+          1
+        );
+        setField("bme_humidity", bme690 ? bme690.humidity_percent : null, 1);
+
         document.getElementById("updated").textContent =
           new Date().toLocaleTimeString();
       }
@@ -471,6 +543,7 @@
         windowMs: 0,
         scd41: emptySeries(),
         sps30: emptySeries(),
+        bme690: emptySeries(),
       };
 
       function emptySeries() {
@@ -623,6 +696,9 @@
             return syncSensor("sps30", MAX_PAGES_PER_SYNC);
           })
           .then(function () {
+            return syncSensor("bme690", MAX_PAGES_PER_SYNC);
+          })
+          .then(function () {
             renderAll();
             setStatus("online", "online");
           })
@@ -641,6 +717,7 @@
         render({
           scd41: newest(store.scd41.readings),
           sps30: newest(store.sps30.readings),
+          bme690: newest(store.bme690.readings),
         });
         drawCharts();
       }
@@ -689,6 +766,14 @@
           }
         }
         return points;
+      }
+
+      // Rescale a series, e.g. pascals to hectopascals, so the axis labels
+      // stay short enough to read.
+      function scalePoints(points, factor) {
+        return points.map(function (point) {
+          return { time: point.time, value: point.value * factor };
+        });
       }
 
       function formatTimeLabel(timestamp, spanMs) {
@@ -740,24 +825,19 @@
 
         var text = cssVar("--muted") || "#64748b";
         var line = cssVar("--line") || "#dde3ec";
-        // Only enough margin for the axis labels themselves.
-        var pad = { top: 6, right: 4, bottom: 22, left: 34 };
-        var plotW = width - pad.left - pad.right;
-        var plotH = heightPx - pad.top - pad.bottom;
-        if (plotW <= 0 || plotH <= 0) {
-          return;
-        }
 
-        // Scanned with a loop rather than `Math.min.apply(null, values)`:
-        // a day of readings is tens of thousands of values, and passing that
-        // many arguments at once overflows the call stack in some browsers.
-        var extent = valueExtent(series);
-
+        // Selected before the axis labels are measured below, because the
+        // width they report depends on the font in use.
         ctx.font =
           "11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
         ctx.strokeStyle = line;
         ctx.fillStyle = text;
         ctx.lineWidth = 1;
+
+        // Scanned with a loop rather than `Math.min.apply(null, values)`:
+        // a day of readings is tens of thousands of values, and passing that
+        // many arguments at once overflows the call stack in some browsers.
+        var extent = valueExtent(series);
 
         if (extent === null) {
           ctx.textAlign = "center";
@@ -785,6 +865,38 @@
           yMax = Math.ceil(yMax / step) * step;
         }
 
+        // Every label text is produced up front so the left margin can be
+        // sized to the widest of them. With a fixed margin a long label runs
+        // off the left edge of the canvas and loses its leading digits: a
+        // pressure of "988.82" was drawn as "88.82".
+        //
+        // Enough decimals are kept for one grid step to be visible in the
+        // text. A coarser rounding than the step makes neighbouring lines
+        // carry the same label, which a narrow pressure axis ran into.
+        var digits = Math.max(0, Math.min(6, Math.ceil(-Math.log10(step))));
+        var labels = [];
+        var widestLabel = 0;
+        for (var value = yMin; value <= yMax + 1e-9; value += step) {
+          var label = value.toFixed(digits);
+          labels.push({ value: value, text: label });
+          widestLabel = Math.max(widestLabel, ctx.measureText(label).width);
+        }
+
+        // Kept clear of the axis on one side and of the canvas edge on the
+        // other.
+        var labelGap = 6;
+        var pad = {
+          top: 6,
+          right: 4,
+          bottom: 22,
+          left: Math.ceil(widestLabel) + labelGap * 2,
+        };
+        var plotW = width - pad.left - pad.right;
+        var plotH = heightPx - pad.top - pad.bottom;
+        if (plotW <= 0 || plotH <= 0) {
+          return;
+        }
+
         function x(time) {
           return pad.left + ((time - xMin) / (xMax - xMin)) * plotW;
         }
@@ -795,14 +907,13 @@
         // Horizontal grid lines and their value labels.
         ctx.textAlign = "right";
         ctx.textBaseline = "middle";
-        for (var value = yMin; value <= yMax + 1e-9; value += step) {
-          var gy = Math.round(y(value)) + 0.5;
+        for (var l = 0; l < labels.length; l++) {
+          var gy = Math.round(y(labels[l].value)) + 0.5;
           ctx.beginPath();
           ctx.moveTo(pad.left, gy);
           ctx.lineTo(pad.left + plotW, gy);
           ctx.stroke();
-          var digits = step >= 10 ? 0 : step >= 1 ? 1 : 2;
-          ctx.fillText(value.toFixed(digits), pad.left - 6, gy);
+          ctx.fillText(labels[l].text, pad.left - labelGap, gy);
         }
 
         // Time axis: five evenly spaced labels across the whole window.
@@ -882,6 +993,7 @@
         var windowStart = now - store.windowMs;
 
         var scd41 = store.scd41.readings;
+        var bme690 = store.bme690.readings;
         drawChart(
           document.getElementById("chart-co2"),
           [{ color: "#2563eb", points: toPoints(scd41, "co2_ppm") }],
@@ -889,26 +1001,38 @@
           now,
           { min: 0 }
         );
-        var temperature = toPoints(scd41, "temperature_celsius");
+
+        // The SCD41 and the BME690 each measure temperature and humidity, so
+        // both are plotted together: the two can be compared directly, and
+        // either sensor alone still fills the chart when the other is absent.
+        var scd41Temperature = toPoints(scd41, "temperature_celsius");
+        var bme690Temperature = toPoints(bme690, "temperature_celsius");
         drawChart(
           document.getElementById("chart-temperature"),
-          [{ color: "#dc2626", points: temperature }],
+          [
+            { color: "#dc2626", points: scd41Temperature },
+            { color: "#f59e0b", points: bme690Temperature },
+          ],
           windowStart,
           now,
           // The axis follows the readings, so a few degrees of variation fill
           // the chart instead of being flattened against a fixed range.
-          paddedAxis(temperature)
+          paddedAxis(scd41Temperature.concat(bme690Temperature))
         );
 
-        var humidity = toPoints(scd41, "humidity_percent");
+        var scd41Humidity = toPoints(scd41, "humidity_percent");
+        var bme690Humidity = toPoints(bme690, "humidity_percent");
         drawChart(
           document.getElementById("chart-humidity"),
-          [{ color: "#0891b2", points: humidity }],
+          [
+            { color: "#0891b2", points: scd41Humidity },
+            { color: "#f59e0b", points: bme690Humidity },
+          ],
           windowStart,
           now,
           // Derived the same way, then clamped to the 0-100 range humidity is
           // expressed in so the axis cannot run past a meaningless value.
-          clampAxis(paddedAxis(humidity), 0, 100)
+          clampAxis(paddedAxis(scd41Humidity.concat(bme690Humidity)), 0, 100)
         );
 
         var sps30 = store.sps30.readings;
@@ -938,6 +1062,32 @@
           windowStart,
           now,
           pmAxis
+        );
+
+        var pressure = scalePoints(
+          toPoints(bme690, "pressure_pascals"),
+          0.01
+        );
+        drawChart(
+          document.getElementById("chart-pressure"),
+          [{ color: "#7c3aed", points: pressure }],
+          windowStart,
+          now,
+          // Indoor pressure only moves by a few hectopascals over a day, so a
+          // fixed axis would flatten the curve into a straight line.
+          paddedAxis(pressure)
+        );
+
+        var gas = scalePoints(
+          toPoints(bme690, "gas_resistance_ohms"),
+          0.001
+        );
+        drawChart(
+          document.getElementById("chart-gas"),
+          [{ color: "#ca8a04", points: gas }],
+          windowStart,
+          now,
+          paddedAxis(gas)
         );
       }
 

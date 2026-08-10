@@ -82,9 +82,10 @@ async fn main(spawner: Spawner) {
     // readings taken before this would be dropped.
     match shared_state::init(&mut psram).await {
         Some(bytes) => println!(
-            "History: {} SCD41 and {} SPS30 readings ({} h) in {} KiB of PSRAM, {} KiB free",
+            "History: {} SCD41, {} SPS30 and {} BME690 readings ({} h) in {} KiB of PSRAM, {} KiB free",
             shared_state::SCD41_CAPACITY,
             shared_state::SPS30_CAPACITY,
+            shared_state::BME690_CAPACITY,
             shared_state::HISTORY_WINDOW_MS / 3_600_000,
             bytes / 1024,
             psram.free_bytes() / 1024

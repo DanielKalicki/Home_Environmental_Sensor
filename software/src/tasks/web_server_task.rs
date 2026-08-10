@@ -11,8 +11,8 @@
 //!
 //! * `GET /` returns the page (HTML, CSS and JavaScript in one file, stored in
 //!   flash).
-//! * `GET /api/status` returns the device uptime and the state of both
-//!   histories.
+//! * `GET /api/status` returns the device uptime and the state of every
+//!   history.
 //! * `GET /api/readings` returns one page of a single sensor's readings.
 //!
 //! The page fetches the retained history once, a page at a time, keeps it in
@@ -273,7 +273,7 @@ async fn send_response(socket: &mut TcpSocket<'_>, content_type: &str, body: &st
     }
 }
 
-/// Describe the device and the state of both histories.
+/// Describe the device and the state of every history.
 ///
 /// This is the endpoint a client polls. It is small and of known length, and
 /// it tells the client which sequence numbers are still available, so the
@@ -283,6 +283,7 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let uptime_ms = Instant::now().as_millis();
     let scd41 = shared_state::scd41_status().await;
     let sps30 = shared_state::sps30_status().await;
+    let bme690 = shared_state::bme690_status().await;
 
     let mut body: String<512> = String::new();
     let _ = write!(
@@ -294,6 +295,8 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let _ = write_sensor_status(&mut body, "scd41", &scd41);
     let _ = body.push(',');
     let _ = write_sensor_status(&mut body, "sps30", &sps30);
+    let _ = body.push(',');
+    let _ = write_sensor_status(&mut body, "bme690", &bme690);
     let _ = body.push_str("}}");
 
     send_response(socket, "application/json", &body).await;
@@ -314,11 +317,12 @@ fn write_sensor_status(
 
 /// Send one page of readings for a single sensor.
 ///
-/// `query` selects the sensor and the page: `sensor=scd41|sps30`, `from=` the
-/// first sequence number wanted, `limit=` how many readings at most. A `from`
-/// that names an already overwritten reading is moved up to the oldest reading
-/// still retained, and the page reports the `from` it actually used, so a
-/// client that has fallen behind can tell that it has lost readings.
+/// `query` selects the sensor and the page: `sensor=scd41|sps30|bme690`,
+/// `from=` the first sequence number wanted, `limit=` how many readings at
+/// most. A `from` that names an already overwritten reading is moved up to the
+/// oldest reading still retained, and the page reports the `from` it actually
+/// used, so a client that has fallen behind can tell that it has lost
+/// readings.
 ///
 /// The body is streamed one reading at a time rather than rendered into a
 /// single buffer, which would be a wasteful permanent allocation on the
@@ -334,6 +338,7 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
     let status = match sensor {
         "scd41" => shared_state::scd41_status().await,
         "sps30" => shared_state::sps30_status().await,
+        "bme690" => shared_state::bme690_status().await,
         _ => {
             let _ = socket
                 .write_all(
@@ -404,6 +409,25 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                         m.co2_ppm,
                         m.temperature_celsius(),
                         m.humidity_percent()
+                    );
+                }
+                None => {
+                    let _ = write!(chunk, "{}null", separator);
+                }
+            }
+        } else if sensor == "bme690" {
+            match shared_state::bme690_reading(sequence).await {
+                Some(sample) => {
+                    let m = sample.value;
+                    let _ = write!(
+                        chunk,
+                        "{}{{\"taken_at_ms\":{},\"temperature_celsius\":{},\"pressure_pascals\":{},\"humidity_percent\":{},\"gas_resistance_ohms\":{}}}",
+                        separator,
+                        sample.taken_at.as_millis(),
+                        m.temperature_celsius,
+                        m.pressure_pascals,
+                        m.relative_humidity_percent,
+                        m.gas_resistance_ohms
                     );
                 }
                 None => {
