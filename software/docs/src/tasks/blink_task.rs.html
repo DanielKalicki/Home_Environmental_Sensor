@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>blink_task.rs — Home Environmental Sensor</title>
+<style>
+  :root{--bg:#ffffff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--muted:#57606a;--accent:#0969da;--accent-2:#116329;--warn:#9a6700;--k:#cf222e;--ty:#6639ba;--st:#032f62;--cm:#6a737d;--mc:#005cc5;--at:#bc4c00;--fn:#116329;--radius:12px}
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;}
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+  header.top{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);border-bottom:1px solid var(--border);padding:22px 40px 16px;}
+  .eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2);margin-bottom:6px;}
+  h1{margin:0 0 6px;font-size:25px;letter-spacing:-0.01em;} header.top p.sub{margin:0 0 12px;color:var(--muted);font-size:14.5px;max-width:1100px;}
+  nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;} nav.toc a{font-size:12.5px;color:var(--accent);text-decoration:none;} nav.toc a:hover{text-decoration:underline;}
+  .wrap{width:100%;margin:0;padding:0 40px 90px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px;margin:28px 0;}
+  .card h2{margin-top:0;font-size:19px;}.card h3{font-size:15px;margin:20px 0 6px;}.card p{font-size:15px;}.card ul,.card ol{margin:10px 0 0;padding-left:20px;font-size:14.5px;}.card li{margin-bottom:6px;}code.inline{background:#eef1f4;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:13px;color:var(--mc);}
+  h2.section{margin:46px 0 0;padding:10px 0 8px;font-size:20px;border-bottom:2px solid var(--border);}h2.section .range{font-size:12.5px;color:var(--muted);font-weight:500;margin-left:10px;}
+  .lines{margin-top:8px;}.line{display:flex;align-items:flex-start;gap:30px;padding:18px 6px;border-radius:10px;border-top:1px solid #eaeef2;}.line:hover{background:rgba(9,105,218,0.04);}.code{flex:1 1 0;min-width:280px;margin:0;padding:10px 0;white-space:pre;overflow-x:auto;font-size:13.2px;background:transparent;}.explain{flex:1.15 1 0;min-width:280px;padding-top:4px;font-size:14.5px;}.explain p{margin:0 0 9px;}.explain p:last-child{margin-bottom:0;}.explain ul{margin:0 0 9px;padding-left:20px;}.explain li{margin-bottom:4px;}
+  .tag{display:inline-block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#fff;background:var(--accent-2);padding:3px 9px;border-radius:999px;margin-bottom:8px;}.tag.alt{background:var(--accent);}.tag.ext{background:var(--warn);}
+  .note{border-left:3px solid var(--accent);background:#f2f7fd;padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 0;font-size:13.8px;}.note.warn{border-left-color:var(--warn);background:#fdf7ec;}
+  table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13.6px;}th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top;}th{background:#eef1f4;}td code{font-size:12.6px;}
+  pre.block{background:#0d1117;color:#c9d1d9;border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12.8px;line-height:1.55;}
+  .diagram{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;overflow-x:auto;}.diagram figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center;}
+  .k{color:var(--k);}.ty{color:var(--ty);}.st{color:var(--st);}.cm{color:var(--cm);font-style:italic;}.mc{color:var(--mc);}.at{color:var(--at);}.fn{color:var(--fn);}.nu{color:var(--ty);}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 0 10px;}
+  @media (max-width:1000px){.line{flex-direction:column;gap:8px;}.code{flex:none;width:100%;}.explain{flex:none;width:100%;padding-top:0;}}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/tasks/blink_task.rs — LED liveness indicator</h1>
+  <p class="sub">This task repeatedly changes the user LED output between high and low levels. Its only purpose is to provide a visible indication that the firmware scheduler is still running.</p>
+  <nav class="toc"><a href="#overview">Overview</a><a href="#interfaces">External interface</a><a href="#flow">Flow chart</a><a href="#imports">Imports</a><a href="#constant">Timing constant</a><a href="#task">blink_task</a><a href="#behaviour">Behaviour and limits</a><a href="#glossary">Glossary</a></nav>
+</header>
+<main class="wrap">
+  <section class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>This file defines one Embassy task: <code>blink_task</code>. The task receives exclusive control of an already-configured general-purpose output pin, raises the output level for 500 milliseconds, lowers it for 500 milliseconds, and repeats indefinitely.</p>
+    <p>The LED is not used to control sensors, Wi-Fi, data storage, or the web server. It is an independent health indicator. If it continues to blink, the Embassy executor is still scheduling this task and the timer service is operating.</p>
+    <div class="note">A blinking LED does <strong>not</strong> prove that every other firmware component is working. For example, an I²C sensor may fail while this task continues normally. It proves only that this task can run and wait on its timer.</div>
+  </section>
+
+  <section class="card" id="interfaces">
+    <h2>External interface</h2>
+    <table>
+      <tr><th>Item</th><th>Defined by</th><th>Role in this file</th></tr>
+      <tr><td><code>Output&lt;'static, AnyPin&lt;'static&gt;&gt;</code></td><td><code>esp_hal::gpio</code></td><td>An output-pin controller. It is created and configured by <code>main.rs</code>, then moved into this task so no other task can drive the LED pin.</td></tr>
+      <tr><td><code>Timer::after_millis()</code></td><td><code>embassy_time</code></td><td>Waits for a specified time without consuming the processor while the task is paused.</td></tr>
+      <tr><td><code>blink_task(led)</code></td><td>This file</td><td>Started once by <code>main.rs</code>. The current board configuration passes GPIO21 as an output whose initial level is low.</td></tr>
+    </table>
+    <p>The task has no return value and no network, storage, or sensor inputs. After it receives the output controller, it owns that controller for the rest of the program run.</p>
+  </section>
+
+  <section class="card" id="flow">
+    <h2>Operation over time</h2>
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart TD
+  A[Task starts with control of the LED output] --> B[Set output high]
+  B --> C[Wait 500 milliseconds]
+  C --> D[Set output low]
+  D --> E[Wait 500 milliseconds]
+  E --> B
+      </pre>
+      <figcaption>One complete electrical cycle lasts 1,000 milliseconds: 500 ms high and 500 ms low.</figcaption>
+    </figure>
+    <figure class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant T as blink_task
+  participant P as LED output pin
+  participant E as Embassy executor
+  T->>P: set_high()
+  T->>E: await 500 ms timer
+  Note over E: Other ready tasks may run.
+  E-->>T: timer expires
+  T->>P: set_low()
+  T->>E: await 500 ms timer
+  E-->>T: timer expires
+  Note over T: Repeat indefinitely.
+      </pre>
+      <figcaption>Each timer wait yields execution; the task does not delay other ready tasks by actively counting time.</figcaption>
+    </figure>
+  </section>
+
+  <h2 class="section" id="imports">Imports <span class="range">lines 1–2</span></h2>
+  <div class="line">
+    <pre class="code"><code><span class="k">use</span> embassy_time::<span class="ty">Timer</span>;
+  <span class="k">use</span> esp_hal::gpio::{<span class="ty">AnyPin</span>, <span class="ty">Output</span>};</code></pre>
+    <div class="explain"><span class="tag">Dependencies</span><p><code>Timer</code> provides the asynchronous delay used between level changes. The delay is tied to the time service initialized by the firmware entry point.</p><p><code>Output</code> is the type that can drive a pin high or low. <code>AnyPin</code> allows the task to accept an output for any physical GPIO pin, rather than only a pin number fixed in this file.</p><p>Pin selection belongs outside this task. In the current firmware, <code>main.rs</code> selects GPIO21 and creates the <code>Output</code> before spawning this task.</p></div>
+  </div>
+
+  <h2 class="section" id="constant">Blink timing <span class="range">lines 4–5</span></h2>
+  <div class="line">
+    <pre class="code"><code><span class="cm">/// Half period of the liveness blink.</span>
+  <span class="k">const</span> <span class="ty">LED_BLINK_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">500</span>;</code></pre>
+    <div class="explain"><span class="tag alt">Configuration</span><p>This constant is the duration of each visible state: high for 500 milliseconds, then low for 500 milliseconds.</p><p>A complete blink takes one second: the LED remains at each output level for half a second. Its output level changes twice during that second.</p><p>Using a named constant prevents the two waits in the task from diverging accidentally. Changing the constant changes both halves of the cycle together.</p></div>
+  </div>
+
+  <h2 class="section" id="task">The task <span class="range">lines 7–18</span></h2>
+  <div class="line">
+    <pre class="code"><code><span class="cm">/// Blink the configured user LED.
+  ///
+  /// On boards where the LED is wired active-low, the visible on/off states are
+  /// reversed, but the blink still confirms that the executor keeps running.</span>
+  <span class="at">#[embassy_executor::task]</span>
+  <span class="k">pub async fn</span> <span class="fn">blink_task</span>(<span class="k">mut</span> led: <span class="ty">Output</span>&lt;<span class="st">'static</span>, <span class="ty">AnyPin</span>&lt;<span class="st">'static</span>&gt;&gt;) {
+    <span class="k">loop</span> {
+      led.<span class="fn">set_high</span>();
+      <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;
+      led.<span class="fn">set_low</span>();
+      <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;
+    }
+  }</code></pre>
+    <div class="explain"><span class="tag">Task body</span><p><code>#[embassy_executor::task]</code> allows the Embassy executor to start this asynchronous function as a task. It is not an operating-system thread. On this single-core firmware, it runs until it reaches an <code>await</code>, then allows other ready tasks to execute.</p><p>The <code>mut led</code> parameter is mutable because both <code>set_high()</code> and <code>set_low()</code> change the output controller's state. Its <code>'static</code> lifetime means the controller remains valid for the entire firmware run.</p><p>The <code>loop</code> has no exit path. The task alternates the electrical level, waiting after each change. No memory is allocated and no shared lock is acquired.</p><p><code>Timer::after_millis(...).await</code> is a waiting point. The task is dormant until the interval has elapsed; it does not run a busy loop and does not intentionally occupy the processor during the 500 ms delay.</p></div>
+  </div>
+
+  <section class="card" id="behaviour">
+    <h2>Behaviour and limits</h2>
+    <table>
+      <tr><th>Situation</th><th>Result</th></tr>
+      <tr><td>Normal operation</td><td>The output alternates every 500 ms. A visible LED normally appears to blink once per second.</td></tr>
+      <tr><td>Active-high LED wiring</td><td>A high output level normally turns the LED on and a low level turns it off.</td></tr>
+      <tr><td>Active-low LED wiring</td><td>The visible states are reversed: high normally turns the LED off and low turns it on. The timing and diagnostic value remain the same.</td></tr>
+      <tr><td>Another task is ready while this task waits</td><td>The executor can run that task. The timer wait is asynchronous rather than a processor-blocking delay.</td></tr>
+      <tr><td>LED wiring fault or failed LED</td><td>The firmware may still be running even though no visible blink occurs. Serial diagnostics and the web interface must be used to distinguish this from a stopped device.</td></tr>
+      <tr><td>Timer service is not initialized</td><td>The waits cannot complete correctly. The firmware entry point initializes Embassy time before it starts this task.</td></tr>
+    </table>
+    <div class="note warn">The task assumes that it is spawned once and is the sole owner of the output controller. Creating a second controller for the same pin elsewhere would violate the intended hardware ownership model.</div>
+  </section>
+
+  <section class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning in this file</th></tr>
+      <tr><td>GPIO</td><td>A general-purpose input/output pin: a physical processor pin that software can drive electrically high or low.</td></tr>
+      <tr><td>High / low</td><td>The two output levels. Their visible meaning depends on how the LED is wired.</td></tr>
+      <tr><td>Active-low</td><td>A wiring arrangement in which a low output level turns the device on and a high level turns it off.</td></tr>
+      <tr><td>Task</td><td>An independently scheduled asynchronous function. Tasks share the processor and cooperate at waiting points.</td></tr>
+      <tr><td><code>await</code></td><td>A point at which an asynchronous task pauses until an operation, here a timer, is ready.</td></tr>
+    </table>
+  </section>
+  <footer>Generated documentation for software/src/tasks/blink_task.rs — Home Environmental Sensor.</footer>
+</main>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+</body>
+</html>

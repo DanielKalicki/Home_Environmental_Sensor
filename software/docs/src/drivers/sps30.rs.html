@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sps30.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --warn:#9a6700;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type */
+    --st:#032f62;  /* string */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:22px 40px 16px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:6px;
+  }
+  h1{margin:0 0 6px; font-size:25px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 12px; color:var(--muted); font-size:14.5px; max-width:1100px;}
+  nav.toc{display:flex; flex-wrap:wrap; gap:6px 16px;}
+  nav.toc a{font-size:12.5px; color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card h3{font-size:15px; margin:20px 0 6px;}
+  .card h4{font-size:14px; margin:16px 0 4px;}
+  .card p{font-size:15px;}
+  .card ul,.card ol{margin:10px 0 0; padding-left:20px; font-size:14.5px;}
+  .card li{margin-bottom:6px;}
+  code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  h2.section{
+    margin:46px 0 0; padding:10px 0 8px; font-size:20px;
+    border-bottom:2px solid var(--border);
+  }
+  h2.section .range{font-size:12.5px; color:var(--muted); font-weight:500; margin-left:10px;}
+
+  .lines{margin-top:8px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:18px 6px; border-radius:10px; border-top:1px solid #eaeef2;
+  }
+  .line:hover{background:rgba(9,105,218,0.04);}
+  .code{
+    flex:1 1 0; min-width:280px; margin:0; padding:10px 0;
+    white-space:pre; overflow-x:auto; font-size:13.2px; background:transparent;
+  }
+  .explain{flex:1.15 1 0; min-width:280px; padding-top:4px; font-size:14.5px;}
+  .explain p{margin:0 0 9px;}
+  .explain p:last-child{margin-bottom:0;}
+  .explain ul{margin:0 0 9px; padding-left:20px;}
+  .explain li{margin-bottom:4px;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:8px;
+  }
+  .tag.alt{background:var(--accent);}
+  .tag.ext{background:var(--warn);}
+
+  .note{
+    border-left:3px solid var(--accent); background:#f2f7fd;
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0 0; font-size:13.8px;
+  }
+  .note.warn{border-left-color:var(--warn); background:#fdf7ec;}
+
+  table{border-collapse:collapse; width:100%; margin-top:12px; font-size:13.6px;}
+  th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top;}
+  th{background:#eef1f4;}
+  td code{font-size:12.6px;}
+
+  pre.block{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; line-height:1.55;
+  }
+
+  .diagram{background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px; overflow-x:auto;}
+  .diagram figcaption{font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center;}
+
+  .k{color:var(--k);} .ty{color:var(--ty);} .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;} .mc{color:var(--mc);}
+  .at{color:var(--at);} .fn{color:var(--fn);} .nu{color:var(--ty);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+
+  @media (max-width:1000px){
+    .line{flex-direction:column; gap:8px;}
+    .code{flex:none; width:100%;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/drivers/sps30.rs — the particulate matter sensor driver</h1>
+  <p class="sub">Left column: the source code. Right column: a description of what that code does. The exact bytes exchanged with the sensor, the ten values it returns and what each of them means, the checksum that protects them, and the way a reading reaches the rest of the firmware are all described here, so no other document is required.</p>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#quantities">What the sensor measures</a>
+    <a href="#protocol">The sensor protocol</a>
+    <a href="#interfaces">External interfaces</a>
+    <a href="#flow">Measurement flow</a>
+    <a href="#s-moduledoc">Module description</a>
+    <a href="#s-imports">Imports</a>
+    <a href="#s-address">Address</a>
+    <a href="#s-commands">Command codes</a>
+    <a href="#s-delays">Execution times</a>
+    <a href="#s-crcconst">Checksum settings</a>
+    <a href="#s-error">Error</a>
+    <a href="#s-measurement">Measurement</a>
+    <a href="#s-crc8">crc8</a>
+    <a href="#s-stripcrc">strip_crc</a>
+    <a href="#s-struct">Sps30</a>
+    <a href="#s-new">new / with_address</a>
+    <a href="#s-sendcommand">send_command</a>
+    <a href="#s-argument">send_command_with_argument</a>
+    <a href="#s-readresponse">read_response</a>
+    <a href="#s-start">start_measurement</a>
+    <a href="#s-mode">Mode commands</a>
+    <a href="#s-sleep">sleep / wake_up</a>
+    <a href="#s-ready">is_data_ready</a>
+    <a href="#s-serial">serial_number</a>
+    <a href="#s-values">read_measured_values</a>
+    <a href="#failure">Failure behaviour</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>
+      The SPS30 is a sensor made by Sensirion that counts and sizes the dust particles in the air. It contains a
+      small fan that draws air past a laser; particles crossing the beam scatter light, and the sensor works out
+      from those flashes how many particles there are and how large they are. It is connected to the two-wire I2C
+      bus described in <code class="inline">src/drivers/i2c_bus.rs</code> and answers at address
+      <code class="inline">0x69</code>.
+    </p>
+    <p>This file is the translation layer between that sensor and the rest of the firmware. It provides:</p>
+    <ol>
+      <li><strong>The command codes</strong> for starting and stopping the fan, asking whether a result is ready,
+          and collecting one.</li>
+      <li><strong>The waiting times</strong> each command requires before the sensor can be spoken to again.</li>
+      <li><strong>The checksum</strong>, recomputed for every two bytes received, so a corrupted reading is
+          rejected rather than published.</li>
+      <li><strong>Decoding.</strong> The sensor returns sixty bytes that have to be stripped of their check
+          bytes and then reassembled into ten decimal numbers.</li>
+    </ol>
+
+    <h3>How this differs from the carbon dioxide sensor driver</h3>
+    <p>
+      The two drivers look similar and share the same checksum, but the sensors work in opposite ways. The SCD41
+      is asked for one measurement at a time and takes five seconds over it. The SPS30 runs continuously once
+      started: its fan turns without interruption and a new result appears about once a second, whether or not
+      anyone collects it. The firmware therefore starts it once and afterwards only asks "is there something new,
+      and what is it".
+    </p>
+
+    <h3>What this file does not do</h3>
+    <ul>
+      <li>It does not decide when to read. The five-second schedule and the readiness polling live in
+          <code class="inline">src/tasks/sps30_task.rs</code>.</li>
+      <li>It does not obtain or release the shared bus. It is handed a ready-to-use I2C block and uses it.</li>
+      <li>It does not retry. A failure is reported and returned.</li>
+      <li>It does not schedule fan cleaning, and it does not use the sensor's sleep mode, although both commands
+          are implemented.</li>
+    </ul>
+  </div>
+
+  <!-- ================= QUANTITIES ================= -->
+  <div class="card" id="quantities">
+    <h2>What the sensor measures</h2>
+    <p>
+      A reading contains ten numbers. They fall into three groups, and the difference between the first two
+      groups is the single most important thing to understand about this sensor.
+    </p>
+
+    <h3>Mass concentration — four numbers, in micrograms per cubic metre</h3>
+    <p>
+      How much the particles in a cubic metre of air <em>weigh</em>. This is the quantity air quality limits are
+      written in, and the one shown on the web page.
+    </p>
+    <table>
+      <tr><th>Name</th><th>Field</th><th>Includes particles up to</th></tr>
+      <tr><td>PM1.0</td><td><code>pm1_0</code></td><td>1.0 micrometres across</td></tr>
+      <tr><td>PM2.5</td><td><code>pm2_5</code></td><td>2.5 micrometres across</td></tr>
+      <tr><td>PM4.0</td><td><code>pm4_0</code></td><td>4.0 micrometres across</td></tr>
+      <tr><td>PM10</td><td><code>pm10</code></td><td>10 micrometres across</td></tr>
+    </table>
+    <div class="note">These four are <strong>cumulative</strong>, not separate size bands. Every particle counted
+      in PM1.0 is also counted in PM2.5, PM4.0 and PM10, so the four values never decrease as the size limit
+      rises. PM2.5 is always at least PM1.0.</div>
+
+    <h3>Number concentration — five numbers, in particles per cubic centimetre</h3>
+    <p>
+      How <em>many</em> particles there are, regardless of their weight. The same cumulative rule applies, and the
+      series starts at a smaller size, 0.5 micrometres. These five are stored but are not shown on the web page,
+      to keep the replies small.
+    </p>
+    <p>
+      The two groups can move independently. A large number of very small particles weighs almost nothing, so the
+      count can rise sharply while the mass barely changes.
+    </p>
+
+    <h3>Typical particle size — one number, in micrometres</h3>
+    <p>
+      The average size of the particles currently being seen. It rises when the air contains coarse dust and falls
+      when it contains fine smoke.
+    </p>
+
+    <h4>A micrometre, for scale</h4>
+    <p>
+      One micrometre is a thousandth of a millimetre. A human hair is roughly 70 micrometres across, so PM10
+      particles are about a seventh of the width of a hair and PM1.0 particles are about a seventieth.
+    </p>
+  </div>
+
+  <!-- ================= PROTOCOL ================= -->
+  <div class="card" id="protocol">
+    <h2>The sensor protocol, in the detail needed to read this file</h2>
+
+    <h3>Commands, words and check bytes</h3>
+    <p>
+      Every operation is a 16-bit number sent as two bytes, most significant first. Data returns in groups of
+      three bytes: two data bytes followed by one check byte, computed from those two bytes with the Sensirion
+      CRC-8 (polynomial <code class="inline">0x31</code>, initial value <code class="inline">0xFF</code>, no
+      reflection, nothing applied at the end). This is identical to the carbon dioxide sensor, and the same
+      computation is written out again in this file so that each driver can be read on its own.
+    </p>
+    <p>
+      As with the other sensor, a command and its answer must be two separate exchanges. The combined
+      write-then-read form is not accepted.
+    </p>
+
+    <h3>The one command that carries an argument</h3>
+    <p>
+      Starting a measurement requires stating the format the results should be reported in. That argument is a
+      word, and like every word it needs its own check byte, so the frame sent is five bytes rather than two:
+    </p>
+<pre class="block"><code>byte   0      1      2      3      4
+     +------+------+------+------+------+
+     | 0x00 | 0x10 | 0x03 | 0x00 | 0xAC |
+     +------+------+------+------+------+
+      \___ command ___/\__ argument __/\_ CRC of the
+        0x0010 =           0x0300 =       argument only
+        start              floating-point
+        measurement        output format</code></pre>
+    <p>
+      The alternative argument the sensor accepts is a compact integer format. Floating-point is chosen because it
+      needs no scaling on this side.
+    </p>
+    <div class="note warn">The value <code class="inline">0x0300</code> appears twice in this file with two
+      unrelated meanings: as the argument selecting floating-point output, and as the command that reads measured
+      values. They are separate constants for that reason.</div>
+
+    <h3>The sixty bytes returned by a measurement read</h3>
+<pre class="block"><code>received: 60 bytes = 20 groups of (2 data bytes + 1 check byte)
+             |
+             |  strip_crc: verify every check byte, keep the data bytes
+             v
+          40 bytes = 10 groups of 4 bytes
+             |
+             |  each group of 4 bytes is one IEEE-754 floating-point number,
+             |  most significant byte first
+             v
+          10 numbers, in this fixed order:
+
+   0  pm1_0     1  pm2_5     2  pm4_0     3  pm10      4  nc0_5
+   5  nc1_0     6  nc2_5     7  nc4_0     8  nc10      9  typical_particle_size</code></pre>
+
+    <h3>IEEE-754, briefly</h3>
+    <p>
+      The four bytes of each value are not a plain whole number. They are a standard arrangement of a sign, an
+      exponent and a fraction that together encode a decimal number — the same arrangement the microcontroller
+      itself uses. Because the two agree exactly, the four bytes are reinterpreted rather than converted, and no
+      arithmetic is involved.
+    </p>
+
+    <h3>Continuous mode and the readiness flag</h3>
+    <p>
+      Once started, the sensor measures on its own about once per second. A one-word flag reports whether a result
+      has appeared since the last one was collected. Reading measured values without checking the flag is
+      permitted; it simply returns the previous result again.
+    </p>
+  </div>
+
+  <!-- ================= INTERFACES ================= -->
+  <div class="card" id="interfaces">
+    <h2>External interfaces — everything this file touches</h2>
+
+    <h3>1. What this file requires</h3>
+    <table>
+      <tr><th>Item</th><th>Source</th><th>Purpose</th></tr>
+      <tr><td><code>&amp;mut I2C&lt;'_, T, Blocking&gt;</code></td><td>Returned by <code>I2cBus::acquire</code> in <code>src/drivers/i2c_bus.rs</code></td>
+          <td>A working I2C block on a bus that has just been returned to its idle state.</td></tr>
+      <tr><td><code>Timer</code></td><td><code>embassy_time</code></td>
+          <td>Waits out the datasheet execution times while other tasks run.</td></tr>
+    </table>
+
+    <h3>2. What this file exposes</h3>
+    <table>
+      <tr><th>Item</th><th>Used by</th><th>Purpose</th></tr>
+      <tr><td><code>Sps30::new</code></td><td><code>src/tasks/sps30_task.rs</code></td><td>Binds the driver to a bus for one exchange.</td></tr>
+      <tr><td><code>serial_number</code></td><td>the task, during initialisation</td><td>Confirms the sensor is present and answering correctly.</td></tr>
+      <tr><td><code>stop_measurement</code></td><td>the task, before starting</td><td>Returns the sensor to idle, because it rejects a start while already measuring.</td></tr>
+      <tr><td><code>start_measurement</code></td><td>the task, during initialisation</td><td>Starts the fan and continuous measurement in floating-point format.</td></tr>
+      <tr><td><code>is_data_ready</code></td><td>the task, polled up to 30 times</td><td>Reports whether a fresh result has appeared.</td></tr>
+      <tr><td><code>read_measured_values</code></td><td>the task, every five seconds</td><td>Collects the ten values.</td></tr>
+      <tr><td><code>Measurement</code></td><td>the task, <code>src/utils/shared_state.rs</code>, the web server</td><td>The reading itself, stored in the history exactly as defined here.</td></tr>
+      <tr><td><code>Error</code></td><td>the task</td><td>Distinguishes a failed exchange from a failed checksum.</td></tr>
+      <tr><td><code>SERIAL_NUMBER_LEN</code></td><td>within this file</td><td>Fixes the size of the serial number buffers.</td></tr>
+      <tr><td><code>DEFAULT_ADDRESS</code>, <code>with_address</code>, <code>device_reset</code>, <code>start_fan_cleaning</code>, <code>sleep</code>, <code>wake_up</code></td><td>nothing at present</td>
+          <td>Complete but unused parts of the driver. See the note on <code>#![allow(dead_code)]</code> below.</td></tr>
+    </table>
+
+    <h3>3. Where a reading goes after this file</h3>
+<pre class="block"><code>sps30.rs            read_measured_values()  ->  Measurement { ten floating-point values, 40 bytes }
+sps30_task.rs       publish_sps30(measurement)
+shared_state.rs     stored whole in a ring buffer in external memory,
+                    with a timestamp and a sequence number
+web_server_task.rs  four mass values and the typical particle size are written into the JSON reply;
+                    the five number concentrations are stored but not sent
+browser             plotted</code></pre>
+    <p>
+      All ten values are retained in the history even though only five are published, so a future change to the
+      web page can show the number concentrations without any change to the storage.
+    </p>
+  </div>
+
+  <!-- ================= FLOW ================= -->
+  <div class="card" id="flow">
+    <h2>Measurement flow</h2>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant T as sps30_task
+  participant B as The shared I2C bus
+  participant D as Sps30 (this file)
+  participant S as The SPS30 sensor
+
+  Note over T: Once, at start-up and after any error
+  T->>B: take the lock, acquire the bus
+  T->>D: serial_number()
+  D->>S: write 0xD033, wait 5 ms, read 48 bytes
+  S-->>D: 16 words with check bytes
+  D-->>T: 32 characters and their length
+  T->>D: stop_measurement()
+  D->>S: write 0x0104, wait 20 ms
+  T->>D: start_measurement()
+  D->>S: write 0x0010 with argument 0x0300, wait 20 ms
+  Note over S: The fan starts. From now on the sensor<br/>produces a new result roughly once a second.
+  T->>B: release the lock
+
+  Note over T: Every five seconds
+  loop up to 30 times, 100 ms apart
+    T->>B: take the lock, acquire the bus
+    T->>D: is_data_ready()
+    D->>S: write 0x0202, wait 5 ms, read 3 bytes
+    S-->>D: one word: 0x0001 when a result is waiting
+    D-->>T: true or false
+    T->>B: release the lock
+  end
+  T->>B: take the lock, acquire the bus
+  T->>D: read_measured_values()
+  D->>S: write 0x0300, wait 5 ms, read 60 bytes
+  S-->>D: 20 words with check bytes
+  D-->>D: verify 20 check bytes, rebuild 10 floating-point values
+  D-->>T: Measurement, or an error
+  T->>B: release the lock
+      </pre>
+      <figcaption>The bus is released between every readiness poll, so the carbon dioxide sensor can use it during the waiting.</figcaption>
+    </figure>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+stateDiagram-v2
+  [*] --> Idle: power applied
+  Idle --> Measuring: start_measurement (0x0010)
+  Measuring --> Idle: stop_measurement (0x0104)
+  Idle --> Asleep: sleep (0x1001)
+  Asleep --> Idle: wake_up (0x1103, sent twice)
+  Measuring --> Idle: device_reset (0xD304)
+  Idle --> Idle: device_reset (0xD304)
+  Measuring --> Measuring: is_data_ready and read_measured_values
+
+  note right of Measuring
+    The fan runs. A new result
+    appears about once a second.
+    This is where the firmware
+    leaves the sensor.
+  end note
+
+  note right of Idle
+    A start is rejected while
+    already measuring, which is
+    why the task sends a stop
+    first.
+  end note
+      </pre>
+      <figcaption>The states the sensor can be in and the commands that move between them. This firmware uses only the top two.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= MODULE DOC ================= -->
+  <h2 class="section" id="s-moduledoc">Module description <span class="range">lines 1–12</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">//! Minimal driver for the Sensirion SPS30 particulate matter sensor.
+//!
+//! The sensor is used in its continuous measurement mode:
+//!
+//! 1. `start_measurement` (0x0010) starts the fan and the measurement loop.
+//! 2. `is_data_ready` (0x0202) reports when a new result is available (~1/s).
+//! 3. `read_measured_values` (0x0300) returns 10 IEEE-754 big-endian floats.
+//!
+//! Every word on the wire is big-endian and protected by a CRC-8 with
+//! polynomial 0x31, initial value 0xFF, no reflection and no final XOR.</span>
+
+<span class="at">#![allow(dead_code)]</span></code></pre>
+      <div class="explain">
+        <span class="tag">Documentation and one attribute</span>
+        <p>The <code class="inline">//!</code> lines describe the file as a whole and state the three steps the
+           firmware actually performs, which is the minimum needed to compare this code against the datasheet.</p>
+        <p><strong>"Continuous measurement mode"</strong> is the sensor's normal way of working: once started it
+           measures repeatedly on its own schedule. The alternative would be to start and stop it around each
+           reading, which is not done here because the fan needs time to reach a steady airflow.</p>
+        <p><code class="inline">#![allow(dead_code)]</code> switches off the warning about items that are never
+           used. Six items here are complete and correct but not called by this firmware:
+           <code class="inline">device_reset</code>, <code class="inline">start_fan_cleaning</code>,
+           <code class="inline">sleep</code>, <code class="inline">wake_up</code>,
+           <code class="inline">with_address</code> and <code class="inline">DEFAULT_ADDRESS</code>. They are kept
+           because they are documented behaviour of the sensor and would otherwise have to be written again when
+           needed.</p>
+        <div class="note warn">The suppression applies to the whole file, so a genuinely unused item added later
+          will also not be reported.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IMPORTS ================= -->
+  <h2 class="section" id="s-imports">Imports <span class="range">lines 14–18</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_time::<span class="ty">Timer</span>;
+<span class="k">use</span> esp_hal::{
+    i2c::{<span class="ty">Error</span> <span class="k">as</span> <span class="ty">I2cError</span>, <span class="ty">Instance</span>, <span class="ty">I2C</span>},
+    <span class="ty">Blocking</span>,
+};</code></pre>
+      <div class="explain">
+        <span class="tag alt">Imports</span>
+        <p>Identical to the carbon dioxide driver, because both need exactly the same two things: a way to wait
+           and a way to speak I2C.</p>
+        <ul>
+          <li><code class="inline">Timer</code> waits a stated number of milliseconds while other tasks run.</li>
+          <li><code class="inline">Error as I2cError</code> renames the hardware driver's error type on import,
+              because this file defines its own type called <code class="inline">Error</code>.</li>
+          <li><code class="inline">Instance</code> is the property shared by all I2C hardware blocks, which is
+              what lets this driver work with either of them.</li>
+          <li><code class="inline">I2C</code> is the hardware driver and <code class="inline">Blocking</code>
+              selects the variant whose calls return only when the transfer has finished.</li>
+        </ul>
+        <div class="note">This file imports nothing from the rest of the project, and nothing from the carbon
+          dioxide driver either. The duplication between the two is deliberate: neither depends on the other.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ADDRESS ================= -->
+  <h2 class="section" id="s-address">The sensor's address <span class="range">lines 20–21</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Fixed 7-bit address of the SPS30.</span>
+<span class="k">pub const</span> <span class="ty">DEFAULT_ADDRESS</span>: <span class="ty">u8</span> = <span class="nu">0x69</span>;</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · the bus</span>
+        <p>The number that identifies this sensor among the devices sharing the two wires.</p>
+        <p>The comment says <strong>fixed</strong> rather than "factory default", and the difference is real: the
+           SPS30 offers no way to change its address at all, so exactly one can be attached to a bus.</p>
+        <p>This is the address that appears in the start-up scan produced by
+           <code class="inline">src/drivers/i2c_bus.rs</code>. If the line
+           <code class="inline">I2C device found at 0x69</code> is missing from the console, no command in this
+           file can succeed and the fault is electrical rather than in this code.</p>
+        <div class="note">The SPS30 needs a 5 volt supply for its fan and laser even though its two signal wires
+          work at the microcontroller's lower voltage. A sensor with only the signal wires connected is silent.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= COMMANDS ================= -->
+  <h2 class="section" id="s-commands">Command codes <span class="range">lines 23–34</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">CMD_START_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0x0010</span>;
+<span class="k">const</span> <span class="ty">CMD_STOP_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0x0104</span>;
+<span class="k">const</span> <span class="ty">CMD_READ_DATA_READY_FLAG</span>: <span class="ty">u16</span> = <span class="nu">0x0202</span>;
+<span class="k">const</span> <span class="ty">CMD_READ_MEASURED_VALUES</span>: <span class="ty">u16</span> = <span class="nu">0x0300</span>;
+<span class="k">const</span> <span class="ty">CMD_SLEEP</span>: <span class="ty">u16</span> = <span class="nu">0x1001</span>;
+<span class="k">const</span> <span class="ty">CMD_WAKE_UP</span>: <span class="ty">u16</span> = <span class="nu">0x1103</span>;
+<span class="k">const</span> <span class="ty">CMD_START_FAN_CLEANING</span>: <span class="ty">u16</span> = <span class="nu">0x5607</span>;
+<span class="k">const</span> <span class="ty">CMD_READ_SERIAL_NUMBER</span>: <span class="ty">u16</span> = <span class="nu">0xD033</span>;
+<span class="k">const</span> <span class="ty">CMD_DEVICE_RESET</span>: <span class="ty">u16</span> = <span class="nu">0xD304</span>;
+
+<span class="cm">/// Argument selecting big-endian IEEE-754 float output format.</span>
+<span class="k">const</span> <span class="ty">MEASUREMENT_FORMAT_FLOAT</span>: <span class="ty">u16</span> = <span class="nu">0x0300</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>The nine operations this driver can request, plus one argument value. Each number is taken directly
+           from the SPS30 datasheet.</p>
+        <table>
+          <tr><th>Constant</th><th>Code</th><th>Effect on the sensor</th></tr>
+          <tr><td><code>CMD_START_MEASUREMENT</code></td><td>0x0010</td><td>Starts the fan and continuous measurement. Requires an argument.</td></tr>
+          <tr><td><code>CMD_STOP_MEASUREMENT</code></td><td>0x0104</td><td>Stops the fan and returns to idle.</td></tr>
+          <tr><td><code>CMD_READ_DATA_READY_FLAG</code></td><td>0x0202</td><td>Returns one word stating whether a fresh result is waiting.</td></tr>
+          <tr><td><code>CMD_READ_MEASURED_VALUES</code></td><td>0x0300</td><td>Returns the ten values.</td></tr>
+          <tr><td><code>CMD_SLEEP</code></td><td>0x1001</td><td>Enters a low-power state in which the sensor ignores the bus.</td></tr>
+          <tr><td><code>CMD_WAKE_UP</code></td><td>0x1103</td><td>Leaves that state.</td></tr>
+          <tr><td><code>CMD_START_FAN_CLEANING</code></td><td>0x5607</td><td>Runs the fan at full speed for ten seconds to blow accumulated dust off the optics.</td></tr>
+          <tr><td><code>CMD_READ_SERIAL_NUMBER</code></td><td>0xD033</td><td>Returns the sensor's identifier as text.</td></tr>
+          <tr><td><code>CMD_DEVICE_RESET</code></td><td>0xD304</td><td>Restarts the sensor, which comes back idle.</td></tr>
+        </table>
+        <p><code class="inline">MEASUREMENT_FORMAT_FLOAT</code> is not a command. It is the argument sent with a
+           start, selecting results as decimal numbers rather than the sensor's compact integer format.</p>
+        <div class="note warn"><strong>0x0300 appears twice.</strong> It is both the command that reads measured
+          values and the argument that selects floating-point output. The two are unrelated and are separate
+          constants so that neither can be used in place of the other by accident.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DELAYS ================= -->
+  <h2 class="section" id="s-delays">Execution times and buffer size <span class="range">lines 36–43</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Execution time of `start_measurement` / `stop_measurement`.</span>
+<span class="k">const</span> <span class="ty">MEASUREMENT_CONTROL_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">20</span>;
+<span class="cm">/// Execution time of `device_reset`.</span>
+<span class="k">const</span> <span class="ty">RESET_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">100</span>;
+<span class="cm">/// Execution time of short read commands.</span>
+<span class="k">const</span> <span class="ty">SHORT_COMMAND_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">5</span>;
+<span class="cm">/// Length of the serial number string, including the terminating NUL.</span>
+<span class="k">pub const</span> <span class="ty">SERIAL_NUMBER_LEN</span>: <span class="ty">usize</span> = <span class="nu">32</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <table>
+          <tr><th>Constant</th><th>Value</th><th>Meaning</th></tr>
+          <tr><td><code>MEASUREMENT_CONTROL_DELAY_MS</code></td><td>20 ms</td>
+              <td>How long the sensor is busy after a start or a stop. It is not how long the fan takes to reach
+                  full speed — that is much longer, and is discussed at
+                  <code>start_measurement</code>.</td></tr>
+          <tr><td><code>RESET_DELAY_MS</code></td><td>100 ms</td><td>How long a restart takes.</td></tr>
+          <tr><td><code>SHORT_COMMAND_DELAY_MS</code></td><td>5 ms</td>
+              <td>The pause between sending a read command and requesting its answer. Used by every read,
+                  including the sixty-byte one.</td></tr>
+          <tr><td><code>SERIAL_NUMBER_LEN</code></td><td>32</td>
+              <td>The size of the serial number in characters, counting the zero byte that marks its end.</td></tr>
+        </table>
+        <p>Note that the SPS30's longest wait is 100 milliseconds, where the carbon dioxide sensor needs five
+           seconds. Nothing here holds the shared bus for long, which is why the readiness polling can afford to
+           take and release the lock repeatedly.</p>
+        <p><code class="inline">SERIAL_NUMBER_LEN</code> is marked <code class="inline">pub</code> because it
+           appears in the type returned by <code class="inline">serial_number</code>, so a caller naming that type
+           needs the constant.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CRC CONSTANTS ================= -->
+  <h2 class="section" id="s-crcconst">Checksum settings <span class="range">lines 45–46</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">CRC8_POLYNOMIAL</span>: <span class="ty">u8</span> = <span class="nu">0x31</span>;
+<span class="k">const</span> <span class="ty">CRC8_INIT</span>: <span class="ty">u8</span> = <span class="nu">0xFF</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>The two numbers defining the checksum used by every Sensirion sensor: the pattern combined into the
+           running value, and the value the computation starts from.</p>
+        <p>They are the same two numbers as in <code class="inline">src/drivers/scd41.rs</code>. Repeating them
+           rather than sharing them keeps each driver independent, so a change to one sensor's driver cannot
+           affect the other.</p>
+        <p>A wrong value here would not produce an obvious failure. It would cause every reading to be rejected as
+           corrupt, and the sensor would appear to be faulty.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ERROR ================= -->
+  <h2 class="section" id="s-error">The error type <span class="range">lines 48–61</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Errors reported by the driver.</span>
+<span class="at">#[derive(Debug, Clone, Copy, PartialEq)]</span>
+<span class="k">pub enum</span> <span class="ty">Error</span> {
+    <span class="cm">/// The I2C transfer itself failed (no acknowledge, timeout, ...).</span>
+    Bus(<span class="ty">I2cError</span>),
+    <span class="cm">/// A word came back with a CRC that does not match its data bytes.</span>
+    Crc,
+}
+
+<span class="k">impl</span> <span class="ty">From</span>&lt;<span class="ty">I2cError</span>&gt; <span class="k">for</span> <span class="ty">Error</span> {
+    <span class="k">fn</span> <span class="fn">from</span>(error: <span class="ty">I2cError</span>) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Error</span>::Bus(error)
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>Two things can go wrong, and they mean different things:</p>
+        <ul>
+          <li><strong><code class="inline">Bus</code></strong> — the exchange itself failed. Nothing answered, or
+              the transfer was cut short. Usually the sensor is absent, its 5 volt supply is missing, or it is
+              asleep. The original hardware error is carried inside so it can be printed.</li>
+          <li><strong><code class="inline">Crc</code></strong> — the sensor answered but a check byte did not
+              match. The sensor is present and talking; the wiring is picking up interference.</li>
+        </ul>
+        <p>This type is separate from the identically shaped one in the carbon dioxide driver. The two are
+           deliberately not shared, and the task that uses this sensor imports this one by name.</p>
+        <p>The <code class="inline">From</code> block states how a hardware error becomes an
+           <code class="inline">Error::Bus</code>. Once that exists, the question-mark operator used throughout
+           the file performs the conversion automatically.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MEASUREMENT ================= -->
+  <h2 class="section" id="s-measurement">The reading <span class="range">lines 63–86</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// One complete set of measured values.</span>
+<span class="at">#[derive(Debug, Clone, Copy, PartialEq)]</span>
+<span class="k">pub struct</span> <span class="ty">Measurement</span> {
+    <span class="cm">/// Mass concentration PM1.0 in ug/m3.</span>
+    <span class="k">pub</span> pm1_0: <span class="ty">f32</span>,
+    <span class="cm">/// Mass concentration PM2.5 in ug/m3.</span>
+    <span class="k">pub</span> pm2_5: <span class="ty">f32</span>,
+    <span class="cm">/// Mass concentration PM4.0 in ug/m3.</span>
+    <span class="k">pub</span> pm4_0: <span class="ty">f32</span>,
+    <span class="cm">/// Mass concentration PM10 in ug/m3.</span>
+    <span class="k">pub</span> pm10: <span class="ty">f32</span>,
+    <span class="cm">/// Number concentration PM0.5 in particles/cm3.</span>
+    <span class="k">pub</span> nc0_5: <span class="ty">f32</span>,
+    <span class="cm">/// Number concentration PM1.0 in particles/cm3.</span>
+    <span class="k">pub</span> nc1_0: <span class="ty">f32</span>,
+    <span class="cm">/// Number concentration PM2.5 in particles/cm3.</span>
+    <span class="k">pub</span> nc2_5: <span class="ty">f32</span>,
+    <span class="cm">/// Number concentration PM4.0 in particles/cm3.</span>
+    <span class="k">pub</span> nc4_0: <span class="ty">f32</span>,
+    <span class="cm">/// Number concentration PM10 in particles/cm3.</span>
+    <span class="k">pub</span> nc10: <span class="ty">f32</span>,
+    <span class="cm">/// Typical particle size in um.</span>
+    <span class="k">pub</span> typical_particle_size: <span class="ty">f32</span>,
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · stored in the history</span>
+        <p>One reading: ten decimal numbers, forty bytes. The field order matches the order the sensor sends them
+           in, so the decoding step below is a straight copy with no rearranging.</p>
+        <p>The units are stated in the comments in plain characters — <code class="inline">ug/m3</code> for
+           micrograms per cubic metre and <code class="inline">um</code> for micrometres — rather than with the
+           Greek letter, because these comments appear in build output where non-English characters are not
+           guaranteed to survive. The web page uses the proper symbols.</p>
+        <p>Unlike the carbon dioxide sensor's reading, the values are stored exactly as received rather than as
+           raw words needing conversion, because the sensor already reports them in their final units.</p>
+        <p><strong><code class="inline">Eq</code> is not among the derived properties</strong>, and cannot be:
+           these are floating-point numbers, and the standard they follow declares that a value representing "not
+           a number" is not equal even to itself. <code class="inline">PartialEq</code> is derived, which allows
+           comparison without claiming that every value equals itself.</p>
+        <p>All forty bytes are kept in the history. Only the four mass values and the typical particle size are
+           published by the web server; the five number concentrations are retained but not sent, to keep replies
+           small.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CRC8 ================= -->
+  <h2 class="section" id="s-crc8">The checksum computation <span class="range">lines 88–104</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Compute the Sensirion CRC-8 over a data word.</span>
+<span class="k">fn</span> <span class="fn">crc8</span>(data: &amp;[<span class="ty">u8</span>]) -&gt; <span class="ty">u8</span> {
+    <span class="k">let mut</span> crc = <span class="ty">CRC8_INIT</span>;
+
+    <span class="k">for</span> byte <span class="k">in</span> data {
+        crc ^= byte;
+        <span class="k">for</span> _ <span class="k">in</span> <span class="nu">0</span>..<span class="nu">8</span> {
+            <span class="k">if</span> crc &amp; <span class="nu">0x80</span> != <span class="nu">0</span> {
+                crc = (crc &lt;&lt; <span class="nu">1</span>) ^ <span class="ty">CRC8_POLYNOMIAL</span>;
+            } <span class="k">else</span> {
+                crc &lt;&lt;= <span class="nu">1</span>;
+            }
+        }
+    }
+
+    crc
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Verification</span>
+        <p>Produces the check byte for a group of data bytes. Here it is always called with two bytes: the two
+           halves of one word.</p>
+        <p><strong>Step by step.</strong> The value starts at <code class="inline">0xFF</code>. Each data byte is
+           combined into it with an exclusive-or, which flips exactly the bits that byte has set. The value is
+           then processed one bit at a time, eight times: if its highest bit is set, it is shifted left and the
+           polynomial is combined in; otherwise it is only shifted. Whatever remains at the end is the check
+           byte.</p>
+        <p>The property this gives is that a change to any single bit of the data produces a different check byte,
+           which is what makes corruption detectable.</p>
+        <p>This function is character for character the same as the one in
+           <code class="inline">src/drivers/scd41.rs</code>. The duplication is deliberate: it keeps the two
+           drivers independent, and each is short enough that sharing it would create a dependency for no real
+           saving.</p>
+        <p>Unlike the carbon dioxide driver, this one runs it twenty times per reading rather than three, and once
+           more when sending the start argument — still trivial against a five-second interval.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STRIP CRC ================= -->
+  <h2 class="section" id="s-stripcrc">Removing and checking the check bytes <span class="range">lines 106–119</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart LR
+  A["raw: 60 bytes as received<br/>20 x (data, data, check)"] --> B["Take the next three bytes"]
+  B --> C["Recompute the check byte<br/>from the first two"]
+  C --> D{"Does it match the third?"}
+  D -- no --> E["Return Error::Crc<br/>and abandon everything"]
+  D -- yes --> F["Copy the two data bytes<br/>into the output"]
+  F --> G{"More groups?"}
+  G -- yes --> B
+  G -- no --> H["data: 40 bytes,<br/>all verified"]
+    </pre>
+    <figcaption>The same function handles a three-byte flag and a sixty-byte measurement; only the buffer sizes differ.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Strip the CRC bytes from a raw `word + crc` stream, verifying each one.
+///
+/// `raw` must be a multiple of 3 bytes; `data` receives 2 bytes per triple.</span>
+<span class="k">fn</span> <span class="fn">strip_crc</span>(raw: &amp;[<span class="ty">u8</span>], data: &amp;<span class="k">mut</span> [<span class="ty">u8</span>]) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+    <span class="k">for</span> (chunk, out) <span class="k">in</span> raw.<span class="fn">chunks_exact</span>(<span class="nu">3</span>).<span class="fn">zip</span>(data.<span class="fn">chunks_exact_mut</span>(<span class="nu">2</span>)) {
+        <span class="k">if</span> <span class="fn">crc8</span>(&amp;chunk[..<span class="nu">2</span>]) != chunk[<span class="nu">2</span>] {
+            <span class="k">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::Crc);
+        }
+        out[<span class="nu">0</span>] = chunk[<span class="nu">0</span>];
+        out[<span class="nu">1</span>] = chunk[<span class="nu">1</span>];
+    }
+
+    <span class="ty">Ok</span>(())
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Verification</span>
+        <p>Converts a stream of three-byte groups into a stream of two-byte words, checking every group on the
+           way. This is where the carbon dioxide driver and this one differ in structure: that sensor always
+           returns exactly three words, so its equivalent is fixed at nine bytes, whereas this one must handle
+           three, forty-eight and sixty bytes, so the sizes are given by the caller.</p>
+        <p><code class="inline">chunks_exact(3)</code> walks the received bytes in groups of three;
+           <code class="inline">chunks_exact_mut(2)</code> walks the output in pairs;
+           <code class="inline">zip</code> advances them together. No index arithmetic is written by hand, and if
+           the two buffers do not correspond the shorter one simply ends the loop.</p>
+        <p>For each group the check byte is recomputed from the first two bytes and compared with the third. A
+           single mismatch anywhere ends the function immediately with <code class="inline">Error::Crc</code>, and
+           the caller discards the whole answer. A reading with one bad word is not partially usable.</p>
+        <p>The comment states the requirement the caller must meet: the received buffer must be a whole number of
+           three-byte groups, and the output must have room for two bytes per group. Both callers in this file
+           declare fixed-size buffers that satisfy this, so the requirement cannot be violated at run time.</p>
+        <p>The function returns nothing on success. Its result is the bytes it wrote into the output buffer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STRUCT ================= -->
+  <h2 class="section" id="s-struct">The driver value <span class="range">lines 121–128</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// SPS30 attached to an esp-hal I2C bus.
+///
+/// The I2C transfers themselves are blocking, but every datasheet-mandated
+/// execution delay yields to the Embassy executor instead of busy-waiting.</span>
+<span class="k">pub struct</span> <span class="ty">Sps30</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt; {
+    i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;,
+    address: <span class="ty">u8</span>,
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>The driver holds only a borrowed I2C block and the address to speak to. It stores nothing about the
+           sensor, so creating one costs nothing and the driver's idea of the sensor cannot drift out of step with
+           reality.</p>
+        <p>This is why the task creates a fresh <code class="inline">Sps30</code> for every exchange — several
+           times per reading, once for each readiness poll — rather than keeping one. The state that does exist,
+           namely whether the sensor has been started, is held by the task.</p>
+        <p><strong>The comment describes the timing behaviour precisely.</strong> Sending bytes occupies the
+           processor until the transfer finishes. Waiting out an execution time does not: the task is suspended
+           and others run.</p>
+        <p><code class="inline">'a</code> and <code class="inline">'d</code> record how long the borrowed block
+           lives, so the driver cannot outlive it. <code class="inline">T</code> stands for whichever I2C hardware
+           block is in use.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NEW ================= -->
+  <h2 class="section" id="s-new">Binding the driver to a bus <span class="range">lines 130–142</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">impl</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt; <span class="ty">Sps30</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt;
+<span class="k">where</span>
+    T: <span class="ty">Instance</span>,
+{
+    <span class="cm">/// Bind the driver to a bus, using the fixed SPS30 address.</span>
+    <span class="k">pub fn</span> <span class="fn">new</span>(i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Self</span>::<span class="fn">with_address</span>(i2c, <span class="ty">DEFAULT_ADDRESS</span>)
+    }
+
+    <span class="cm">/// Bind the driver to a bus using an explicit 7-bit address.</span>
+    <span class="k">pub fn</span> <span class="fn">with_address</span>(i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;, address: <span class="ty">u8</span>) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Self</span> { i2c, address }
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task</span>
+        <p><code class="inline">where T: Instance</code> restricts everything in this block to types that really
+           are I2C hardware blocks.</p>
+        <p><code class="inline">new</code> is the only form this firmware uses. It supplies the fixed address.</p>
+        <p><code class="inline">with_address</code> is present for symmetry with the other driver. For this sensor
+           it has no practical use, because the address cannot be changed; it exists so that both drivers offer
+           the same shape.</p>
+        <p>Neither function touches the hardware. Binding a driver produces no signal on the wires.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEND COMMAND ================= -->
+  <h2 class="section" id="s-sendcommand">Sending one command <span class="range">lines 144–149</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a bare 16-bit command and wait for its execution time.</span>
+    <span class="k">async fn</span> <span class="fn">send_command</span>(&amp;<span class="k">mut</span> <span class="k">self</span>, command: <span class="ty">u16</span>, execution_delay_ms: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.i2c.<span class="fn">write</span>(<span class="k">self</span>.address, &amp;command.<span class="fn">to_be_bytes</span>())?;
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(execution_delay_ms).<span class="k">await</span>;
+        <span class="ty">Ok</span>(())
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block</span>
+        <p>Every command that carries no argument goes through these three lines.</p>
+        <p><code class="inline">to_be_bytes</code> splits the 16-bit command into two bytes, most significant
+           first: <code class="inline">0x0104</code> becomes <code class="inline">[0x01, 0x04]</code>. The name
+           states the byte order, so it cannot be confused with the opposite convention.</p>
+        <p>The question mark is the early-return operator: if the exchange failed, the function stops immediately
+           and the failure reaches the caller as <code class="inline">Error::Bus</code>. The wait is then skipped,
+           which is correct, because a command that was never delivered is not being executed.</p>
+        <p><code class="inline">Timer::after_millis(...).await</code> suspends the calling task for the execution
+           time. Other tasks run during it.</p>
+        <p>The function is private. Callers ask for operations by name, and the command code and its execution
+           time are supplied together here so the two cannot be mismatched.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ARGUMENT ================= -->
+  <h2 class="section" id="s-argument">Sending a command with an argument <span class="range">lines 151–171</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a 16-bit command followed by one CRC-protected argument word.</span>
+    <span class="k">async fn</span> <span class="fn">send_command_with_argument</span>(
+        &amp;<span class="k">mut</span> <span class="k">self</span>,
+        command: <span class="ty">u16</span>,
+        argument: <span class="ty">u16</span>,
+        execution_delay_ms: <span class="ty">u64</span>,
+    ) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> command = command.<span class="fn">to_be_bytes</span>();
+        <span class="k">let</span> argument = argument.<span class="fn">to_be_bytes</span>();
+        <span class="k">let</span> frame = [
+            command[<span class="nu">0</span>],
+            command[<span class="nu">1</span>],
+            argument[<span class="nu">0</span>],
+            argument[<span class="nu">1</span>],
+            <span class="fn">crc8</span>(&amp;argument),
+        ];
+
+        <span class="k">self</span>.i2c.<span class="fn">write</span>(<span class="k">self</span>.address, &amp;frame)?;
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(execution_delay_ms).<span class="k">await</span>;
+        <span class="ty">Ok</span>(())
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block · used once</span>
+        <p>Builds the five-byte frame shown in the protocol section above and sends it in one exchange. Only
+           <code class="inline">start_measurement</code> uses this.</p>
+        <p><strong>The checksum covers the argument alone.</strong> <code class="inline">crc8(&amp;argument)</code>
+           is computed from the two argument bytes and nothing else. The command bytes are not protected, which is
+           the rule these sensors follow: commands are unprotected, data words are protected. Including the
+           command bytes in the computation would produce a check byte the sensor rejects.</p>
+        <p>Both halves are converted to bytes with the same most-significant-first ordering used everywhere else,
+           and the five bytes are assembled into a fixed-size array on the stack.</p>
+        <p>The whole frame goes out as a single exchange. Splitting it into two would leave the sensor with a
+           command whose argument never arrived.</p>
+        <p>The final two lines are identical to <code class="inline">send_command</code>: report a failure at once,
+           otherwise wait the execution time.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= READ RESPONSE ================= -->
+  <h2 class="section" id="s-readresponse">Reading an answer of any length <span class="range">lines 173–185</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a command and read `raw.len() / 3` CRC-checked words back.
+    ///
+    /// The SPS30 requires the write and the read to be separate transactions,
+    /// so this is deliberately not a repeated-start `write_read`.</span>
+    <span class="k">async fn</span> <span class="fn">read_response</span>(
+        &amp;<span class="k">mut</span> <span class="k">self</span>,
+        command: <span class="ty">u16</span>,
+        raw: &amp;<span class="k">mut</span> [<span class="ty">u8</span>],
+        data: &amp;<span class="k">mut</span> [<span class="ty">u8</span>],
+    ) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(command, <span class="ty">SHORT_COMMAND_DELAY_MS</span>).<span class="k">await</span>?;
+        <span class="k">self</span>.i2c.<span class="fn">read</span>(<span class="k">self</span>.address, raw)?;
+        <span class="fn">strip_crc</span>(raw, data)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block</span>
+        <p>Three lines that every read in this file uses: send the command, collect the raw bytes, verify and
+           unpack them.</p>
+        <p><strong>The buffers are supplied by the caller</strong>, and their sizes decide how much is read. The
+           hardware driver reads exactly enough bytes to fill the buffer it is given, so a three-byte buffer reads
+           the readiness flag and a sixty-byte buffer reads a full measurement, with no length parameter
+           needed.</p>
+        <table>
+          <tr><th>Caller</th><th><code>raw</code></th><th><code>data</code></th><th>Words</th></tr>
+          <tr><td><code>is_data_ready</code></td><td>3 bytes</td><td>2 bytes</td><td>1</td></tr>
+          <tr><td><code>serial_number</code></td><td>48 bytes</td><td>32 bytes</td><td>16</td></tr>
+          <tr><td><code>read_measured_values</code></td><td>60 bytes</td><td>40 bytes</td><td>20</td></tr>
+        </table>
+        <p><strong>The comment records a protocol requirement, not a preference.</strong> The usual efficient
+           approach keeps hold of the bus between the command and the answer using a repeated START. This sensor
+           does not accept that: the command must be a finished exchange before the answer is requested in a
+           second one. Using the combined form would produce no answer at all.</p>
+        <p>Every read uses the same five-millisecond pause, including the sixty-byte one, because that pause is a
+           property of the sensor rather than of the amount of data.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= START ================= -->
+  <h2 class="section" id="s-start">Starting continuous measurement <span class="range">lines 188–199</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Start continuous measurement in big-endian float output format.
+    ///
+    /// The fan spins up immediately; the first values are available after
+    /// roughly one second and are only stable after ~30 seconds.</span>
+    <span class="k">pub async fn</span> <span class="fn">start_measurement</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command_with_argument</span>(
+            <span class="ty">CMD_START_MEASUREMENT</span>,
+            <span class="ty">MEASUREMENT_FORMAT_FLOAT</span>,
+            <span class="ty">MEASUREMENT_CONTROL_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task during initialisation</span>
+        <p>Starts the fan and the measurement loop, and selects floating-point output. From this point the sensor
+           produces a new result about once a second until it is stopped.</p>
+        <p><strong>The comment states three different timescales, and the difference matters when reading the
+           output.</strong></p>
+        <ul>
+          <li><strong>20 milliseconds</strong> — the command itself is finished and the sensor accepts the next
+              one.</li>
+          <li><strong>About 1 second</strong> — the first result appears and can be read.</li>
+          <li><strong>About 30 seconds</strong> — the airflow through the sensor has settled and the values can be
+              trusted.</li>
+        </ul>
+        <p>Only the first is waited for here. The firmware publishes readings from the first second onwards, so
+           the first few entries after a restart may be inaccurate. They are kept rather than discarded, because
+           the history records the timestamps and a gap would be harder to interpret than a slightly wrong start.</p>
+        <p><strong>The sensor rejects this command while it is already measuring</strong>, which happens whenever
+           the microcontroller restarts and the sensor does not. The task therefore sends a stop first, ignoring
+           its result, and only then starts.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODE ================= -->
+  <h2 class="section" id="s-mode">Stopping, resetting and cleaning <span class="range">lines 201–216</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Stop continuous measurement and switch back to idle mode.</span>
+    <span class="k">pub async fn</span> <span class="fn">stop_measurement</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_STOP_MEASUREMENT</span>, <span class="ty">MEASUREMENT_CONTROL_DELAY_MS</span>)
+            .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task before every start</span>
+        <p>Stops the fan and returns the sensor to idle.</p>
+        <p>Its purpose here is not to stop measuring but to reach a known state. The task sends it immediately
+           before <code class="inline">start_measurement</code> and discards its result, because a sensor that was
+           already idle reports a failure and that failure is meaningless.</p>
+        <p>This is what makes the firmware survive a restart of the microcontroller alone: the sensor keeps its
+           own power and its fan keeps turning, and this command brings it back to a state from which a start is
+           accepted.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Reset the sensor; it comes back in idle mode.</span>
+    <span class="k">pub async fn</span> <span class="fn">device_reset</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_DEVICE_RESET</span>, <span class="ty">RESET_DELAY_MS</span>).<span class="k">await</span>
+    }
+
+    <span class="cm">/// Run the fan-cleaning routine (10 s at maximum speed).</span>
+    <span class="k">pub async fn</span> <span class="fn">start_fan_cleaning</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_START_FAN_CLEANING</span>, <span class="ty">MEASUREMENT_CONTROL_DELAY_MS</span>)
+            .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p><strong>Reset</strong> restarts the sensor, which returns idle after 100 milliseconds. It is the
+           heaviest recovery step available. The task does not use it: sending a stop and then a start achieves the
+           same result and is quicker.</p>
+        <p><strong>Fan cleaning</strong> runs the fan at full speed for ten seconds to blow accumulated dust off
+           the optics. The manufacturer recommends it weekly for continuously running sensors. It only starts the
+           routine; the command finishes in 20 milliseconds while the fan continues for ten seconds, during which
+           readings are meaningless.</p>
+        <p>Cleaning is not scheduled by this firmware. Adding it would mean choosing a moment, suppressing the
+           readings taken during it, and recording that they were suppressed — decisions belonging to the task,
+           not to this file.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SLEEP ================= -->
+  <h2 class="section" id="s-sleep">Sleeping and waking <span class="range">lines 218–231</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Enter sleep mode. Only valid in idle mode.</span>
+    <span class="k">pub async fn</span> <span class="fn">sleep</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_SLEEP</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>).<span class="k">await</span>
+    }
+
+    <span class="cm">/// Leave sleep mode.
+    ///
+    /// While asleep the sensor does not acknowledge its address, so the first
+    /// attempt is expected to fail; the command is sent twice for that reason.</span>
+    <span class="k">pub async fn</span> <span class="fn">wake_up</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> _ = <span class="k">self</span>.i2c.<span class="fn">write</span>(<span class="k">self</span>.address, &amp;<span class="ty">CMD_WAKE_UP</span>.<span class="fn">to_be_bytes</span>());
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">SHORT_COMMAND_DELAY_MS</span>).<span class="k">await</span>;
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_WAKE_UP</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>).<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p><strong>Sleep</strong> puts the sensor into a low-power state. The comment records the restriction: it
+           is only accepted while idle, so a running measurement must be stopped first.</p>
+        <p><strong>Waking</strong> needs the unusual treatment the comment explains. A sleeping SPS30 does not
+           acknowledge its address at all, so the first attempt cannot succeed — but receiving it is what rouses
+           the sensor's interface. The command is therefore sent twice:</p>
+        <ol>
+          <li>The first write is expected to fail, and its result is deliberately discarded with
+              <code class="inline">let _ =</code>. Its only purpose is to rouse the sensor.</li>
+          <li>Five milliseconds are allowed for that to happen.</li>
+          <li>The second write is the real one. Its result is returned, so a sensor that is genuinely absent still
+              reports a failure.</li>
+        </ol>
+        <p>Discarding the first result is essential. Using the question-mark operator there would return a failure
+           in exactly the case the function is designed to handle.</p>
+        <p>The firmware never puts this sensor to sleep, because a sleeping particle sensor measures nothing and
+           its fan needs about thirty seconds to give trustworthy readings after waking.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DATA READY ================= -->
+  <h2 class="section" id="s-ready">Asking whether a result is waiting <span class="range">lines 233–241</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Report whether a new measurement result is available.</span>
+    <span class="k">pub async fn</span> <span class="fn">is_data_ready</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">bool</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let mut</span> raw = [<span class="nu">0u8</span>; <span class="nu">3</span>];
+        <span class="k">let mut</span> data = [<span class="nu">0u8</span>; <span class="nu">2</span>];
+        <span class="k">self</span>.<span class="fn">read_response</span>(<span class="ty">CMD_READ_DATA_READY_FLAG</span>, &amp;<span class="k">mut</span> raw, &amp;<span class="k">mut</span> data)
+            .<span class="k">await</span>?;
+
+        <span class="ty">Ok</span>(data[<span class="nu">1</span>] == <span class="nu">0x01</span>)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task, up to 30 times per reading</span>
+        <p>The smallest exchange in the file: one word, three bytes on the wire.</p>
+        <p>The sensor returns <code class="inline">0x0001</code> when a result has appeared since the last one was
+           collected, and <code class="inline">0x0000</code> otherwise. The first byte is always zero and carries
+           no information, which is why only <code class="inline">data[1]</code> is examined.</p>
+        <p>The comparison is against <code class="inline">0x01</code> exactly, rather than testing for any
+           non-zero value. Only the two documented values can occur, and an undocumented one is treated as "not
+           ready", which is the safe interpretation: it causes another poll rather than a reading that may not
+           exist.</p>
+        <p>The check byte is verified like any other, so a corrupted flag produces
+           <code class="inline">Error::Crc</code> rather than a false answer.</p>
+        <p>The task calls this up to thirty times, a tenth of a second apart, releasing the shared bus between
+           each. If none of them reports a result, it reads the values anyway — the previous result is better than
+           no entry in the history, and a genuine fault still shows up as an error from the read itself.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SERIAL ================= -->
+  <h2 class="section" id="s-serial">The serial number <span class="range">lines 243–254</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the ASCII serial number; useful as a presence check.
+    ///
+    /// Returns the NUL-terminated buffer and the number of characters in it.</span>
+    <span class="k">pub async fn</span> <span class="fn">serial_number</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;([<span class="ty">u8</span>; <span class="ty">SERIAL_NUMBER_LEN</span>], <span class="ty">usize</span>), <span class="ty">Error</span>&gt; {
+        <span class="k">let mut</span> raw = [<span class="nu">0u8</span>; <span class="nu">3</span> * <span class="ty">SERIAL_NUMBER_LEN</span> / <span class="nu">2</span>];
+        <span class="k">let mut</span> data = [<span class="nu">0u8</span>; <span class="ty">SERIAL_NUMBER_LEN</span>];
+        <span class="k">self</span>.<span class="fn">read_response</span>(<span class="ty">CMD_READ_SERIAL_NUMBER</span>, &amp;<span class="k">mut</span> raw, &amp;<span class="k">mut</span> data)
+            .<span class="k">await</span>?;
+
+        <span class="k">let</span> len = data.<span class="fn">iter</span>().<span class="fn">position</span>(|&amp;byte| byte == <span class="nu">0</span>).<span class="fn">unwrap_or</span>(data.<span class="fn">len</span>());
+        <span class="ty">Ok</span>((data, len))
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task during initialisation</span>
+        <p>Reads the sensor's identifier, which unlike the carbon dioxide sensor's is <strong>text</strong> rather
+           than a number — a run of printable characters such as
+           <code class="inline">"6E9C1B4A2D3F8E70"</code>.</p>
+        <p><code class="inline">3 * SERIAL_NUMBER_LEN / 2</code> is 48: thirty-two characters occupy sixteen words,
+           and each word costs three bytes on the wire. Writing the arithmetic rather than the number keeps the
+           two buffers in step if the length is ever changed.</p>
+        <p>The text is padded with zero bytes to the full thirty-two, so its real length has to be found.
+           <code class="inline">position</code> returns where the first zero byte is, and
+           <code class="inline">unwrap_or(data.len())</code> covers the case where there is none, treating the
+           whole buffer as text. Without that fallback a sensor returning thirty-two characters and no terminator
+           would have no length to report.</p>
+        <p>Both the buffer and the length are returned, because the buffer has a fixed size and only the caller's
+           use of the length makes the unused remainder harmless. The task combines them into text and prints
+           <code class="inline">SPS30 found, serial number: ...</code>.</p>
+        <p>As with the other sensor, the value itself is not used. Reading it successfully proves the sensor is
+           powered, holds the expected address, accepts commands, and produces correct checksums.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= VALUES ================= -->
+  <h2 class="section" id="s-values">Reading the ten values <span class="range">lines 256–283</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the latest set of measured values.
+    ///
+    /// Only meaningful while a measurement is running; in idle mode the sensor
+    /// returns the last result or zeros.</span>
+    <span class="k">pub async fn</span> <span class="fn">read_measured_values</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let mut</span> raw = [<span class="nu">0u8</span>; <span class="nu">60</span>];
+        <span class="k">let mut</span> data = [<span class="nu">0u8</span>; <span class="nu">40</span>];
+        <span class="k">self</span>.<span class="fn">read_response</span>(<span class="ty">CMD_READ_MEASURED_VALUES</span>, &amp;<span class="k">mut</span> raw, &amp;<span class="k">mut</span> data)
+            .<span class="k">await</span>?;</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task every five seconds</span>
+        <p>The largest exchange in the file: sixty bytes received, forty kept.</p>
+        <p>The two buffers are declared with their sizes written out rather than computed, because both are fixed
+           by the sensor: twenty words of three bytes, holding ten values of four bytes.</p>
+        <p><strong>The warning in the comment matters.</strong> This command always answers, whatever state the
+           sensor is in. In idle mode it returns the last result taken before the fan stopped, or zeros if none
+           was ever taken. There is no error and no indication that the values are stale, so it is the caller's
+           responsibility to ensure a measurement is running.</p>
+        <p>The one-in, one-out arrangement means a caller cannot receive half a reading: either all twenty check
+           bytes matched and all ten values are present, or an error is returned and nothing is.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="k">let mut</span> values = [<span class="nu">0f32</span>; <span class="nu">10</span>];
+        <span class="k">for</span> (value, chunk) <span class="k">in</span> values.<span class="fn">iter_mut</span>().<span class="fn">zip</span>(data.<span class="fn">chunks_exact</span>(<span class="nu">4</span>)) {
+            *value = <span class="ty">f32</span>::<span class="fn">from_bits</span>(<span class="ty">u32</span>::<span class="fn">from_be_bytes</span>([chunk[<span class="nu">0</span>], chunk[<span class="nu">1</span>], chunk[<span class="nu">2</span>], chunk[<span class="nu">3</span>]]));
+        }</code></pre>
+      <div class="explain">
+        <span class="tag">Decoding</span>
+        <p>Turns the forty verified bytes into ten decimal numbers. This is done in two steps, and the distinction
+           between them is worth being precise about.</p>
+        <ul>
+          <li><code class="inline">u32::from_be_bytes</code> assembles four bytes into one 32-bit whole number,
+              the first byte contributing the highest part. This is the same most-significant-first ordering used
+              everywhere else in the protocol.</li>
+          <li><code class="inline">f32::from_bits</code> then <strong>reinterprets</strong> those same 32 bits as
+              a decimal number. It performs no arithmetic and changes no bit; it only states that the bits should
+              now be read according to the IEEE-754 arrangement of sign, exponent and fraction.</li>
+        </ul>
+        <p>This works because the sensor and the microcontroller both use that same standard arrangement, so no
+           conversion is required — only agreement about the byte order, which the sensor states and this code
+           follows.</p>
+        <p>The alternative, treating the whole number as a value and converting it, would produce numbers in the
+           billions rather than the sensor's readings. The two operations look similar and are entirely
+           different.</p>
+        <p><code class="inline">chunks_exact(4)</code> walks the buffer in groups of four and
+           <code class="inline">zip</code> pairs each with its destination, so the loop runs exactly ten times.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="ty">Ok</span>(<span class="ty">Measurement</span> {
+            pm1_0: values[<span class="nu">0</span>],
+            pm2_5: values[<span class="nu">1</span>],
+            pm4_0: values[<span class="nu">2</span>],
+            pm10: values[<span class="nu">3</span>],
+            nc0_5: values[<span class="nu">4</span>],
+            nc1_0: values[<span class="nu">5</span>],
+            nc2_5: values[<span class="nu">6</span>],
+            nc4_0: values[<span class="nu">7</span>],
+            nc10: values[<span class="nu">8</span>],
+            typical_particle_size: values[<span class="nu">9</span>],
+        })
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">The reading handed to the rest of the firmware</span>
+        <p>Labels the ten numbers. The order is fixed by the datasheet and this list is the only place in the
+           firmware where it is recorded.</p>
+        <p>It is written out one field at a time rather than copied wholesale, because that is what makes the
+           order checkable against the datasheet by eye. An error here would produce readings that look entirely
+           plausible — mass values in the right range, in the wrong fields — and would be very hard to notice
+           afterwards.</p>
+        <p>Note the two different series interleaved in one list: positions 0 to 3 are masses in micrograms per
+           cubic metre, positions 4 to 8 are counts per cubic centimetre, and position 9 is a size in
+           micrometres. The names carry the distinction, since the numbers themselves do not.</p>
+        <p>From here the reading travels unchanged into the history in external memory, and five of its ten fields
+           are eventually written into the web server's replies.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FAILURE ================= -->
+  <div class="card" id="failure">
+    <h2>Failure behaviour</h2>
+    <p>This file never retries and never waits indefinitely. Every failure is returned to the caller immediately.</p>
+    <table>
+      <tr><th>Situation</th><th>What this file returns</th><th>What the task does with it</th></tr>
+      <tr><td>The sensor does not acknowledge its address</td><td><code>Error::Bus</code></td>
+          <td>Prints the error, waits one second, and repeats the whole initialisation.</td></tr>
+      <tr><td>A check byte does not match</td><td><code>Error::Crc</code>, with the whole answer discarded</td>
+          <td>The same. No partial or unverified reading can reach the history.</td></tr>
+      <tr><td>A start is sent while the sensor is already measuring</td><td><code>Error::Bus</code>, because the sensor rejects it</td>
+          <td>Avoided: the task always sends a stop first and ignores its result.</td></tr>
+      <tr><td>No readiness flag appears within three seconds</td><td>Nothing; this file is not involved</td>
+          <td>Reads the values anyway. The previous result is published rather than leaving a gap.</td></tr>
+      <tr><td>Values are read while the sensor is idle</td><td>The last result, or zeros, reported as success</td>
+          <td>Nothing detects this. Ensuring a measurement is running is the caller's responsibility.</td></tr>
+      <tr><td>Values are read within thirty seconds of starting the fan</td><td>Real but not yet settled values, reported as success</td>
+          <td>Published as normal. The first few readings after a restart may be inaccurate.</td></tr>
+      <tr><td>The 5 volt supply is missing</td><td><code>Error::Bus</code> for every command</td>
+          <td>The sensor also does not appear in the start-up address scan, which identifies this case.</td></tr>
+    </table>
+    <div class="note">Because the driver holds no state, the task's recovery — print, wait one second, initialise
+      again — is complete. Nothing is left over from a failed attempt.</div>
+  </div>
+
+  <!-- ================= GLOSSARY ================= -->
+  <div class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning in this file</th></tr>
+      <tr><td>SPS30</td><td>The Sensirion sensor that counts and sizes airborne particles.</td></tr>
+      <tr><td>Particulate matter</td><td>Solid and liquid particles suspended in air.</td></tr>
+      <tr><td>PM1.0, PM2.5, PM4.0, PM10</td><td>Cumulative measures including all particles up to that size in micrometres.</td></tr>
+      <tr><td>Mass concentration</td><td>The weight of particles in a volume of air, in micrograms per cubic metre.</td></tr>
+      <tr><td>Number concentration</td><td>The count of particles in a volume of air, in particles per cubic centimetre.</td></tr>
+      <tr><td>Micrometre (um)</td><td>A thousandth of a millimetre. A human hair is about 70 across.</td></tr>
+      <tr><td>Continuous mode</td><td>The state in which the fan runs and a result appears about once a second.</td></tr>
+      <tr><td>Idle mode</td><td>Powered and answering commands, but not measuring.</td></tr>
+      <tr><td>Data ready flag</td><td>The one-word answer stating whether a fresh result is waiting.</td></tr>
+      <tr><td>Word</td><td>Two bytes forming one value, always followed on the wire by a check byte.</td></tr>
+      <tr><td>Big-endian</td><td>The most significant byte is sent first.</td></tr>
+      <tr><td>CRC-8</td><td>The one-byte checksum protecting each word.</td></tr>
+      <tr><td>IEEE-754</td><td>The standard arrangement of bits used for decimal numbers by both the sensor and the microcontroller.</td></tr>
+      <tr><td>NUL</td><td>A zero byte, used here to mark the end of the serial number text.</td></tr>
+      <tr><td>Fan cleaning</td><td>Ten seconds at full fan speed to clear dust from the optics.</td></tr>
+      <tr><td>Repeated START</td><td>Joining a write and a read into one exchange. Not permitted by this sensor.</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Home Environmental Sensor — firmware documentation for <code>src/drivers/sps30.rs</code>.
+  </footer>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+
+</body>
+</html>

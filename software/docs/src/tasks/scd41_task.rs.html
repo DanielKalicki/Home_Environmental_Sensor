@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>scd41_task.rs — Home Environmental Sensor</title>
+<style>
+  :root{--bg:#ffffff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--muted:#57606a;--accent:#0969da;--accent-2:#116329;--warn:#9a6700;--k:#cf222e;--ty:#6639ba;--st:#032f62;--cm:#6a737d;--mc:#005cc5;--at:#bc4c00;--fn:#116329;--radius:12px}
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6;} code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+  header.top{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);border-bottom:1px solid var(--border);padding:22px 40px 16px;}.eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2);margin-bottom:6px;}h1{margin:0 0 6px;font-size:25px;letter-spacing:-0.01em;}header.top p.sub{margin:0 0 12px;color:var(--muted);font-size:14.5px;max-width:1100px;}nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px;}nav.toc a{font-size:12.5px;color:var(--accent);text-decoration:none;}nav.toc a:hover{text-decoration:underline;}
+  .wrap{width:100%;margin:0;padding:0 40px 90px;}.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px;margin:28px 0;}.card h2{margin-top:0;font-size:19px;}.card h3{font-size:15px;margin:20px 0 6px;}.card p{font-size:15px;}.card ul,.card ol{margin:10px 0 0;padding-left:20px;font-size:14.5px;}.card li{margin-bottom:6px;}code.inline{background:#eef1f4;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:13px;color:var(--mc);}
+  h2.section{margin:46px 0 0;padding:10px 0 8px;font-size:20px;border-bottom:2px solid var(--border);}h2.section .range{font-size:12.5px;color:var(--muted);font-weight:500;margin-left:10px;}.lines{margin-top:8px;}.line{display:flex;align-items:flex-start;gap:30px;padding:18px 6px;border-radius:10px;border-top:1px solid #eaeef2;}.line:hover{background:rgba(9,105,218,0.04);}.code{flex:1 1 0;min-width:280px;margin:0;padding:10px 0;white-space:pre;overflow-x:auto;font-size:13.2px;background:transparent;}.explain{flex:1.15 1 0;min-width:280px;padding-top:4px;font-size:14.5px;}.explain p{margin:0 0 9px;}.explain p:last-child{margin-bottom:0;}.explain ul{margin:0 0 9px;padding-left:20px;}.explain li{margin-bottom:4px;}
+  .tag{display:inline-block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#fff;background:var(--accent-2);padding:3px 9px;border-radius:999px;margin-bottom:8px;}.tag.alt{background:var(--accent);}.tag.ext{background:var(--warn);}.note{border-left:3px solid var(--accent);background:#f2f7fd;padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 0;font-size:13.8px;}.note.warn{border-left-color:var(--warn);background:#fdf7ec;}table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13.6px;}th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top;}th{background:#eef1f4;}td code{font-size:12.6px;}.diagram{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;overflow-x:auto;}.diagram figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center;}.k{color:var(--k);}.ty{color:var(--ty);}.st{color:var(--st);}.cm{color:var(--cm);font-style:italic;}.mc{color:var(--mc);}.at{color:var(--at);}.fn{color:var(--fn);}.nu{color:var(--ty);}footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 0 10px;}@media (max-width:1000px){.line{flex-direction:column;gap:8px;}.code{flex:none;width:100%;}.explain{flex:none;width:100%;padding-top:0;}}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/tasks/scd41_task.rs — periodic CO₂, temperature, and humidity measurement</h1>
+  <p class="sub">This task takes one full SCD41 reading every ten seconds. It shares I²C0 safely with the particle-sensor task, leaves that bus available during the SCD41’s five-second conversion, stores successful readings in external-memory history, and retries safely after errors.</p>
+  <nav class="toc"><a href="#overview">Overview</a><a href="#interfaces">Dependencies</a><a href="#flow">Flow diagrams</a><a href="#imports">Imports</a><a href="#timing">Timing</a><a href="#initialise">Initialisation</a><a href="#start">Start conversion</a><a href="#wait">Wait and read</a><a href="#schedule">Recovery and schedule</a><a href="#driver">SCD41 driver</a><a href="#storage">History storage</a><a href="#failure">Failure behaviour</a><a href="#glossary">Glossary</a></nav>
+</header>
+<main class="wrap">
+  <section class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>The task communicates with a Sensirion SCD41 at its factory I²C address, <code class="inline">0x62</code>. A successful reading contains carbon-dioxide concentration in parts per million, plus raw temperature and humidity words. The raw values are converted to degrees Celsius and relative humidity only when printed or returned by the web API.</p>
+    <ol><li>Bring the sensor into its idle state and confirm that it answers with a valid serial number.</li><li>Start one on-demand CO₂, temperature, and humidity conversion.</li><li>Release the shared I²C bus for the sensor’s required 5,000 ms conversion time.</li><li>Reacquire the bus, read three CRC-protected words, save the result, and print it to the USB serial console.</li><li>Wait until the next ten-second schedule deadline. On a failure, pause for one second and reinitialise before trying again.</li></ol>
+    <div class="note">The task’s ten-second interval is measured from scheduled start times, not from the end of one successful read. A normal conversion takes about five seconds, leaving roughly five seconds for the other task to use the shared bus before the next conversion begins.</div>
+  </section>
+
+  <section class="card" id="interfaces">
+    <h2>Every component this task depends on</h2>
+    <table><tr><th>Component</th><th>Input → operation → output</th></tr>
+      <tr><td><code>SharedI2cBus</code></td><td>Owns I²C0 and GPIO5/GPIO6. A critical-section mutex grants one task exclusive access. <code>acquire()</code> first sends recovery clocks and a STOP condition, then constructs a fresh 100 kHz blocking I²C controller.</td></tr>
+      <tr><td><code>Scd41</code></td><td>Borrows the temporary controller and speaks the SCD41 command protocol. It sends big-endian 16-bit commands, waits for the required execution times, and verifies a CRC-8 byte after every returned 16-bit word.</td></tr>
+      <tr><td><code>embassy_time</code></td><td><code>Timer</code> supplies asynchronous delays; <code>Ticker</code> supplies repeating deadlines. Each wait yields the single processor to ready tasks rather than actively waiting.</td></tr>
+      <tr><td><code>shared_state::publish_scd41()</code></td><td>Takes one successful <code>Measurement</code>, timestamps it with device uptime, and appends it to an SCD41 ring buffer in external PSRAM when that buffer was reserved at boot.</td></tr>
+      <tr><td><code>println!</code></td><td>Writes diagnosis and successful values to the USB serial console. These messages are not sent to the browser.</td></tr>
+    </table>
+    <p><code class="inline">main.rs</code> creates I²C0 on SDA GPIO5 and SCL GPIO6, reserves history before sensor tasks start, places the bus in a permanent mutex, and spawns this function once. This task does not choose pins, initialise PSRAM, or create the timer service itself.</p>
+  </section>
+
+  <section class="card" id="flow">
+    <h2>Data flow and one measurement cycle</h2>
+    <figure class="diagram"><pre class="mermaid">
+flowchart LR
+  S[SCD41 at I²C address 0x62] -->|three CRC-protected words| D[Scd41 driver]
+  D --> T[scd41 measure_task]
+  T -->|successful Measurement| H[shared_state ring buffer in PSRAM]
+  T -->|diagnostic text| U[USB serial console]
+  H -->|read only| W[web server]
+  P[SPS30 task] <-->|takes bus only while locked| B[Shared I²C0 mutex]
+  T <-->|takes bus only while locked| B
+  B --> D
+    </pre><figcaption>Sensor tasks never write directly to the web server. Both use the same I²C mutex, while only this task writes SCD41 history.</figcaption></figure>
+    <figure class="diagram"><pre class="mermaid">
+flowchart TD
+  A[Need initialisation?] -->|yes| B[Lock bus; recover it; stop periodic mode]
+  B --> C[Read and CRC-check serial number]
+  C -->|failure| R[Wait 1 s; retry initialisation]
+  C -->|success| D[Reset 10 s ticker]
+  A -->|no| E[Lock bus; recover it; start single-shot conversion]
+  D --> E
+  E -->|failure| R
+  E -->|success| F[Release I²C mutex]
+  F --> G[Wait 5,000 ms while SCD41 converts]
+  G --> H[Lock bus; recover it; read measurement]
+  H -->|failure| R
+  H -->|success| I[Timestamp and store; print values]
+  I --> J[Wait until next scheduled 10 s deadline]
+  J --> A
+    </pre><figcaption>The conversion delay is deliberately outside the I²C lock. The shorter driver delays during a command remain inside the lock because that command is still in progress.</figcaption></figure>
+  </section>
+
+  <h2 class="section" id="imports">Imports <span class="range">lines 1–8</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="k">use</span> embassy_time::{<span class="ty">Duration</span>, <span class="ty">Ticker</span>, <span class="ty">Timer</span>};
+<span class="k">use</span> esp_println::println;
+
+<span class="k">use crate</span>::drivers::i2c_bus::<span class="ty">SharedI2cBus</span>;
+<span class="k">use crate</span>::drivers::scd41::{<span class="ty">Scd41</span>, <span class="ty">SINGLE_SHOT_MEASUREMENT_DELAY_MS</span>};
+<span class="k">use crate</span>::utils::shared_state;</code></pre>
+    <div class="explain"><span class="tag">Dependencies</span><p><code>Duration</code> represents ten seconds for the schedule. <code>Ticker</code records periodic deadlines, while <code>Timer</code is used for the one-second recovery delay and the sensor conversion delay.</p><p>The task has only three project dependencies: the mutually exclusive I²C bus, the device-specific SCD41 driver, and the shared measurement history. Their full relevant behaviour is described later on this page.</p></div>
+  </div></div>
+
+  <h2 class="section" id="timing">Timing constants <span class="range">lines 10–13</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="cm">/// Time between the starts of two single-shot conversions.</span>
+<span class="k">pub const</span> <span class="ty">MEASUREMENT_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">10_000</span>;
+<span class="cm">/// Idle time before retrying after a bus or sensor error.</span>
+<span class="k">const</span> <span class="ty">ERROR_RETRY_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">1000</span>;</code></pre>
+    <div class="explain"><span class="tag alt">Schedule</span><p>One normal cycle starts immediately, waits 5,000 ms for conversion, reads and stores the result, then waits until ten seconds after that cycle started to begin again. The schedule therefore targets six conversions per minute.</p><p><code>MEASUREMENT_INTERVAL_MS</code> is public because the history module uses it to calculate the one-day capacity. One day contains 86,400,000 milliseconds, so ten-second readings produce 8,640 retained readings.</p><p>After an error the task waits one second. It does not continue the old ticker schedule; a later successful initialisation resets the schedule so the next conversion starts immediately.</p></div>
+  </div></div>
+
+  <h2 class="section" id="initialise">Initialisation and presence check <span class="range">lines 20–54</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="k">let mut</span> needs_init = <span class="k">true</span>;
+<span class="k">let mut</span> ticker = <span class="ty">Ticker</span>::<span class="fn">every</span>(<span class="ty">Duration</span>::<span class="fn">from_millis</span>(<span class="ty">MEASUREMENT_INTERVAL_MS</span>));
+
+<span class="k">if</span> needs_init {
+    <span class="k">let</span> initialized = {
+        <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
+        <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
+        <span class="k">let mut</span> sensor = <span class="ty">Scd41</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);
+        <span class="k">match</span> sensor.<span class="fn">stop_periodic_measurement</span>().<span class="k">await</span> {
+            <span class="ty">Ok</span>(()) =&gt; <span class="k">match</span> sensor.<span class="fn">serial_number</span>().<span class="k">await</span> { <span class="cm">/* print and return true or false */</span> }
+            <span class="ty">Err</span>(error) =&gt; { <span class="cm">/* print and return false */</span> }
+        }
+    };
+    <span class="k">if</span> !initialized { <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>; <span class="k">continue</span>; }
+    ticker.<span class="fn">reset</span>();
+}</code></pre>
+    <div class="explain"><span class="tag">Recovery state</span><p><code>needs_init</code> is true at boot and after every failed start or read. The task then locks the bus, recovers it, and creates a short-lived driver that borrows that controller.</p><p><code>stop_periodic_measurement()</code> sends command <code>0x3F86</code> (<code>stop_periodic_measurement</code>) and waits 500 ms. Calling it is safe even after reset when periodic measurement was not running. It makes the sensor idle, which is required before single-shot commands are accepted.</p><p><code>serial_number()</code> sends command <code>0x3682</code> (<code>get_serial_number</code>), waits 1 ms, reads nine bytes, validates three CRC bytes, and combines the three 16-bit words into a 48-bit number. A valid result confirms that the device and transfer are working; it is printed as twelve hexadecimal digits.</p><p>The outer braces are important: they end the mutex guard, controller, and driver before the retry delay or later conversion starts.</p></div>
+  </div></div>
+
+  <h2 class="section" id="start">Start one conversion <span class="range">lines 56–69</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="k">let</span> started = {
+    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
+    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
+    <span class="k">let mut</span> sensor = <span class="ty">Scd41</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);
+    sensor.<span class="fn">start_single_shot</span>()
+};
+
+<span class="k">if let</span> <span class="ty">Err</span>(error) = started {
+    println!(<span class="st">"SCD41: could not start measurement: {:?}"</span>, error);
+    needs_init = <span class="k">true</span>;
+    <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>;
+    <span class="k">continue</span>;
+}</code></pre>
+    <div class="explain"><span class="tag">Start command</span><p><code>acquire()</code> always executes bus recovery before rebuilding the hardware controller at 100 kHz. Recovery drives SCL through nine pulses and sends a manual STOP condition, returning a bus that may have been left in an undefined state by a previous failed transfer to idle.</p><p><code>start_single_shot()</code> writes command <code>0x219D</code> (<code>measure_single_shot</code>, the SCD41 command that starts a full CO₂, temperature, and humidity conversion). This is a blocking I²C write, so it returns either immediately after the transfer or with a bus error. No sensor value exists yet.</p><p>The lock ends at the closing brace. If the start write failed, no result can become available, so the task marks the sensor as needing initialisation, waits one second, and restarts recovery.</p></div>
+  </div></div>
+
+  <h2 class="section" id="wait">Wait, read, validate, and publish <span class="range">lines 71–101</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="cm">// The I2C mutex is intentionally not held while the SCD41 converts.</span>
+<span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">SINGLE_SHOT_MEASUREMENT_DELAY_MS</span>).<span class="k">await</span>;
+
+<span class="k">let</span> result = {
+    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
+    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
+    <span class="k">let mut</span> sensor = <span class="ty">Scd41</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);
+    sensor.<span class="fn">read_measurement</span>().<span class="k">await</span>
+};
+
+<span class="k">match</span> result {
+    <span class="ty">Ok</span>(measurement) =&gt; {
+        needs_init = <span class="k">false</span>;
+        shared_state::<span class="fn">publish_scd41</span>(measurement).<span class="k">await</span>;
+        println!(<span class="st">"CO2: {} ppm, temperature: {} C, humidity: {} %"</span>, ...);
+    }
+    <span class="ty">Err</span>(error) =&gt; { needs_init = <span class="k">true</span>; println!(<span class="st">"SCD41: measurement failed: {:?}, recovering bus"</span>, error); }
+}</code></pre>
+    <div class="explain"><span class="tag ext">Shared-bus rule</span><p>The SCD41 needs exactly 5,000 ms after command <code>0x219D</code> (<code>measure_single_shot</code>, started by <code>start_single_shot()</code>). The task waits without holding the mutex, allowing the SPS30 task to transfer during almost all of that interval.</p><p><code>read_measurement()</code> writes command <code>0xEC05</code> (<code>read_measurement</code>), waits 1 ms, then reads nine bytes. Bytes 0–1, 3–4, and 6–7 are big-endian words. Bytes 2, 5, and 8 must match Sensirion CRC-8: polynomial <code>0x31</code>, initial value <code>0xFF</code>, no reflection, and no final XOR. A failed transfer yields <code>Bus(...)</code>; a mismatched check byte yields <code>Crc</code>.</p><p>For a successful result, CO₂ is stored as the reported integer in ppm. The driver calculates temperature by taking the raw temperature word, multiplying it by 175, dividing by 65,535, then subtracting 45. It calculates relative humidity by multiplying the raw humidity word by 100 and dividing by 65,535. The task prints those converted values and sends the original measurement to history.</p></div>
+  </div></div>
+
+  <h2 class="section" id="schedule">Completing the cycle <span class="range">lines 103–113</span></h2><div class="lines"><div class="line">
+    <pre class="code"><code><span class="k">if</span> needs_init {
+    <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>;
+} <span class="k">else</span> {
+    <span class="cm">// `Ticker` advances from its previous deadline instead of from
+    // this call, equivalent to FreeRTOS `vTaskDelayUntil()`.</span>
+    ticker.<span class="fn">next</span>().<span class="k">await</span>;
+}</code></pre>
+    <div class="explain"><span class="tag alt">Fixed schedule</span><p>After an error, the task waits one second and the next loop pass must initialise the sensor. After success, <code>ticker.next().await</code> waits only until the next previously calculated deadline.</p><p>This differs from waiting another ten seconds after a read. If the read completes around five seconds after the start, the next wait is roughly five seconds. Short variations in transfer duration do not gradually move the schedule later.</p><p>If a cycle takes longer than a deadline, the ticker reports the missed deadline without trying to run several measurements at once. The next loop pass proceeds with one new conversion.</p></div>
+  </div></div>
+
+  <section class="card" id="driver"><h2>Complete dependent component: the SCD41 driver</h2>
+    <p><code class="inline">Scd41&lt;'a, 'd, T&gt;</code> contains exactly two fields: <code class="inline">i2c: &amp;'a mut I2C&lt;'d, T, Blocking&gt;</code>, a mutable borrow of the controller, and <code class="inline">address: u8</code>, the seven-bit address. <code class="inline">new()</code> selects <code class="inline">DEFAULT_ADDRESS = 0x62</code>; <code class="inline">with_address()</code> accepts a different seven-bit address. The task uses <code class="inline">new()</code>.</p>
+    <table><tr><th>Constant</th><th>Exact meaning</th></tr><tr><td><code>CMD_STOP_PERIODIC_MEASUREMENT = 0x3F86</code></td><td><code>stop_periodic_measurement</code>: put the sensor in idle mode before a single-shot command.</td></tr><tr><td><code>CMD_WAKE_UP = 0x36F6</code></td><td><code>wake_up</code>: leave power-down mode. The SCD41 does not acknowledge this command, so <code>Error::Bus(AckCheckFailed)</code> is expected.</td></tr><tr><td><code>CMD_REINIT = 0x3646</code></td><td><code>reinit</code>: reload user settings from EEPROM while idle.</td></tr><tr><td><code>CMD_MEASURE_SINGLE_SHOT = 0x219D</code></td><td><code>start_single_shot</code>: start one full CO₂, temperature, and humidity conversion.</td></tr><tr><td><code>CMD_MEASURE_SINGLE_SHOT_RHT_ONLY = 0x2196</code></td><td><code>measure_single_shot_rht_only</code>: start a temperature/humidity-only conversion; it does not update CO₂.</td></tr><tr><td><code>CMD_READ_MEASUREMENT = 0xEC05</code></td><td><code>read_measurement</code>: read the completed full-conversion result.</td></tr><tr><td><code>CMD_GET_SERIAL_NUMBER = 0x3682</code></td><td><code>serial_number</code>: read the unique 48-bit sensor identifier.</td></tr></table>
+    <table><tr><th>Timing constant</th><th>Value and operation</th></tr><tr><td><code>STOP_PERIODIC_MEASUREMENT_DELAY_MS</code></td><td>500 ms after <code>CMD_STOP_PERIODIC_MEASUREMENT</code>.</td></tr><tr><td><code>REINIT_DELAY_MS</code></td><td>30 ms after <code>CMD_REINIT</code>.</td></tr><tr><td><code>WAKE_UP_DELAY_MS</code></td><td>30 ms after <code>CMD_WAKE_UP</code>.</td></tr><tr><td><code>SINGLE_SHOT_MEASUREMENT_DELAY_MS</code></td><td>5,000 ms after <code>CMD_MEASURE_SINGLE_SHOT</code>.</td></tr><tr><td><code>MEASURE_SINGLE_SHOT_RHT_ONLY_DELAY_MS</code></td><td>50 ms after <code>CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</code>.</td></tr><tr><td><code>SHORT_COMMAND_DELAY_MS</code></td><td>1 ms after the serial-number and measurement-read commands.</td></tr></table>
+    <h3>Driver helpers and every method</h3><table><tr><th>Symbol</th><th>Inputs → operation → output</th></tr><tr><td><code>send_command()</code></td><td>Writes one big-endian 16-bit command to the configured address, awaits its named execution delay, then returns <code>Ok(())</code> or <code>Error::Bus</code>.</td></tr><tr><td><code>read_three_words()</code></td><td>Uses <code>send_command()</code>, reads nine bytes in a separate I²C transaction, validates three CRC bytes, and returns three big-endian <code>u16</code> words.</td></tr><tr><td><code>stop_periodic_measurement()</code></td><td>Sends <code>CMD_STOP_PERIODIC_MEASUREMENT</code> and waits 500 ms.</td></tr><tr><td><code>reinit()</code></td><td>Sends <code>CMD_REINIT</code> and waits 30 ms. This task does not call it.</td></tr><tr><td><code>wake_up()</code></td><td>Writes <code>CMD_WAKE_UP</code>, waits 30 ms even when no acknowledgement arrives, and maps the write result to <code>Error</code>. This task does not put the sensor to sleep, so it does not call this method.</td></tr><tr><td><code>serial_number()</code></td><td>Calls <code>read_three_words(CMD_GET_SERIAL_NUMBER, SHORT_COMMAND_DELAY_MS)</code> and combines the three 16-bit words into one 48-bit <code>u64</code>.</td></tr><tr><td><code>read_measurement()</code></td><td>Calls <code>read_three_words(CMD_READ_MEASUREMENT, SHORT_COMMAND_DELAY_MS)</code> and maps the words to <code>Measurement</code>.</td></tr><tr><td><code>start_single_shot()</code></td><td>Writes <code>CMD_MEASURE_SINGLE_SHOT</code> only. It does not wait, which is why this task can release the shared I²C bus during the five-second conversion.</td></tr><tr><td><code>measure_single_shot()</code></td><td>Convenience method: call <code>start_single_shot()</code>, wait <code>SINGLE_SHOT_MEASUREMENT_DELAY_MS</code>, then call <code>read_measurement()</code>. The task does not use it because it would hold its driver borrow across the conversion wait.</td></tr><tr><td><code>measure_single_shot_rht_only()</code></td><td>Sends <code>CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</code>, waits 50 ms, then reads a result whose <code>co2_ppm</code> is not updated.</td></tr></table>
+    <h3>Result, errors, and CRC</h3><p><code class="inline">Measurement</code> has three exact fields: <code class="inline">co2_ppm: u16</code>, <code class="inline">temperature_raw: u16</code>, and <code class="inline">humidity_raw: u16</code>. Temperature is calculated as <code class="inline">−45 + (175 × temperature_raw / 65535)</code> degrees Celsius. Relative humidity is calculated as <code class="inline">100 × humidity_raw / 65535</code> percent. In each formula, the raw 16-bit word is first scaled to the sensor’s documented range, then converted to the displayed unit.</p><p><code class="inline">Error::Bus(I2cError)</code> means the I²C transfer failed, such as no acknowledgement or timeout. <code class="inline">Error::Crc</code> means the sensor replied but a check byte did not match. <code class="inline">crc8()</code> starts with <code class="inline">CRC8_INIT = 0xFF</code>, processes each data byte most-significant-bit first, and uses <code class="inline">CRC8_POLYNOMIAL = 0x31</code> whenever the current high bit is set. There is no bit reflection and no final XOR. The driver checks this CRC separately for every two-byte returned word.</p>
+    <div class="note">The driver deliberately performs each command write and subsequent response read as two separate I²C transactions. The SCD4x protocol requires this; it does not use a repeated-start combined write/read transaction.</div>
+  </section>
+
+  <section class="card" id="storage"><h2>Complete dependent components: I²C bus, shared state, history, and PSRAM</h2>
+    <h3>Shared I²C bus interface</h3><p><code class="inline">I2cBus</code> owns five exact fields: <code class="inline">i2c0: I2C0</code>, <code class="inline">sda: SdaPin</code>, <code class="inline">scl: SclPin</code>, <code class="inline">clocks: &amp;'static Clocks&lt;'static&gt;</code>, and <code class="inline">delay: Delay</code>. <code class="inline">SdaPin</code> is the concrete alias <code class="inline">GpioPin&lt;I2C_SDA_PIN&gt;</code>; <code class="inline">SclPin</code> is <code class="inline">GpioPin&lt;I2C_SCL_PIN&gt;</code>. The named constants are <code class="inline">I2C_SDA_PIN = 5</code>, <code class="inline">I2C_SCL_PIN = 6</code>, and <code class="inline">I2C_FREQUENCY_KHZ = 100</code>.</p><p>The sensor tasks receive <code class="inline">SharedI2cBus = Mutex&lt;CriticalSectionRawMutex, I2cBus&gt;</code>. After a task awaits the lock, <code class="inline">I2cBus::acquire()</code> calls <code class="inline">recover_i2c_bus(sda, scl, delay)</code>, then builds the 100 kHz temporary controller. <code class="inline">recover_i2c_bus()</code> configures both pins as pulled-up open-drain outputs, pulses SCL nine times using five-microsecond half periods, then produces a STOP condition by releasing SDA high while SCL is high. This is the named function that returns a bus left by a failed transfer to idle before the next SCD41 command.</p>
+    <h3>Shared state interface</h3><p><code class="inline">shared_state::init(psram)</code> runs before either sensor task starts. It requests an SCD41 slice of <code class="inline">SCD41_CAPACITY = HISTORY_WINDOW_MS / SCD41_INTERVAL_MS = 8,640</code> optional samples and an SPS30 slice of <code class="inline">SPS30_CAPACITY = HISTORY_WINDOW_MS / SPS30_INTERVAL_MS = 17,280</code> optional samples. <code class="inline">HISTORY_WINDOW_MS</code> is 86,400,000 ms, one day.</p><table><tr><th>Shared-state symbol</th><th>Exact behaviour</th></tr><tr><td><code>Sample&lt;T&gt;</code></td><td>Stores <code>value: T</code> and <code>taken_at: Instant</code>. <code>Instant</code> is device uptime at publication.</td></tr><tr><td><code>HistoryStatus</code></td><td>Contains <code>interval_ms</code>, <code>capacity</code>, <code>len</code>, <code>first_sequence</code>, and <code>next_sequence</code>. When a history is absent, capacity, length, and both sequence values are zero.</td></tr><tr><td><code>publish_scd41()</code></td><td>Locks the shared state briefly and, if the SCD41 history exists, pushes <code>Sample { value: measurement, taken_at: Instant::now() }</code>.</td></tr><tr><td><code>publish_sps30()</code></td><td>Equivalent publish operation for SPS30 measurements; it shares the same state mutex.</td></tr><tr><td><code>scd41_status()</code> / <code>sps30_status()</code></td><td>Copy the status values for their respective histories for the web server.</td></tr><tr><td><code>scd41_reading(sequence)</code> / <code>sps30_reading(sequence)</code></td><td>Copy one retained sample by sequence number, or return <code>None</code> when it was never stored or was overwritten.</td></tr></table>
+    <h3>Ring-buffer implementation</h3><p><code class="inline">MeasurementHistory&lt;T&gt;</code> owns an externally supplied permanent slice of <code class="inline">Option&lt;T&gt;</code>, plus <code class="inline">next</code> write index, current <code class="inline">len</code>, and total <code class="inline">pushed</code> count. <code class="inline">new(entries)</code> rejects an empty slice. <code class="inline">push(value)</code> writes at <code class="inline">next</code>, advances that index with wraparound, limits <code class="inline">len</code> to capacity, and increments <code class="inline">pushed</code>.</p><p><code class="inline">capacity()</code> returns slice length; <code class="inline">len()</code> returns retained entries; <code class="inline">next_sequence()</code> returns <code class="inline">pushed</code>; and <code class="inline">first_sequence()</code> returns <code class="inline">pushed − len</code>. This formula means that once old entries are overwritten, the first retained sequence advances by one for every replacement. <code class="inline">get(sequence)</code> subtracts <code class="inline">first_sequence()</code> and delegates to <code class="inline">get_oldest(index)</code>. The private helper calculates the physical oldest index, using <code class="inline">next</code> when the buffer is full, and returns the copied entry or <code class="inline">None</code>.</p>
+    <h3>PSRAM allocator</h3><p><code class="inline">Psram::init()</code> maps the ESP32-S3R8 external PSRAM before Wi-Fi and sensor tasks begin, then records the start and end address of the mapped window. <code class="inline">free_bytes()</code> reports <code class="inline">end − next</code>. <code class="inline">alloc_slice&lt;T&gt;(len, value)</code> aligns the next address for <code class="inline">T</code>, checks multiplication and address arithmetic for overflow, verifies that the request fits, fills every element with <code class="inline">value</code>, advances the permanent allocation pointer, and returns a permanent mutable slice. It returns <code class="inline">None</code> rather than forming an invalid address when PSRAM is insufficient.</p>
+    <div class="note warn">If either history allocation fails, <code>init()</code> returns <code>None</code>. The sensor tasks still measure and print results, but both <code>publish_*</code> functions drop readings because their optional histories are absent, and the web API reports empty histories.</div>
+  </section>
+
+  <section class="card" id="failure"><h2>Failure behaviour</h2><table><tr><th>Situation</th><th>Observed action</th></tr><tr><td>SCD41 absent, disconnected, or does not acknowledge</td><td>A bus error is printed. The task waits one second, recovers the bus on the next attempt, and repeats initialisation.</td></tr><tr><td>Returned measurement has an invalid CRC</td><td>The driver returns <code>Crc</code>. The task prints an error, waits one second, and performs the full initialisation sequence before trying again.</td></tr><tr><td>Other sensor is using I²C0</td><td>This task waits for the mutex; transactions cannot interleave. It does not hold the mutex during the 5,000 ms SCD41 conversion.</td></tr><tr><td>SPS30 uses I²C0 during SCD41 conversion</td><td>Normal operation. The SCD41 retains its conversion internally until this task reacquires the bus and reads it.</td></tr><tr><td>PSRAM history unavailable</td><td>The reading is still measured and printed, but it is not retained.</td></tr></table></section>
+
+  <section class="card" id="glossary"><h2>Glossary</h2><table><tr><th>Term</th><th>Meaning in this document</th></tr><tr><td>SCD41</td><td>A Sensirion sensor that reports carbon dioxide concentration, temperature, and relative humidity.</td></tr><tr><td>Single-shot conversion</td><td>One explicit measurement started by a command, as opposed to an internal continuous measurement mode.</td></tr><tr><td>I²C transaction</td><td>A complete transfer over the shared two-wire bus. The mutex prevents two tasks from overlapping such transfers.</td></tr><tr><td>CRC-8</td><td>An eight-bit checksum used here to detect corrupted returned sensor words.</td></tr><tr><td>Ticker</td><td>An Embassy timer primitive that produces fixed periodic deadlines.</td></tr><tr><td>PSRAM</td><td>External memory used to retain a full day of sensor readings without using scarce internal RAM.</td></tr></table></section>
+  <footer>Generated documentation for software/src/tasks/scd41_task.rs — Home Environmental Sensor.</footer>
+</main>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });</script>
+</body>
+</html>

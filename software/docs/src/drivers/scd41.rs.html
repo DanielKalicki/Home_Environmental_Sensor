@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>scd41.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --warn:#9a6700;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type */
+    --st:#032f62;  /* string */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:22px 40px 16px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:6px;
+  }
+  h1{margin:0 0 6px; font-size:25px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 12px; color:var(--muted); font-size:14.5px; max-width:1100px;}
+  nav.toc{display:flex; flex-wrap:wrap; gap:6px 16px;}
+  nav.toc a{font-size:12.5px; color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card h3{font-size:15px; margin:20px 0 6px;}
+  .card h4{font-size:14px; margin:16px 0 4px;}
+  .card p{font-size:15px;}
+  .card ul,.card ol{margin:10px 0 0; padding-left:20px; font-size:14.5px;}
+  .card li{margin-bottom:6px;}
+  code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  h2.section{
+    margin:46px 0 0; padding:10px 0 8px; font-size:20px;
+    border-bottom:2px solid var(--border);
+  }
+  h2.section .range{font-size:12.5px; color:var(--muted); font-weight:500; margin-left:10px;}
+
+  .lines{margin-top:8px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:18px 6px; border-radius:10px; border-top:1px solid #eaeef2;
+  }
+  .line:hover{background:rgba(9,105,218,0.04);}
+  .code{
+    flex:1 1 0; min-width:280px; margin:0; padding:10px 0;
+    white-space:pre; overflow-x:auto; font-size:13.2px; background:transparent;
+  }
+  .explain{flex:1.15 1 0; min-width:280px; padding-top:4px; font-size:14.5px;}
+  .explain p{margin:0 0 9px;}
+  .explain p:last-child{margin-bottom:0;}
+  .explain ul{margin:0 0 9px; padding-left:20px;}
+  .explain li{margin-bottom:4px;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:8px;
+  }
+  .tag.alt{background:var(--accent);}
+  .tag.ext{background:var(--warn);}
+
+  .note{
+    border-left:3px solid var(--accent); background:#f2f7fd;
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0 0; font-size:13.8px;
+  }
+  .note.warn{border-left-color:var(--warn); background:#fdf7ec;}
+
+  table{border-collapse:collapse; width:100%; margin-top:12px; font-size:13.6px;}
+  th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top;}
+  th{background:#eef1f4;}
+  td code{font-size:12.6px;}
+
+  pre.block{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; line-height:1.55;
+  }
+
+  .diagram{background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px; overflow-x:auto;}
+  .diagram figcaption{font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center;}
+
+  .k{color:var(--k);} .ty{color:var(--ty);} .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;} .mc{color:var(--mc);}
+  .at{color:var(--at);} .fn{color:var(--fn);} .nu{color:var(--ty);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+
+  @media (max-width:1000px){
+    .line{flex-direction:column; gap:8px;}
+    .code{flex:none; width:100%;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/drivers/scd41.rs — the carbon dioxide, temperature and humidity sensor driver</h1>
+  <p class="sub">Left column: the source code. Right column: a description of what that code does. The exact bytes exchanged with the sensor, the checksum that protects them, the datasheet waiting times, and the way the result reaches the rest of the firmware are all described here, so no other document is required.</p>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#protocol">The sensor protocol</a>
+    <a href="#interfaces">External interfaces</a>
+    <a href="#flow">Measurement flow</a>
+    <a href="#s-moduledoc">Module description</a>
+    <a href="#s-imports">Imports</a>
+    <a href="#s-address">Address</a>
+    <a href="#s-commands">Command codes</a>
+    <a href="#s-delays">Execution times</a>
+    <a href="#s-crcconst">Checksum settings</a>
+    <a href="#s-error">Error</a>
+    <a href="#s-measurement">Measurement</a>
+    <a href="#s-crc8">crc8</a>
+    <a href="#s-struct">Scd41</a>
+    <a href="#s-new">new / with_address</a>
+    <a href="#s-sendcommand">send_command</a>
+    <a href="#s-readwords">read_three_words</a>
+    <a href="#s-mode">Mode commands</a>
+    <a href="#s-serial">serial_number</a>
+    <a href="#s-read">read_measurement</a>
+    <a href="#s-single">Single-shot commands</a>
+    <a href="#failure">Failure behaviour</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>
+      The SCD41 is a sensor made by Sensirion that reports the carbon dioxide concentration of the air, together
+      with the temperature and the relative humidity. It is connected to the two-wire I2C bus described in
+      <code class="inline">src/drivers/i2c_bus.rs</code> and answers at address <code class="inline">0x62</code>.
+    </p>
+    <p>This file is the translation layer between that sensor and the rest of the firmware. It provides:</p>
+    <ol>
+      <li><strong>The command codes.</strong> Every operation the sensor understands is a fixed 16-bit number
+          taken from the datasheet. They are named constants here rather than numbers scattered through the
+          code.</li>
+      <li><strong>The waiting times.</strong> The sensor does not answer instantly; each command has a published
+          time it needs before it can be spoken to again. Those times are stored next to the commands.</li>
+      <li><strong>The checksum.</strong> Every pair of bytes the sensor sends is followed by a check byte. This
+          file recomputes it and rejects any word that does not match, so corrupted readings are never
+          published.</li>
+      <li><strong>Unit conversion.</strong> Temperature and humidity arrive as plain 16-bit numbers with no
+          units. The formulas that turn them into degrees Celsius and percent live here.</li>
+    </ol>
+
+    <h3>What this file does not do</h3>
+    <ul>
+      <li>It does not decide when to measure. The ten-second schedule lives in
+          <code class="inline">src/tasks/scd41_task.rs</code>.</li>
+      <li>It does not obtain or release the shared bus. It is handed a ready-to-use I2C block and uses it.</li>
+      <li>It does not store readings or retry after a failure. It reports the failure and returns.</li>
+      <li>It does not implement the sensor's continuous measurement mode, its calibration commands, or its
+          settings storage. Only the on-demand flow the firmware actually uses is present.</li>
+    </ul>
+
+    <h3>Constraints that shaped the implementation</h3>
+    <ul>
+      <li>The bus is shared with a second sensor, so the driver is deliberately split: starting a measurement and
+          collecting it are two separate calls, and the five seconds in between belong to nobody.</li>
+      <li>The firmware has no heap. The largest buffer here is nine bytes on the stack.</li>
+      <li>Floating-point arithmetic is used only in the two conversion functions, and only when a caller asks for
+          a converted value. The stored reading remains an exact integer.</li>
+    </ul>
+  </div>
+
+  <!-- ================= PROTOCOL ================= -->
+  <div class="card" id="protocol">
+    <h2>The sensor protocol, in the detail needed to read this file</h2>
+
+    <h3>Commands</h3>
+    <p>
+      Every operation is a 16-bit number sent as two bytes, most significant byte first. Reading a measurement,
+      for example, is <code class="inline">0xEC05</code>, which travels as the byte
+      <code class="inline">0xEC</code> followed by the byte <code class="inline">0x05</code>. This ordering is
+      called <strong>big-endian</strong>.
+    </p>
+
+    <h3>Execution time</h3>
+    <p>
+      After the command bytes have been delivered, the sensor is busy. The datasheet states how long for each
+      command, ranging from one millisecond to five seconds. Speaking to the sensor before that time has elapsed
+      produces no answer. There is no "ready" signal to poll; the waiting time is simply respected.
+    </p>
+
+    <h3>Answers: words with a check byte</h3>
+    <p>
+      Data always comes back in groups of three bytes: two data bytes, most significant first, followed by one
+      check byte. The check byte is a <strong>CRC-8</strong>, a small number computed from the two data bytes
+      using a fixed rule. The receiver repeats the computation; if the result differs from the byte that arrived,
+      one of the three bytes was corrupted in transit and the whole group is discarded.
+    </p>
+
+    <h4>The nine bytes returned by <code class="inline">0xEC05</code></h4>
+<pre class="block"><code>byte   0     1     2      3     4     5      6     7     8
+     +-----+-----+-----++-----+-----+-----++-----+-----+-----+
+     | CO2 | CO2 | CRC || T   | T   | CRC || RH  | RH  | CRC |
+     | MSB | LSB |     || MSB | LSB |     || MSB | LSB |     |
+     +-----+-----+-----++-----+-----+-----++-----+-----+-----+
+       \_____ word 0 _____/\____ word 1 ____/\____ word 2 ____/
+       carbon dioxide       temperature       relative humidity
+       in ppm, ready to     raw, needs        raw, needs
+       use                  conversion        conversion</code></pre>
+
+    <h4>Checksum parameters used by Sensirion</h4>
+    <table>
+      <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+      <tr><td>Width</td><td>8 bits</td><td>The check byte is one byte.</td></tr>
+      <tr><td>Polynomial</td><td><code>0x31</code></td><td>The fixed pattern combined into the value on each step.</td></tr>
+      <tr><td>Initial value</td><td><code>0xFF</code></td><td>The value the computation starts from.</td></tr>
+      <tr><td>Reflection</td><td>none</td><td>Bits are processed most significant first, in the order they arrive.</td></tr>
+      <tr><td>Final operation</td><td>none</td><td>The result is used as computed, with nothing applied afterwards.</td></tr>
+      <tr><td>Covers</td><td>2 bytes</td><td>Each check byte protects only the two data bytes before it.</td></tr>
+    </table>
+
+    <h3>Two separate exchanges, never one</h3>
+    <p>
+      Many I2C devices allow a command and its answer to be combined into a single exchange, with a repeated
+      START in the middle instead of a STOP. The SCD41 does not permit this. The command must be delivered in one
+      complete exchange, and the answer collected in a second one after the waiting time. This is why the code
+      never uses the combined write-then-read call offered by the hardware driver.
+    </p>
+
+    <h3>Unit conversion</h3>
+    <p>Carbon dioxide arrives in parts per million and needs no conversion. The other two do:</p>
+    <table>
+      <tr><th>Quantity</th><th>Formula</th><th>Range of the formula</th></tr>
+      <tr><td>Temperature</td><td><code>-45 + 175 &times; raw / 65535</code></td><td>−45 °C at raw 0, +130 °C at raw 65535</td></tr>
+      <tr><td>Relative humidity</td><td><code>100 &times; raw / 65535</code></td><td>0 % at raw 0, 100 % at raw 65535</td></tr>
+    </table>
+    <div class="note">The raw words are kept exactly as the sensor sent them and are stored that way. Conversion
+      happens only where a human-readable number is required: the serial console line, and the moment a reading is
+      written into the web server's reply.</div>
+  </div>
+
+  <!-- ================= INTERFACES ================= -->
+  <div class="card" id="interfaces">
+    <h2>External interfaces — everything this file touches</h2>
+
+    <h3>1. What this file requires</h3>
+    <table>
+      <tr><th>Item</th><th>Source</th><th>Purpose</th></tr>
+      <tr><td><code>&amp;mut I2C&lt;'_, T, Blocking&gt;</code></td><td>Returned by <code>I2cBus::acquire</code> in <code>src/drivers/i2c_bus.rs</code></td>
+          <td>A working I2C block on a bus that has just been returned to its idle state. The driver borrows it
+              and never keeps it.</td></tr>
+      <tr><td><code>Timer</code></td><td><code>embassy_time</code></td>
+          <td>Waits out the datasheet execution times while allowing other tasks to run.</td></tr>
+    </table>
+
+    <h3>2. What this file exposes</h3>
+    <table>
+      <tr><th>Item</th><th>Used by</th><th>Purpose</th></tr>
+      <tr><td><code>Scd41::new</code></td><td><code>src/tasks/scd41_task.rs</code></td><td>Binds the driver to a bus for the duration of one exchange.</td></tr>
+      <tr><td><code>stop_periodic_measurement</code></td><td>the task, during start-up and after every error</td><td>Places the sensor in the idle state that on-demand commands require.</td></tr>
+      <tr><td><code>serial_number</code></td><td>the task, during start-up</td><td>Confirms the sensor is present and answering correctly.</td></tr>
+      <tr><td><code>start_single_shot</code></td><td>the task, every ten seconds</td><td>Begins one conversion and returns immediately.</td></tr>
+      <tr><td><code>read_measurement</code></td><td>the task, five seconds later</td><td>Collects the finished conversion.</td></tr>
+      <tr><td><code>SINGLE_SHOT_MEASUREMENT_DELAY_MS</code></td><td>the task</td><td>The five-second wait between those two calls, so the number is stated once.</td></tr>
+      <tr><td><code>Measurement</code></td><td>the task, <code>src/utils/shared_state.rs</code>, the web server</td><td>The reading itself. It is stored in the history exactly as defined here.</td></tr>
+      <tr><td><code>Error</code></td><td>the task</td><td>Distinguishes a failed exchange from a failed checksum.</td></tr>
+      <tr><td><code>DEFAULT_ADDRESS</code>, <code>with_address</code>, <code>reinit</code>, <code>wake_up</code>, <code>measure_single_shot</code>, <code>measure_single_shot_rht_only</code></td><td>nothing at present</td>
+          <td>Complete but unused parts of the driver. See the note on <code>#![allow(dead_code)]</code> below.</td></tr>
+    </table>
+
+    <h3>3. Where a reading goes after this file</h3>
+<pre class="block"><code>scd41.rs            read_measurement()  ->  Measurement { co2_ppm, temperature_raw, humidity_raw }
+scd41_task.rs       publish_scd41(measurement)
+shared_state.rs     stored in a ring buffer in external memory, with a timestamp and a sequence number
+web_server_task.rs  converted to degrees Celsius and percent, written into the JSON reply
+browser             plotted</code></pre>
+    <p>
+      The two raw words survive unchanged all the way to the web server, which performs the conversion at the
+      last possible moment. Nothing between here and there interprets them.
+    </p>
+  </div>
+
+  <!-- ================= FLOW ================= -->
+  <div class="card" id="flow">
+    <h2>Measurement flow</h2>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant T as scd41_task
+  participant B as The shared I2C bus
+  participant D as Scd41 (this file)
+  participant S as The SCD41 sensor
+
+  Note over T: Once, at start-up and after any error
+  T->>B: take the lock, acquire the bus
+  T->>D: stop_periodic_measurement()
+  D->>S: write 0x3F86
+  D-->>D: wait 500 ms
+  T->>D: serial_number()
+  D->>S: write 0x3682, wait 1 ms, read 9 bytes
+  S-->>D: three words with check bytes
+  D-->>T: 48-bit serial number
+  T->>B: release the lock
+
+  Note over T: Every ten seconds
+  T->>B: take the lock, acquire the bus
+  T->>D: start_single_shot()
+  D->>S: write 0x219D
+  D-->>T: returns at once, no waiting
+  T->>B: release the lock
+  Note over T,S: Five seconds pass. The sensor converts.<br/>No lock is held, so the other sensor can use the bus.
+  T->>B: take the lock, acquire the bus
+  T->>D: read_measurement()
+  D->>S: write 0xEC05, wait 1 ms, read 9 bytes
+  S-->>D: nine bytes
+  D-->>D: check all three check bytes
+  D-->>T: Measurement, or an error
+  T->>B: release the lock
+      </pre>
+      <figcaption>The five-second conversion happens with the bus released, which is the reason starting and reading are separate calls.</figcaption>
+    </figure>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart TD
+  A["read_three_words(command, delay)"] --> B["Write the two command bytes"]
+  B --> C{"Did the sensor acknowledge?"}
+  C -- no --> E1["Return Error::Bus"]
+  C -- yes --> D["Wait the command's execution time"]
+  D --> E["Read exactly nine bytes"]
+  E --> F{"Did the read succeed?"}
+  F -- no --> E2["Return Error::Bus"]
+  F -- yes --> G["Split into three groups of three bytes"]
+  G --> H["For each group: recompute the check byte<br/>from the two data bytes"]
+  H --> I{"Does it match the third byte?"}
+  I -- no --> E3["Return Error::Crc, discard everything"]
+  I -- yes --> J["Combine the two data bytes into one 16-bit word"]
+  J --> K{"All three groups done?"}
+  K -- no --> H
+  K -- yes --> L["Return the three words"]
+    </pre>
+      <figcaption>A single corrupted byte anywhere in the answer causes the whole answer to be discarded; no partial reading is ever produced.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= MODULE DOC ================= -->
+  <h2 class="section" id="s-moduledoc">Module description <span class="range">lines 1–12</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">//! Minimal driver for the Sensirion SCD41 CO2 / temperature / humidity sensor.
+//!
+//! Only the single-shot ("on demand") measurement flow is implemented:
+//!
+//! 1. `measure_single_shot` (0x219D) triggers one conversion.
+//! 2. The sensor needs 5000 ms to finish it.
+//! 3. `read_measurement` (0xEC05) returns 3 words, each followed by a CRC-8.
+//!
+//! Every word on the wire is big-endian and protected by a CRC-8 with
+//! polynomial 0x31, initial value 0xFF, no reflection and no final XOR.</span>
+
+<span class="at">#![allow(dead_code)]</span></code></pre>
+      <div class="explain">
+        <span class="tag">Documentation and one attribute</span>
+        <p>The <code class="inline">//!</code> lines describe the file as a whole. They state the three steps of a
+           measurement and the checksum settings, which is the minimum needed to compare this code against the
+           datasheet.</p>
+        <p><strong>"Single-shot"</strong> means the sensor measures once, when asked. The alternative offered by
+           the sensor is a continuous mode in which it measures on its own schedule; that mode is not used, so it
+           is not implemented.</p>
+        <p><code class="inline">#![allow(dead_code)]</code> switches off the warning that reports items which are
+           never used. Several commands here are complete and correct but not called by this firmware —
+           <code class="inline">reinit</code>, <code class="inline">wake_up</code>,
+           <code class="inline">measure_single_shot</code> and the humidity-and-temperature-only variant. They are
+           kept because they are part of the sensor's documented behaviour and would otherwise have to be written
+           again when needed. The attribute stops each of them producing a warning at every build.</p>
+        <div class="note warn">The suppression applies to the whole file, so a genuinely unused item added later
+          will also not be reported. This is the cost of keeping the unused commands.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IMPORTS ================= -->
+  <h2 class="section" id="s-imports">Imports <span class="range">lines 14–18</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_time::<span class="ty">Timer</span>;
+<span class="k">use</span> esp_hal::{
+    i2c::{<span class="ty">Error</span> <span class="k">as</span> <span class="ty">I2cError</span>, <span class="ty">Instance</span>, <span class="ty">I2C</span>},
+    <span class="ty">Blocking</span>,
+};</code></pre>
+      <div class="explain">
+        <span class="tag alt">Imports</span>
+        <ul>
+          <li><code class="inline">Timer</code> waits for a stated number of milliseconds. During that wait the
+              processor runs other tasks, so the five-second conversion costs nothing.</li>
+          <li><code class="inline">Error as I2cError</code> renames the hardware driver's error type on import.
+              This file defines its own type called <code class="inline">Error</code>, and two different things
+              cannot share one name in the same place.</li>
+          <li><code class="inline">Instance</code> is the property shared by all I2C hardware blocks. It is what
+              allows this driver to be written once and used with either block.</li>
+          <li><code class="inline">I2C</code> is the hardware driver itself and
+              <code class="inline">Blocking</code> selects the variant whose calls return only when the transfer
+              has finished.</li>
+        </ul>
+        <div class="note">This file imports nothing from the rest of the project. It knows about the sensor and
+          about I2C, and nothing else — not the task that drives it, not the storage its results end up in.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ADDRESS ================= -->
+  <h2 class="section" id="s-address">The sensor's address <span class="range">lines 20–21</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Factory-default 7-bit address of the SCD41.</span>
+<span class="k">pub const</span> <span class="ty">DEFAULT_ADDRESS</span>: <span class="ty">u8</span> = <span class="nu">0x62</span>;</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · the bus</span>
+        <p>The number that identifies this sensor among the devices sharing the two wires. It is fixed in the
+           sensor at manufacture and cannot be changed, which is why one bus can carry only one SCD41.</p>
+        <p>This is the address that appears in the start-up scan produced by
+           <code class="inline">src/drivers/i2c_bus.rs</code>. If the line
+           <code class="inline">I2C device found at 0x62</code> is missing from the console, no command in this
+           file can succeed and the fault is electrical rather than in this code.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= COMMANDS ================= -->
+  <h2 class="section" id="s-commands">Command codes <span class="range">lines 23–29</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">CMD_STOP_PERIODIC_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0x3F86</span>;
+<span class="k">const</span> <span class="ty">CMD_WAKE_UP</span>: <span class="ty">u16</span> = <span class="nu">0x36F6</span>;
+<span class="k">const</span> <span class="ty">CMD_REINIT</span>: <span class="ty">u16</span> = <span class="nu">0x3646</span>;
+<span class="k">const</span> <span class="ty">CMD_MEASURE_SINGLE_SHOT</span>: <span class="ty">u16</span> = <span class="nu">0x219D</span>;
+<span class="k">const</span> <span class="ty">CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</span>: <span class="ty">u16</span> = <span class="nu">0x2196</span>;
+<span class="k">const</span> <span class="ty">CMD_READ_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0xEC05</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_SERIAL_NUMBER</span>: <span class="ty">u16</span> = <span class="nu">0x3682</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>The seven operations this driver can request. Each number is taken directly from the SCD4x datasheet
+           and is meaningless outside it.</p>
+        <table>
+          <tr><th>Constant</th><th>Code</th><th>Effect on the sensor</th></tr>
+          <tr><td><code>CMD_STOP_PERIODIC_MEASUREMENT</code></td><td>0x3F86</td>
+              <td>Leaves continuous mode and enters the idle state. On-demand commands are only accepted while
+                  idle.</td></tr>
+          <tr><td><code>CMD_WAKE_UP</code></td><td>0x36F6</td><td>Leaves the power-down state.</td></tr>
+          <tr><td><code>CMD_REINIT</code></td><td>0x3646</td><td>Reloads the stored settings from the sensor's own permanent memory.</td></tr>
+          <tr><td><code>CMD_MEASURE_SINGLE_SHOT</code></td><td>0x219D</td><td>Measures all three quantities once. This is the command the firmware uses.</td></tr>
+          <tr><td><code>CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</code></td><td>0x2196</td><td>Measures temperature and humidity only, which is far quicker because no gas measurement is performed.</td></tr>
+          <tr><td><code>CMD_READ_MEASUREMENT</code></td><td>0xEC05</td><td>Returns the result of the most recent conversion.</td></tr>
+          <tr><td><code>CMD_GET_SERIAL_NUMBER</code></td><td>0x3682</td><td>Returns the sensor's unique 48-bit identifier.</td></tr>
+        </table>
+        <p>Naming them, rather than writing the numbers where they are used, means a reader can check each one
+           against the datasheet in a single place, and a transposed digit is visible here rather than hidden in
+           the middle of a function.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DELAYS ================= -->
+  <h2 class="section" id="s-delays">Execution times <span class="range">lines 31–42</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Execution time of `stop_periodic_measurement`, per the datasheet.</span>
+<span class="k">const</span> <span class="ty">STOP_PERIODIC_MEASUREMENT_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">500</span>;
+<span class="cm">/// Execution time of `reinit`, per the datasheet.</span>
+<span class="k">const</span> <span class="ty">REINIT_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">30</span>;
+<span class="cm">/// Execution time of `wake_up`, per the datasheet.</span>
+<span class="k">const</span> <span class="ty">WAKE_UP_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">30</span>;
+<span class="cm">/// Execution time of a full single-shot measurement, per the datasheet.</span>
+<span class="k">pub const</span> <span class="ty">SINGLE_SHOT_MEASUREMENT_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">5000</span>;
+<span class="cm">/// Execution time of an RH/T-only single-shot measurement, per the datasheet.</span>
+<span class="k">const</span> <span class="ty">MEASURE_SINGLE_SHOT_RHT_ONLY_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">50</span>;
+<span class="cm">/// Execution time of short commands such as `read_measurement`.</span>
+<span class="k">const</span> <span class="ty">SHORT_COMMAND_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">1</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>How long the sensor is busy after each command. Speaking to it sooner produces no answer, so these are
+           not adjustable tuning values but published properties of the device.</p>
+        <table>
+          <tr><th>Command</th><th>Time</th><th>Why it takes that long</th></tr>
+          <tr><td>Stop continuous mode</td><td>500 ms</td><td>The sensor must finish and abandon any conversion already in progress.</td></tr>
+          <tr><td>Reload settings</td><td>30 ms</td><td>Reading its own permanent memory.</td></tr>
+          <tr><td>Wake up</td><td>30 ms</td><td>Restarting the internal circuitry.</td></tr>
+          <tr><td>Full measurement</td><td>5000 ms</td><td>The gas measurement warms an internal element and waits for a stable reading.</td></tr>
+          <tr><td>Temperature and humidity only</td><td>50 ms</td><td>No gas measurement is performed.</td></tr>
+          <tr><td>Short commands</td><td>1 ms</td><td>Only fetching values the sensor already holds.</td></tr>
+        </table>
+        <p><code class="inline">SINGLE_SHOT_MEASUREMENT_DELAY_MS</code> is the only one marked
+           <code class="inline">pub</code>. The task waits out those five seconds itself, between its two calls
+           into this driver, so it needs the number; the others are consumed entirely inside this file.</p>
+        <div class="note">Five seconds per measurement, taken every ten seconds, means the sensor is converting
+          for about half of the time the device is switched on.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CRC CONSTANTS ================= -->
+  <h2 class="section" id="s-crcconst">Checksum settings <span class="range">lines 44–45</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">CRC8_POLYNOMIAL</span>: <span class="ty">u8</span> = <span class="nu">0x31</span>;
+<span class="k">const</span> <span class="ty">CRC8_INIT</span>: <span class="ty">u8</span> = <span class="nu">0xFF</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>The two numbers that define the checksum used by every Sensirion sensor. The polynomial is the pattern
+           combined into the running value; the initial value is where the computation starts.</p>
+        <p>Both must match the sensor exactly. A wrong value here would not cause an obvious failure — it would
+           cause every reading to be rejected as corrupt, and the sensor would appear to be broken.</p>
+        <p>The same two numbers are used by the SPS30 driver in
+           <code class="inline">src/drivers/sps30.rs</code>, which repeats the computation rather than sharing it,
+           so that each driver can be read on its own.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ERROR ================= -->
+  <h2 class="section" id="s-error">The error type <span class="range">lines 47–60</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Errors reported by the driver.</span>
+<span class="at">#[derive(Debug, Clone, Copy, PartialEq)]</span>
+<span class="k">pub enum</span> <span class="ty">Error</span> {
+    <span class="cm">/// The I2C transfer itself failed (no acknowledge, timeout, ...).</span>
+    Bus(<span class="ty">I2cError</span>),
+    <span class="cm">/// A word came back with a CRC that does not match its data bytes.</span>
+    Crc,
+}
+
+<span class="k">impl</span> <span class="ty">From</span>&lt;<span class="ty">I2cError</span>&gt; <span class="k">for</span> <span class="ty">Error</span> {
+    <span class="k">fn</span> <span class="fn">from</span>(error: <span class="ty">I2cError</span>) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Error</span>::Bus(error)
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>Exactly two things can go wrong, and they call for different responses:</p>
+        <ul>
+          <li><strong><code class="inline">Bus</code></strong> — the exchange itself failed. Nothing answered, or
+              the transfer was cut short. This usually means the sensor is absent, unpowered, or was left in a
+              state where it ignores commands. The original hardware error is carried inside so it can be printed.</li>
+          <li><strong><code class="inline">Crc</code></strong> — the exchange succeeded and the sensor answered,
+              but the check byte did not match. The sensor is present and talking; the wires are picking up
+              interference or the connection is marginal.</li>
+        </ul>
+        <p>The four derived properties: <code class="inline">Debug</code> allows the error to be printed;
+           <code class="inline">Clone</code> and <code class="inline">Copy</code> make it a plain value that can be
+           passed around freely; <code class="inline">PartialEq</code> allows two errors to be compared.</p>
+        <p>The <code class="inline">From</code> block states how a hardware error becomes one of these. Once that
+           conversion exists, the question-mark operator used throughout the file performs it automatically, which
+           is why lines such as <code class="inline">self.i2c.write(...)?</code> need no explicit conversion step.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MEASUREMENT ================= -->
+  <h2 class="section" id="s-measurement">The reading and its unit conversions <span class="range">lines 62–84</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// One complete single-shot result.</span>
+<span class="at">#[derive(Debug, Clone, Copy, PartialEq, Eq)]</span>
+<span class="k">pub struct</span> <span class="ty">Measurement</span> {
+    <span class="cm">/// CO2 concentration in ppm, as reported by the sensor.</span>
+    <span class="k">pub</span> co2_ppm: <span class="ty">u16</span>,
+    <span class="cm">/// Raw temperature word; convert with [`Measurement::temperature_celsius`].</span>
+    <span class="k">pub</span> temperature_raw: <span class="ty">u16</span>,
+    <span class="cm">/// Raw humidity word; convert with [`Measurement::humidity_percent`].</span>
+    <span class="k">pub</span> humidity_raw: <span class="ty">u16</span>,
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · stored in the history</span>
+        <p>One reading: six bytes, three 16-bit numbers, exactly as they arrived from the sensor. This is the
+           value the task hands to <code class="inline">shared_state.rs</code>, and the value the history keeps.</p>
+        <p>Carbon dioxide is already in parts per million and is stored as such. Temperature and humidity are
+           stored raw and are converted only on demand, for three reasons: the raw form is exact, it occupies half
+           the space of a floating-point number, and it avoids performing arithmetic on readings that may never be
+           looked at.</p>
+        <p><code class="inline">Eq</code> is among the derived properties, which is only possible because every
+           field is an integer. It states that two readings can be compared for exact equality — a claim that
+           cannot be made about floating-point numbers, and therefore could not be derived if the conversions were
+           applied here.</p>
+        <p>Storing six bytes rather than the twelve a converted form would need is what allows the history in
+           external memory to hold 8640 readings per sensor.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">impl</span> <span class="ty">Measurement</span> {
+    <span class="cm">/// Temperature in degrees Celsius: `-45 + 175 * raw / 2^16`.</span>
+    <span class="k">pub fn</span> <span class="fn">temperature_celsius</span>(&amp;<span class="k">self</span>) -&gt; <span class="ty">f32</span> {
+        <span class="nu">-45.0</span> + <span class="nu">175.0</span> * (<span class="k">self</span>.temperature_raw <span class="k">as</span> <span class="ty">f32</span>) / <span class="nu">65535.0</span>
+    }
+
+    <span class="cm">/// Relative humidity in percent: `100 * raw / 2^16`.</span>
+    <span class="k">pub fn</span> <span class="fn">humidity_percent</span>(&amp;<span class="k">self</span>) -&gt; <span class="ty">f32</span> {
+        <span class="nu">100.0</span> * (<span class="k">self</span>.humidity_raw <span class="k">as</span> <span class="ty">f32</span>) / <span class="nu">65535.0</span>
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task and by the web server</span>
+        <p>The two formulas from the datasheet, applied to the raw words.</p>
+        <p><strong>Temperature</strong> spans a fixed range: raw 0 means −45 °C, the largest possible raw value
+           means +130 °C, and everything in between is spread evenly. A raw word of about 24000 corresponds to
+           roughly 19 °C.</p>
+        <p><strong>Humidity</strong> spans 0 % to 100 % over the same word.</p>
+        <p>The divisor is 65535, which is the largest value a 16-bit word can hold. The doc comments write this as
+           <code class="inline">2^16</code>; the exact value used in the code is
+           <code class="inline">2^16 − 1</code>, which is the divisor the datasheet specifies. The difference
+           between the two is smaller than the sensor's accuracy, but the code is the correct form.</p>
+        <p>Both take the reading by reference and return a new number without changing anything, so calling them
+           twice is free of consequence.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CRC8 ================= -->
+  <h2 class="section" id="s-crc8">The checksum computation <span class="range">lines 86–102</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Start with 0xFF"] --> B["For each of the two data bytes"]
+  B --> C["Combine the byte into the value<br/>(exclusive-or)"]
+  C --> D["Repeat eight times, once per bit"]
+  D --> E{"Is the top bit of the value set?"}
+  E -- yes --> F["Shift the value left by one,<br/>then combine 0x31 into it"]
+  E -- no --> G["Shift the value left by one"]
+  F --> D
+  G --> D
+  D -- "eight rounds done" --> B
+  B -- "both bytes done" --> H["The remaining byte is the check byte"]
+  </pre>
+    <figcaption>The computation is fixed and has no inputs beyond the two data bytes; the same bytes always produce the same check byte.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Compute the Sensirion CRC-8 over a data word.</span>
+<span class="k">fn</span> <span class="fn">crc8</span>(data: &amp;[<span class="ty">u8</span>]) -&gt; <span class="ty">u8</span> {
+    <span class="k">let mut</span> crc = <span class="ty">CRC8_INIT</span>;
+
+    <span class="k">for</span> byte <span class="k">in</span> data {
+        crc ^= byte;
+        <span class="k">for</span> _ <span class="k">in</span> <span class="nu">0</span>..<span class="nu">8</span> {
+            <span class="k">if</span> crc &amp; <span class="nu">0x80</span> != <span class="nu">0</span> {
+                crc = (crc &lt;&lt; <span class="nu">1</span>) ^ <span class="ty">CRC8_POLYNOMIAL</span>;
+            } <span class="k">else</span> {
+                crc &lt;&lt;= <span class="nu">1</span>;
+            }
+        }
+    }
+
+    crc
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Verification</span>
+        <p>Produces the check byte for a group of data bytes. In this file it is always called with the two bytes
+           of one word.</p>
+        <p><strong>Step by step.</strong> The value starts at <code class="inline">0xFF</code>. For each data
+           byte, that byte is combined into the value with an exclusive-or — an operation that flips exactly the
+           bits the byte has set. Then the value is processed one bit at a time, eight times:</p>
+        <ul>
+          <li><code class="inline">crc &amp; 0x80 != 0</code> tests whether the highest bit is set.</li>
+          <li>If it is, the value is shifted one place to the left and the polynomial is combined into it.</li>
+          <li>If it is not, the value is only shifted.</li>
+        </ul>
+        <p>Whatever remains after both bytes have been processed is the check byte. Nothing is applied afterwards,
+           which is the "no final XOR" mentioned in the file description.</p>
+        <p>This procedure has a useful property: a change to any single bit of the data, and most changes to
+           several bits, produce a different check byte. That is what makes a corrupted reading detectable.</p>
+        <p>The two shifts deliberately discard the bit that moves off the top. The result stays within one byte,
+           which is what makes it an 8-bit checksum.</p>
+        <div class="note">This is computed bit by bit rather than with a lookup table. A table would be faster but
+          would occupy 256 bytes of memory permanently, and the computation runs six times per reading, once every
+          ten seconds.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STRUCT ================= -->
+  <h2 class="section" id="s-struct">The driver value <span class="range">lines 104–111</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// SCD41 attached to an esp-hal I2C bus.
+///
+/// The I2C transfers themselves are blocking, but every datasheet-mandated
+/// execution delay yields to the Embassy executor instead of busy-waiting.</span>
+<span class="k">pub struct</span> <span class="ty">Scd41</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt; {
+    i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;,
+    address: <span class="ty">u8</span>,
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>The driver holds only two things: a borrowed I2C block and the address to speak to. It stores no state
+           about the sensor, which means creating one costs nothing and there is no possibility of the driver's
+           idea of the sensor drifting away from reality.</p>
+        <p>This is why the task creates a fresh <code class="inline">Scd41</code> for every exchange rather than
+           keeping one. The task does hold one piece of state itself — whether the sensor still needs
+           initialising — but that belongs to the schedule, not to the protocol.</p>
+        <p><strong>The comment describes the timing behaviour precisely.</strong> Sending the bytes occupies the
+           processor until the transfer finishes, which at 100 kHz is a few hundred microseconds. Waiting out the
+           execution time does not: the task is suspended and other tasks run, which is what allows a five-second
+           conversion to cost nothing.</p>
+        <p><code class="inline">'a</code> and <code class="inline">'d</code> record how long the borrowed block
+           lives, so the driver cannot outlive the block it borrows. <code class="inline">T</code> stands for
+           whichever I2C hardware block is in use, so this driver is not tied to
+           <code class="inline">I2C0</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NEW ================= -->
+  <h2 class="section" id="s-new">Binding the driver to a bus <span class="range">lines 113–126</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">impl</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt; <span class="ty">Scd41</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt;
+<span class="k">where</span>
+    T: <span class="ty">Instance</span>,
+{
+    <span class="cm">/// Bind the driver to a bus, using the factory-default address.</span>
+    <span class="k">pub fn</span> <span class="fn">new</span>(i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Self</span>::<span class="fn">with_address</span>(i2c, <span class="ty">DEFAULT_ADDRESS</span>)
+    }
+
+    <span class="cm">/// Bind the driver to a bus using an explicit 7-bit address.</span>
+    <span class="k">pub fn</span> <span class="fn">with_address</span>(i2c: &amp;<span class="st">'a</span> <span class="k">mut</span> <span class="ty">I2C</span>&lt;<span class="st">'d</span>, T, <span class="ty">Blocking</span>&gt;, address: <span class="ty">u8</span>) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Self</span> { i2c, address }
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task</span>
+        <p><code class="inline">where T: Instance</code> restricts everything in this block to types that really
+           are I2C hardware blocks, so nothing else can be passed in by mistake.</p>
+        <p><code class="inline">new</code> is the ordinary way in and is the only one this firmware uses. It simply
+           supplies the factory address.</p>
+        <p><code class="inline">with_address</code> exists for a sensor whose address has been changed, which some
+           Sensirion parts permit. Keeping the two apart means the common case reads as one word at the call site
+           while the unusual case remains possible.</p>
+        <p>Neither function touches the hardware. Binding a driver produces no signal on the wires.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEND COMMAND ================= -->
+  <h2 class="section" id="s-sendcommand">Sending one command <span class="range">lines 127–132</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a bare 16-bit command and wait for its execution time.</span>
+    <span class="k">async fn</span> <span class="fn">send_command</span>(&amp;<span class="k">mut</span> <span class="k">self</span>, command: <span class="ty">u16</span>, execution_delay_ms: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.i2c.<span class="fn">write</span>(<span class="k">self</span>.address, &amp;command.<span class="fn">to_be_bytes</span>())?;
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(execution_delay_ms).<span class="k">await</span>;
+        <span class="ty">Ok</span>(())
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block</span>
+        <p>Every command in this file that carries no data goes through these three lines.</p>
+        <p><code class="inline">to_be_bytes</code> splits the 16-bit command into its two bytes, most significant
+           first. <code class="inline">0xEC05</code> becomes the pair <code class="inline">[0xEC, 0x05]</code>.
+           The name states the byte order explicitly, so it cannot be confused with the opposite convention.</p>
+        <p>The question mark at the end of the write is the early-return operator: if the exchange failed, the
+           function stops immediately and hands the failure back to the caller, converted into
+           <code class="inline">Error::Bus</code> by the conversion defined earlier. The wait is then not
+           performed, which is correct — a command that was never delivered is not being executed.</p>
+        <p><code class="inline">Timer::after_millis(...).await</code> suspends the calling task for the sensor's
+           execution time. Other tasks run during it. This is the single most important difference between this
+           driver and a busy-waiting one: the five-second conversion does not stop the rest of the firmware.</p>
+        <p>The function is private. Callers ask for operations by name; the command code and its execution time
+           are supplied here, together, so the two can never be mismatched.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= READ THREE WORDS ================= -->
+  <h2 class="section" id="s-readwords">Reading three checked words <span class="range">lines 134–156</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a command and read three CRC-checked words back.
+    ///
+    /// The SCD4x requires the write and the read to be separate transactions,
+    /// so this is deliberately not a repeated-start `write_read`.</span>
+    <span class="k">async fn</span> <span class="fn">read_three_words</span>(
+        &amp;<span class="k">mut</span> <span class="k">self</span>,
+        command: <span class="ty">u16</span>,
+        execution_delay_ms: <span class="ty">u64</span>,
+    ) -&gt; <span class="ty">Result</span>&lt;[<span class="ty">u16</span>; <span class="nu">3</span>], <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(command, execution_delay_ms).<span class="k">await</span>?;
+
+        <span class="k">let mut</span> buffer = [<span class="nu">0u8</span>; <span class="nu">9</span>];
+        <span class="k">self</span>.i2c.<span class="fn">read</span>(<span class="k">self</span>.address, &amp;<span class="k">mut</span> buffer)?;</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block</span>
+        <p>Both commands that return data — the serial number and the measurement — use this function. Only the
+           command code differs.</p>
+        <p><strong>The comment records a protocol requirement, not a preference.</strong> The usual efficient
+           approach is a combined write-then-read, which keeps hold of the bus between the two halves using a
+           repeated START. The SCD4x does not accept that; the command must be a finished exchange, ending in a
+           STOP, before the answer is requested in a second exchange. Using the combined form would produce no
+           answer at all.</p>
+        <p>The nine-byte buffer is exactly three groups of three. Its size is fixed when the program is compiled
+           and it lives on the stack for the duration of the call.</p>
+        <p><code class="inline">read</code> requests exactly nine bytes. Both the write and the read carry a
+           question mark, so a failure at either point returns immediately without examining the buffer.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="k">let mut</span> words = [<span class="nu">0u16</span>; <span class="nu">3</span>];
+        <span class="k">for</span> (word, chunk) <span class="k">in</span> words.<span class="fn">iter_mut</span>().<span class="fn">zip</span>(buffer.<span class="fn">chunks_exact</span>(<span class="nu">3</span>)) {
+            <span class="k">if</span> <span class="fn">crc8</span>(&amp;chunk[..<span class="nu">2</span>]) != chunk[<span class="nu">2</span>] {
+                <span class="k">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::Crc);
+            }
+            *word = <span class="ty">u16</span>::<span class="fn">from_be_bytes</span>([chunk[<span class="nu">0</span>], chunk[<span class="nu">1</span>]]);
+        }
+
+        <span class="ty">Ok</span>(words)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag">Verification</span>
+        <p>Turns the nine bytes into three verified words.</p>
+        <p><code class="inline">chunks_exact(3)</code> walks the buffer in groups of three bytes, producing
+           exactly three groups. <code class="inline">zip</code> pairs each group with the word it will fill, so
+           the two advance together and no index arithmetic is written by hand.</p>
+        <p>For each group the check byte is recomputed from the first two bytes and compared with the third. A
+           mismatch ends the function immediately with <code class="inline">Error::Crc</code>. Nothing partial is
+           returned: if the third word is corrupt, the first two are discarded as well, because a reading is only
+           meaningful complete.</p>
+        <p><code class="inline">u16::from_be_bytes</code> combines the two verified bytes into one number, the
+           first byte contributing the high half. This is the exact inverse of the
+           <code class="inline">to_be_bytes</code> used when sending.</p>
+        <p>The function returns three plain numbers. What they mean is decided by the caller: the same three words
+           are a serial number for one command and a reading for another.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODE COMMANDS ================= -->
+  <h2 class="section" id="s-mode">Mode commands <span class="range">lines 158–185</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Bring the sensor into idle mode so that single-shot commands are accepted.
+    ///
+    /// Safe to call after a reset even if no periodic measurement was running.</span>
+    <span class="k">pub async fn</span> <span class="fn">stop_periodic_measurement</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(
+            <span class="ty">CMD_STOP_PERIODIC_MEASUREMENT</span>,
+            <span class="ty">STOP_PERIODIC_MEASUREMENT_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up and after every error</span>
+        <p>Places the sensor in the idle state. This matters because on-demand measurement commands are rejected
+           while the sensor is in continuous mode, and the firmware cannot know which state it is in: the
+           microcontroller may have been reset while the sensor, which has its own power, kept running.</p>
+        <p>The comment records that issuing it unnecessarily is harmless. The sensor accepts it whether or not
+           anything was running, so it can be used unconditionally rather than only when believed to be needed.</p>
+        <p>This is the first command the task sends, and it is sent again after any error, which is how the
+           firmware recovers from a sensor left in an unexpected state.</p>
+        <p>The 500 ms wait is included by <code class="inline">send_command</code>, and the whole of it happens
+           while the shared bus lock is held.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Reload user settings from EEPROM. The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">reinit</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(<span class="ty">CMD_REINIT</span>, <span class="ty">REINIT_DELAY_MS</span>).<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p>Instructs the sensor to reload its settings from its own permanent memory, which is the closest thing
+           it offers to a software reset.</p>
+        <p>The settings concerned are the sensor's calibration values and its measurement offsets. This firmware
+           never changes them, so there is nothing to reload and the command is not called. It is kept because it
+           is one line and is the documented recovery step if a sensor is ever put into an unusable state.</p>
+        <p><strong>EEPROM</strong> is memory inside the sensor that keeps its contents when power is removed.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Leave sleep mode.
+    ///
+    /// The SCD41 does **not** acknowledge this command, so `Bus(AckCheckFailed)`
+    /// is the expected outcome and can be ignored. It is a no-op unless the
+    /// sensor was put into power-down mode.</span>
+    <span class="k">pub async fn</span> <span class="fn">wake_up</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> result = <span class="k">self</span>.i2c.<span class="fn">write</span>(<span class="k">self</span>.address, &amp;<span class="ty">CMD_WAKE_UP</span>.<span class="fn">to_be_bytes</span>());
+        <span class="cm">// Wait for the wake-up time even though the command was not acked.</span>
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">WAKE_UP_DELAY_MS</span>).<span class="k">await</span>;
+        result.<span class="fn">map_err</span>(<span class="ty">Error</span>::from)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p>The one command that cannot use <code class="inline">send_command</code>, and the comment explains why:
+           a sleeping SCD41 does not acknowledge the command that wakes it. The exchange therefore reports failure
+           even when it worked, and reporting failure is the normal outcome.</p>
+        <p>Because of that, the code cannot stop at the write. It keeps the result aside, waits the full 30 ms for
+           the sensor to become responsive, and only then hands the result back — leaving the caller to decide
+           whether to ignore it. Using the question-mark operator here would skip the wait in exactly the case
+           where the wait is needed.</p>
+        <p><code class="inline">map_err(Error::from)</code> converts the hardware error into this file's error
+           type. It is written explicitly because the automatic conversion only applies to the question-mark
+           operator, which is deliberately not used here.</p>
+        <p>The firmware never puts the sensor to sleep, so it never needs to wake it. The command is kept because
+           its unusual behaviour is easy to get wrong and is worth recording once.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SERIAL ================= -->
+  <h2 class="section" id="s-serial">The serial number <span class="range">lines 186–192</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the 48-bit unique serial number; useful as a presence check.</span>
+    <span class="k">pub async fn</span> <span class="fn">serial_number</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u64</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> words = <span class="k">self</span>
+            .<span class="fn">read_three_words</span>(<span class="ty">CMD_GET_SERIAL_NUMBER</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>?;
+        <span class="ty">Ok</span>(((words[<span class="nu">0</span>] <span class="k">as</span> <span class="ty">u64</span>) &lt;&lt; <span class="nu">32</span>) | ((words[<span class="nu">1</span>] <span class="k">as</span> <span class="ty">u64</span>) &lt;&lt; <span class="nu">16</span>) | (words[<span class="nu">2</span>] <span class="k">as</span> <span class="ty">u64</span>))
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reads the identifier written into the sensor at manufacture. It is unique to that individual part.</p>
+        <p>The three words are joined into a single 48-bit number: the first is moved up 32 places, the second up
+           16, the third left where it is, and the three are combined. The result is placed in a 64-bit number
+           because no smaller size can hold 48 bits; the top 16 bits are always zero.</p>
+        <p>The value itself is not used for anything. Its purpose is stated in the comment: it is a presence
+           check. Reading it successfully proves four things at once — the sensor is powered, it holds the
+           expected address, it accepts commands, and the checksums it produces are correct. The task prints it
+           and continues.</p>
+        <p>This is why the console line <code class="inline">SCD41 ready, serial number: 0x...</code> is a
+           meaningful confirmation and not decoration: it cannot be printed unless a full exchange succeeded.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= READ MEASUREMENT ================= -->
+  <h2 class="section" id="s-read">Collecting a finished conversion <span class="range">lines 194–205</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the result of a conversion that has already completed.</span>
+    <span class="k">pub async fn</span> <span class="fn">read_measurement</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> words = <span class="k">self</span>
+            .<span class="fn">read_three_words</span>(<span class="ty">CMD_READ_MEASUREMENT</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>?;
+
+        <span class="ty">Ok</span>(<span class="ty">Measurement</span> {
+            co2_ppm: words[<span class="nu">0</span>],
+            temperature_raw: words[<span class="nu">1</span>],
+            humidity_raw: words[<span class="nu">2</span>],
+        })
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task, five seconds after starting a conversion</span>
+        <p>Fetches the result the sensor is already holding and labels the three words.</p>
+        <p>The order is fixed by the datasheet and is the whole content of this function: carbon dioxide first,
+           then temperature, then humidity. Getting this order wrong would produce readings that look plausible
+           and are entirely false, which is why the assignment is written out field by field rather than by
+           copying an array.</p>
+        <p>The one-millisecond wait is not for the measurement — that finished during the five seconds the caller
+           waited. It is the short pause the sensor needs between receiving
+           <code class="inline">0xEC05</code> and being able to answer it.</p>
+        <p><strong>This function does not check that a conversion actually happened.</strong> The sensor returns
+           whatever it last measured. Calling it too early, or twice, yields the previous reading rather than an
+           error. Respecting the five seconds is the caller's responsibility, which is why the required delay is
+           published as a constant.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SINGLE SHOT ================= -->
+  <h2 class="section" id="s-single">The single-shot commands <span class="range">lines 207–237</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Start an on-demand CO2 + RH/T conversion without waiting for its result.
+    ///
+    /// Call [`Scd41::read_measurement`] after
+    /// [`SINGLE_SHOT_MEASUREMENT_DELAY_MS`] has elapsed. This split operation
+    /// lets callers release a shared I2C bus while the sensor converts.</span>
+    <span class="k">pub fn</span> <span class="fn">start_single_shot</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;(), <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.i2c
+            .<span class="fn">write</span>(<span class="k">self</span>.address, &amp;<span class="ty">CMD_MEASURE_SINGLE_SHOT</span>.<span class="fn">to_be_bytes</span>())
+            .<span class="fn">map_err</span>(<span class="ty">Error</span>::from)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task every ten seconds</span>
+        <p>Sends the two bytes that begin a conversion, and returns as soon as they have been delivered.</p>
+        <p><strong>This is the only function in the file that is not asynchronous</strong>, and that is
+           deliberate. It contains no waiting at all, so there is nothing to suspend for. The five seconds the
+           sensor needs are left entirely to the caller.</p>
+        <p>The reason is the shared bus, and the comment states it. The task's sequence is: take the lock, call
+           this, release the lock, wait five seconds, take the lock again, call
+           <code class="inline">read_measurement</code>. During those five seconds the bus is free, and the
+           particle sensor — which measures every five seconds — uses it. If the wait happened inside this
+           function, the lock would be held throughout and the other sensor would be blocked.</p>
+        <p><code class="inline">map_err(Error::from)</code> converts the hardware error, as in
+           <code class="inline">wake_up</code>, because there is no question-mark operator here to do it
+           automatically.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Trigger one on-demand CO2 + RH/T conversion and return its result.
+    ///
+    /// This yields to the executor for roughly 5 seconds while the sensor converts.</span>
+    <span class="k">pub async fn</span> <span class="fn">measure_single_shot</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">start_single_shot</span>()?;
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">SINGLE_SHOT_MEASUREMENT_DELAY_MS</span>).<span class="k">await</span>;
+        <span class="k">self</span>.<span class="fn">read_measurement</span>().<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p>The convenient form: start a conversion, wait, collect the result, in one call.</p>
+        <p>It is correct and would work, but it holds the driver — and therefore the borrowed bus — for the whole
+           five seconds. On a bus with a second sensor that is unacceptable, so the task uses the split form
+           instead. This version remains for a board where the SCD41 is the only device.</p>
+        <p>The three lines are exactly what the task does, with the difference that the task releases the bus
+           across the middle line. Reading them together is the clearest statement of what the split form is
+           for.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Trigger one on-demand RH/T-only conversion (no CO2 update, ~50 ms).
+    ///
+    /// The returned `co2_ppm` field is not updated by this command.</span>
+    <span class="k">pub async fn</span> <span class="fn">measure_single_shot_rht_only</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(
+            <span class="ty">CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</span>,
+            <span class="ty">MEASURE_SINGLE_SHOT_RHT_ONLY_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>?;
+        <span class="k">self</span>.<span class="fn">read_measurement</span>().<span class="k">await</span>
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">Not used by this firmware</span>
+        <p>Measures temperature and humidity only. It takes 50 milliseconds rather than 5000, because the gas
+           measurement — the slow part — is skipped.</p>
+        <p><strong>The warning in the comment matters.</strong> The result is still read with
+           <code class="inline">0xEC05</code>, which always returns three words, so a full
+           <code class="inline">Measurement</code> comes back. Its carbon dioxide field holds whatever the last
+           full measurement produced, however old that is. Publishing such a reading unchanged would place a stale
+           carbon dioxide value into the history under a fresh timestamp.</p>
+        <p>This is the reason the firmware uses the slow full measurement even though a faster command exists: the
+           purpose of the device is the carbon dioxide reading, and this command does not produce one.</p>
+        <p>Because it waits only 50 milliseconds, it does not need the split treatment given to the full
+           measurement; holding the bus for that long is not a problem.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FAILURE ================= -->
+  <div class="card" id="failure">
+    <h2>Failure behaviour</h2>
+    <p>This file never retries and never waits indefinitely. Every failure is returned to the caller immediately.</p>
+    <table>
+      <tr><th>Situation</th><th>What this file returns</th><th>What the task does with it</th></tr>
+      <tr><td>The sensor does not acknowledge its address</td><td><code>Error::Bus</code></td>
+          <td>Prints the error, waits one second, and starts again with the initialisation sequence.</td></tr>
+      <tr><td>A check byte does not match</td><td><code>Error::Crc</code>, with the whole answer discarded</td>
+          <td>The same. No partial or unverified reading can reach the history.</td></tr>
+      <tr><td>The read returns fewer bytes than expected</td><td><code>Error::Bus</code></td>
+          <td>The same. The buffer is never examined after a failed read.</td></tr>
+      <tr><td><code>read_measurement</code> is called too early</td><td>The previous reading, reported as success</td>
+          <td>Nothing detects this. The caller is responsible for the five-second wait.</td></tr>
+      <tr><td>The sensor is in continuous mode after a microcontroller reset</td><td>Measurement commands fail with <code>Error::Bus</code></td>
+          <td>Resolved by <code>stop_periodic_measurement</code>, which the task sends before anything else.</td></tr>
+      <tr><td>The sensor is asleep</td><td><code>wake_up</code> reports failure even when it succeeded</td>
+          <td>Not encountered: this firmware never puts the sensor to sleep.</td></tr>
+    </table>
+    <div class="note">The task's response to every error is the same: print it, wait one second, and repeat the
+      initialisation. Because the driver holds no state, that recovery is complete — there is nothing left over
+      from the failed attempt.</div>
+  </div>
+
+  <!-- ================= GLOSSARY ================= -->
+  <div class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning in this file</th></tr>
+      <tr><td>SCD41</td><td>The Sensirion sensor measuring carbon dioxide, temperature and humidity.</td></tr>
+      <tr><td>ppm</td><td>Parts per million. Outdoor air is around 420 ppm; an occupied closed room can exceed 1500 ppm.</td></tr>
+      <tr><td>Single shot</td><td>Measuring once when asked, rather than continuously on the sensor's own schedule.</td></tr>
+      <tr><td>Word</td><td>Two bytes forming one 16-bit number, always followed on the wire by a check byte.</td></tr>
+      <tr><td>Big-endian</td><td>The most significant byte is sent first.</td></tr>
+      <tr><td>CRC-8</td><td>The one-byte checksum protecting each word.</td></tr>
+      <tr><td>Execution time</td><td>The published period after a command during which the sensor cannot answer.</td></tr>
+      <tr><td>Raw word</td><td>A reading as the sensor sent it, before the datasheet formula is applied.</td></tr>
+      <tr><td>EEPROM</td><td>Memory inside the sensor that survives loss of power; holds its settings.</td></tr>
+      <tr><td>Repeated START</td><td>Joining a write and a read into one exchange. Not permitted by this sensor.</td></tr>
+      <tr><td>Yield</td><td>Suspending the current task so others may run, instead of occupying the processor while waiting.</td></tr>
+      <tr><td>RH/T</td><td>Relative humidity and temperature, the two quantities measured without the gas sensor.</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Home Environmental Sensor — firmware documentation for <code>src/drivers/scd41.rs</code>.
+  </footer>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>web_server_task.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --warn:#9a6700;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type */
+    --st:#032f62;  /* string */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:22px 40px 16px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:6px;
+  }
+  h1{margin:0 0 6px; font-size:25px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 12px; color:var(--muted); font-size:14.5px; max-width:1100px;}
+  nav.toc{display:flex; flex-wrap:wrap; gap:6px 16px;}
+  nav.toc a{font-size:12.5px; color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card h3{font-size:15px; margin:20px 0 6px;}
+  .card p{font-size:15px;}
+  .card ul,.card ol{margin:10px 0 0; padding-left:20px; font-size:14.5px;}
+  .card li{margin-bottom:6px;}
+  code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  h2.section{
+    margin:46px 0 0; padding:10px 0 8px; font-size:20px;
+    border-bottom:2px solid var(--border);
+  }
+  h2.section .range{font-size:12.5px; color:var(--muted); font-weight:500; margin-left:10px;}
+
+  .lines{margin-top:8px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:18px 6px; border-radius:10px; border-top:1px solid #eaeef2;
+  }
+  .line:hover{background:rgba(9,105,218,0.04);}
+  .code{
+    flex:1 1 0; min-width:280px; margin:0; padding:10px 0;
+    white-space:pre; overflow-x:auto; font-size:13.2px; background:transparent;
+  }
+  .explain{flex:1.15 1 0; min-width:280px; padding-top:4px; font-size:14.5px;}
+  .explain p{margin:0 0 9px;}
+  .explain p:last-child{margin-bottom:0;}
+  .explain ul{margin:0 0 9px; padding-left:20px;}
+  .explain li{margin-bottom:4px;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:8px;
+  }
+  .tag.alt{background:var(--accent);}
+  .tag.ext{background:var(--warn);}
+
+  .note{
+    border-left:3px solid var(--accent); background:#f2f7fd;
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0 0; font-size:13.8px;
+  }
+  .note.warn{border-left-color:var(--warn); background:#fdf7ec;}
+
+  table{border-collapse:collapse; width:100%; margin-top:12px; font-size:13.6px;}
+  th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top;}
+  th{background:#eef1f4;}
+  td code{font-size:12.6px;}
+
+  pre.block{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; line-height:1.55;
+  }
+
+  .diagram{background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px; overflow-x:auto;}
+  .diagram figcaption{font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center;}
+
+  .k{color:var(--k);} .ty{color:var(--ty);} .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;} .mc{color:var(--mc);}
+  .at{color:var(--at);} .fn{color:var(--fn);} .nu{color:var(--ty);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+
+  @media (max-width:1000px){
+    .line{flex-direction:column; gap:8px;}
+    .code{flex:none; width:100%;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/tasks/web_server_task.rs — Wi-Fi client and HTTP server</h1>
+  <p class="sub">Left column: the source code. Right column: a description of what that code does. The parts that live in other files, and the exact format of the data sent to a browser, are described here in full, so no other document is required.</p>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#interfaces">External interfaces</a>
+    <a href="#flow">Flow diagrams</a>
+    <a href="#s-imports">Imports</a>
+    <a href="#s-credentials">Credentials</a>
+    <a href="#s-constants">Constants</a>
+    <a href="#s-buffers">Buffers</a>
+    <a href="#s-types">Type aliases</a>
+    <a href="#s-wifi">wifi_connection_task</a>
+    <a href="#s-net">net_task</a>
+    <a href="#s-server">web_server_task</a>
+    <a href="#s-serve">serve_connection</a>
+    <a href="#s-query">query_param</a>
+    <a href="#s-page">send_page / send_response</a>
+    <a href="#s-status">send_status</a>
+    <a href="#s-readings">send_readings</a>
+    <a href="#failure">Failure behaviour</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>
+      This one file contains everything the device needs to be reachable from a web browser on your home
+      network. It does three separate jobs, each running as its own independent task:
+    </p>
+    <ol>
+      <li><strong>Join the Wi-Fi network.</strong> The board behaves like a phone or laptop: it connects
+        <em>to</em> an existing wireless router using a network name and password that were compiled into the
+        firmware. It does not create its own hotspot.</li>
+      <li><strong>Run the network stack.</strong> The library that implements IP, TCP and DHCP only performs
+        work while a task calls it, so one task exists to call it continuously.</li>
+      <li><strong>Answer HTTP requests.</strong> A server listens on TCP port 80 and replies to exactly three
+        addresses: the web page itself, a small status report, and pages of stored sensor readings.</li>
+    </ol>
+    <p>
+      The file stores nothing itself. All the measured data lives in a separate module,
+      <code class="inline">utils/shared_state.rs</code>, which the two sensor tasks write into and this file only
+      ever reads from. This file converts that stored data into HTTP responses.
+    </p>
+
+    <h3>Constraints that shaped the implementation</h3>
+    <ul>
+      <li><strong>No memory is allocated while running.</strong> There is no heap allocator in this firmware, so
+        every buffer used here is a fixed-size area reserved at compile time. That is why responses are written
+        out in small pieces instead of being assembled into one big string.</li>
+      <li><strong>One client at a time.</strong> A single connection is accepted, answered, and closed before the
+        next one is accepted. This keeps memory use to two 1536-byte buffers.</li>
+      <li><strong>The device keeps no per-client state.</strong> It does not record which client has received
+        which readings. Each reading has a number that never repeats, so a browser requests "everything from
+        number N onwards" and the device answers using only that number.</li>
+      <li><strong>The device has no clock.</strong> There is no battery-backed real-time clock on the board, so
+        readings are timestamped with "milliseconds since the board powered on". Every response also reports the
+        current uptime, which lets the browser convert those numbers into real dates using its own clock.</li>
+    </ul>
+  </div>
+
+  <!-- ================= EXTERNAL INTERFACES ================= -->
+  <div class="card" id="interfaces">
+    <h2>External interfaces — everything this file touches</h2>
+
+    <h3>1. Build-time inputs</h3>
+    <table>
+      <tr><th>Name</th><th>Where it comes from</th><th>Effect</th></tr>
+      <tr>
+        <td><code>WIFI_SSID</code></td>
+        <td>Environment variable read while compiling</td>
+        <td>The wireless network name to join. If it is not set, the value becomes an empty string and the
+            Wi-Fi task exits immediately, leaving the device working but unreachable.</td>
+      </tr>
+      <tr>
+        <td><code>WIFI_PASSWORD</code></td>
+        <td>Environment variable read while compiling</td>
+        <td>The password for that network. Empty if not set.</td>
+      </tr>
+      <tr>
+        <td><code>src/tasks/web/index.html</code></td>
+        <td>File on disk, embedded into the firmware image at compile time</td>
+        <td>The complete web page — HTML, styling and JavaScript in one file. It is served byte-for-byte from
+            flash memory; the device never reads it from a filesystem at run time.</td>
+      </tr>
+    </table>
+    <div class="note warn">
+      Because the network name and password are compiled into the binary, changing networks means rebuilding
+      and reflashing the firmware. The credentials are stored as plain readable text inside the firmware image.
+    </div>
+
+    <h3>2. Functions called in other files</h3>
+    <table>
+      <tr><th>Called function</th><th>Defined in</th><th>What it returns / does</th></tr>
+      <tr>
+        <td><code>shared_state::scd41_status()</code><br><code>shared_state::sps30_status()</code></td>
+        <td><code>src/utils/shared_state.rs</code></td>
+        <td>A five-field summary of one sensor's stored history: how often that sensor measures
+            (<code>interval_ms</code>), how many readings the buffer can hold (<code>capacity</code>), how many
+            it currently holds (<code>len</code>), the number of the oldest reading still kept
+            (<code>first_sequence</code>), and the number the next reading will get
+            (<code>next_sequence</code>).</td>
+      </tr>
+      <tr>
+        <td><code>shared_state::scd41_reading(n)</code><br><code>shared_state::sps30_reading(n)</code></td>
+        <td><code>src/utils/shared_state.rs</code></td>
+        <td>A copy of the reading whose sequence number is <code>n</code>, together with the uptime at which it
+            was taken — or nothing at all if that reading was never taken or has already been overwritten.
+            One reading is copied per call, so the lock protecting the data is taken and released quickly and is
+            never held while the network is being written to.</td>
+      </tr>
+      <tr>
+        <td><code>shared_state::HISTORY_WINDOW_MS</code></td>
+        <td><code>src/utils/shared_state.rs</code></td>
+        <td>A constant: 86,400,000 — the 24-hour span the stored history is sized to cover.</td>
+      </tr>
+      <tr>
+        <td><code>Instant::now()</code></td>
+        <td><code>embassy_time</code> library</td>
+        <td>Time since the board powered on. Used to date responses.</td>
+      </tr>
+      <tr>
+        <td><code>println!</code></td>
+        <td><code>esp_println</code> library</td>
+        <td>Writes a diagnostic line to the USB serial console. Not visible to a browser.</td>
+      </tr>
+    </table>
+
+    <h3>3. Items this file exposes to <code class="inline">src/main.rs</code></h3>
+    <table>
+      <tr><th>Item</th><th>How main.rs uses it</th></tr>
+      <tr><td><code>SOCKET_COUNT</code> / <code>WifiStackResources</code></td>
+          <td>Reserves the bookkeeping memory the network stack needs, sized for 3 simultaneous sockets.</td></tr>
+      <tr><td><code>WifiStack</code></td>
+          <td>Names the type of the network stack object that main.rs creates and stores permanently.</td></tr>
+      <tr><td><code>wifi_connection_task(controller)</code></td>
+          <td>Started once, handed the radio controller object created by main.rs.</td></tr>
+      <tr><td><code>net_task(stack)</code></td>
+          <td>Started once, handed a permanent reference to the network stack.</td></tr>
+      <tr><td><code>web_server_task(stack)</code></td>
+          <td>Started once, handed the same permanent reference.</td></tr>
+    </table>
+    <p>All three tasks are started at the end of <code class="inline">main.rs</code>, after the sensor tasks and
+       after the measurement storage has been reserved in external memory.</p>
+
+    <h3>4. The HTTP interface a browser sees</h3>
+    <table>
+      <tr><th>Request</th><th>Reply</th></tr>
+      <tr>
+        <td><code>GET /</code> or <code>GET /index.html</code></td>
+        <td>The embedded web page, sent as <code>text/html</code> with a correct <code>Content-Length</code>.</td>
+      </tr>
+      <tr>
+        <td><code>GET /api/status</code></td>
+        <td>A small JSON object of known length, described below.</td>
+      </tr>
+      <tr>
+        <td><code>GET /api/readings?sensor=…&amp;from=…&amp;limit=…</code></td>
+        <td>A JSON object containing an array of readings. Sent without a <code>Content-Length</code>; the end of
+            the data is marked by the connection closing.</td>
+      </tr>
+      <tr><td>Any other path</td><td><code>404 Not Found</code>, empty body.</td></tr>
+      <tr><td>Any method other than GET</td><td><code>405 Method Not Allowed</code>, empty body.</td></tr>
+      <tr><td>Request headers larger than 512 bytes</td><td><code>431 Request Header Fields Too Large</code>.</td></tr>
+      <tr><td><code>/api/readings</code> with an unknown or missing <code>sensor</code></td><td><code>400 Bad Request</code>.</td></tr>
+    </table>
+
+    <h4 style="margin-bottom:4px;">Exact shape of <code class="inline">/api/status</code></h4>
+<pre class="block"><code>{
+  "uptime_ms": 3600123,          // milliseconds since the board powered on
+  "window_ms": 86400000,         // how far back the device is sized to remember
+  "sensors": {
+    "scd41": {
+      "interval_ms": 10000,      // this sensor measures every 10 seconds
+      "capacity": 8640,          // readings the buffer can hold
+      "len": 360,                // readings currently held
+      "first_sequence": 0,       // number of the oldest reading still held
+      "next_sequence": 360       // number the next reading will receive
+    },
+    "sps30": {
+      "interval_ms": 5000,       // this sensor measures every 5 seconds
+      "capacity": 17280,
+      "len": 720,
+      "first_sequence": 0,
+      "next_sequence": 720
+    }
+  }
+}</code></pre>
+    <p>If the measurement storage could not be reserved at startup, <code class="inline">capacity</code>,
+       <code class="inline">len</code> and both sequence numbers are all zero. The endpoint still responds
+       normally and reports an empty history.</p>
+
+    <h4 style="margin-bottom:4px;">Exact shape of <code class="inline">/api/readings?sensor=scd41&amp;from=100&amp;limit=3</code></h4>
+<pre class="block"><code>{
+  "sensor": "scd41",
+  "uptime_ms": 3600123,
+  "interval_ms": 10000,
+  "capacity": 8640,
+  "first_sequence": 0,
+  "next_sequence": 360,
+  "from": 100,          // the first sequence number ACTUALLY returned
+  "count": 3,           // exactly how many array elements follow
+  "readings": [
+    {"taken_at_ms": 1000123, "co2_ppm": 612, "temperature_celsius": 21.7, "humidity_percent": 44.2},
+    null,               // this reading was overwritten while the reply was being sent
+    {"taken_at_ms": 1020123, "co2_ppm": 618, "temperature_celsius": 21.8, "humidity_percent": 44.0}
+  ]
+}</code></pre>
+<pre class="block"><code>{
+  "sensor": "sps30",
+  ...
+  "readings": [
+    {"taken_at_ms": 1000200, "pm1_0": 1.2, "pm2_5": 1.8, "pm4_0": 2.0,
+     "pm10": 2.1, "typical_particle_size": 0.6}
+  ]
+}</code></pre>
+    <div class="note">
+      <strong>Two guarantees about this reply.</strong> First, the array always contains exactly
+      <code class="inline">count</code> elements, so the element at position <em>i</em> is always the reading
+      numbered <code class="inline">from + i</code>, including when some positions are
+      <code class="inline">null</code>. Second, a <code class="inline">from</code> value naming a reading that
+      has already been overwritten is moved forward to the oldest retained reading without returning an error,
+      and the value actually used is reported in the <code class="inline">from</code> field, so the client can
+      determine that some readings were not received.
+    </div>
+    <p>The SPS30 sensor measures more values than are published here (particle <em>counts</em> for several size
+       classes). Only the mass concentrations and the typical particle size are sent, to keep replies small.
+       The SCD41 temperature and humidity are stored as raw sensor words and converted to real units at the
+       moment they are written into the reply.</p>
+  </div>
+
+  <!-- ================= FLOW DIAGRAMS ================= -->
+  <div class="card" id="flow">
+    <h2>Task structure and data flow</h2>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart LR
+  subgraph SENSORS["Sensor tasks (other files)"]
+    A1["scd41_task<br/>reads CO2, temperature,<br/>humidity every 10 s"]
+    A2["sps30_task<br/>reads particle mass<br/>every 5 s"]
+  end
+
+  subgraph STORE["shared_state.rs (other file)"]
+    B["Two ring buffers in external PSRAM.<br/>Each stored reading gets a<br/>sequence number that never repeats.<br/>Oldest reading is overwritten when full."]
+  end
+
+  subgraph THISFILE["web_server_task.rs (this file)"]
+    C1["wifi_connection_task<br/>keeps the radio joined<br/>to the router"]
+    C2["net_task<br/>keeps IP / TCP / DHCP<br/>making progress"]
+    C3["web_server_task<br/>accepts one TCP connection,<br/>answers it, closes it"]
+  end
+
+  D["Browser on your network<br/>at http://device-address/"]
+
+  A1 -- "publish_scd41" --> B
+  A2 -- "publish_sps30" --> B
+  B -- "status + one reading per call<br/>(read only)" --> C3
+  C1 -. "link must be up first" .-> C3
+  C2 -. "sockets only work<br/>while this runs" .-> C3
+  C3 -- "HTML page and JSON over HTTP" --> D
+      </pre>
+      <figcaption>Data flows in one direction only: sensors write, the web server reads.</figcaption>
+    </figure>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant B as Browser
+  participant S as web_server_task
+  participant H as shared_state history
+
+  B->>S: GET /
+  S-->>B: the embedded page, then connection closes
+  Note over B: The page's JavaScript starts polling.
+
+  B->>S: GET /api/status
+  S->>H: scd41_status, sps30_status
+  H-->>S: interval, capacity, len, first_sequence, next_sequence
+  S-->>B: JSON status
+  Note over B: Browser compares the reported sequence<br/>numbers with what it already holds.
+
+  loop until caught up (bounded number of pages)
+    B->>S: GET /api/readings?sensor=scd41&amp;from=N&amp;limit=2000
+    S->>H: scd41_reading(N), scd41_reading(N+1), ...
+    H-->>S: one reading per call
+    S-->>B: JSON page of up to 2000 readings
+  end
+
+  Note over B: Later polls ask only for readings<br/>added since the last one received.
+      </pre>
+      <figcaption>First load fetches the backlog in pages; afterwards only new readings are transferred.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= IMPORTS ================= -->
+  <h2 class="section" id="s-imports">Module description and imports <span class="range">lines 1–35</span></h2>
+  <div class="lines">
+
+    <div class="line">
+<pre class="code"><code><span class="cm">//! Wi-Fi station and HTTP server exposing the newest sensor readings.
+//!
+//! The board joins an existing Wi-Fi network as a client (station mode) and
+//! serves a small web application on TCP port 80. Three tasks cooperate:
+//!
+//! * `wifi_connection_task` keeps the radio associated with the access point.
+//! * `net_task` runs the embassy-net TCP/IP stack.
+//! * `web_server_task` accepts connections and answers HTTP requests.</span></code></pre>
+      <div class="explain">
+        <span class="tag">Documentation</span>
+        <p>Lines beginning <code class="inline">//!</code> document the file as a whole rather than any single
+           item below them. They are ignored when the program runs.</p>
+        <p><strong>"Station mode"</strong> means the radio acts as a client of an existing router, the same way
+           a laptop does. The alternative, not used here, would be access-point mode, where the board itself
+           broadcasts a network for others to join.</p>
+        <p><strong>"Port 80"</strong> is the default port for unencrypted web traffic, which is why the address
+           can be typed into a browser without a port number after it.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> core::fmt::<span class="ty">Write</span> <span class="k">as</span> _;
+
+<span class="k">use</span> embassy_net::tcp::<span class="ty">TcpSocket</span>;
+<span class="k">use</span> embassy_net::{<span class="ty">Stack</span>, <span class="ty">StackResources</span>};
+<span class="k">use</span> embassy_time::{<span class="ty">Duration</span>, <span class="ty">Instant</span>, <span class="ty">Timer</span>};
+<span class="k">use</span> embedded_io_async::<span class="ty">Write</span> <span class="k">as</span> _;
+<span class="k">use</span> esp_println::println;
+<span class="k">use</span> esp_wifi::wifi::{
+    <span class="ty">ClientConfiguration</span>, <span class="ty">Configuration</span>, <span class="ty">WifiController</span>, <span class="ty">WifiDevice</span>, <span class="ty">WifiEvent</span>, <span class="ty">WifiStaDevice</span>,
+    <span class="ty">WifiState</span>,
+};
+<span class="k">use</span> heapless::<span class="ty">String</span>;
+
+<span class="k">use crate</span>::utils::shared_state;</code></pre>
+      <div class="explain">
+        <span class="tag alt">Imports</span>
+        <p>Each line makes a name from another package usable here. Two of them use the
+           <code class="inline">as _</code> form:</p>
+        <ul>
+          <li><code class="inline">core::fmt::Write as _</code> — imported "anonymously". It is never referred to
+              by name; it exists only so that the <code class="inline">write!</code> macro can append formatted
+              text into a text buffer. This is text <em>formatting</em>.</li>
+          <li><code class="inline">embedded_io_async::Write as _</code> — likewise anonymous, and this one is
+              what makes <code class="inline">socket.write_all(...)</code> available. This is writing bytes
+              <em>to the network</em>. Two different things happen to share the name "Write"; importing them
+              anonymously is how both can be used in the same file without a name clash.</li>
+        </ul>
+        <p><code class="inline">heapless::String</code> is a text buffer whose maximum size is fixed when the
+           program is compiled, for example <code class="inline">String&lt;512&gt;</code> holds at most 512 bytes.
+           It cannot grow. Appending more text than fits discards the excess and returns an error rather than
+           requesting memory from a heap, because this firmware has no heap.</p>
+        <p><code class="inline">crate::utils::shared_state</code> is the only project-internal dependency: the
+           module holding the stored sensor readings.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CREDENTIALS ================= -->
+  <h2 class="section" id="s-credentials">Network credentials <span class="range">lines 37–47</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Network credentials, supplied at build time via environment variables.
+///
+/// Example: `WIFI_SSID="my-net" WIFI_PASSWORD="secret" cargo build --release`.</span>
+<span class="k">const</span> <span class="ty">SSID</span>: &amp;<span class="ty">str</span> = <span class="k">match</span> <span class="mc">option_env!</span>(<span class="st">"WIFI_SSID"</span>) {
+    <span class="ty">Some</span>(value) =&gt; value,
+    <span class="ty">None</span> =&gt; <span class="st">""</span>,
+};
+<span class="k">const</span> <span class="ty">PASSWORD</span>: &amp;<span class="ty">str</span> = <span class="k">match</span> <span class="mc">option_env!</span>(<span class="st">"WIFI_PASSWORD"</span>) {
+    <span class="ty">Some</span>(value) =&gt; value,
+    <span class="ty">None</span> =&gt; <span class="st">""</span>,
+};</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · build time</span>
+        <p><code class="inline">option_env!</code> looks up an environment variable <strong>while the firmware is
+           being compiled</strong>, not while it runs. Whatever value the variable had at that moment is baked
+           into the binary as fixed text.</p>
+        <p>The <code class="inline">match</code> handles the case where the variable was not set at all: instead
+           of refusing to compile, the value becomes an empty string. That choice means the firmware always
+           builds, and the missing configuration is reported later, at run time, as a message on the serial
+           console.</p>
+        <p>In this project these variables are normally set by the helper script
+           <code class="inline">tools/build.sh</code>.</p>
+        <div class="note warn">The password is stored in the firmware image in readable form. Anyone who can read
+           the flash contents of the board can recover it.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CONSTANTS ================= -->
+  <h2 class="section" id="s-constants">Tuning constants <span class="range">lines 49–64</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">HTTP_PORT</span>: <span class="ty">u16</span> = <span class="nu">80</span>;
+<span class="k">const</span> <span class="ty">INDEX_HTML</span>: &amp;<span class="ty">str</span> = <span class="mc">include_str!</span>(<span class="st">"web/index.html"</span>);
+<span class="k">pub const</span> <span class="ty">SOCKET_COUNT</span>: <span class="ty">usize</span> = <span class="nu">3</span>;
+<span class="k">const</span> <span class="ty">RECONNECT_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">5000</span>;
+<span class="k">const</span> <span class="ty">SOCKET_TIMEOUT_S</span>: <span class="ty">u64</span> = <span class="nu">10</span>;
+<span class="k">const</span> <span class="ty">MAX_PAGE_READINGS</span>: <span class="ty">usize</span> = <span class="nu">2000</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Configuration</span>
+        <ul>
+          <li><code class="inline">HTTP_PORT = 80</code> — the port the server listens on.</li>
+          <li><code class="inline">INDEX_HTML</code> — <code class="inline">include_str!</code> reads
+              <code class="inline">src/tasks/web/index.html</code> <em>at compile time</em> and pastes its entire
+              contents into the program as one long piece of text. At run time there is no file and no
+              filesystem; the page is a constant stored in flash memory. Editing that HTML file requires
+              rebuilding and reflashing.</li>
+          <li><code class="inline">SOCKET_COUNT = 3</code> — how many network sockets the stack is allowed to
+              track at once. The web server uses one; the remainder cover DHCP and connections in the process of
+              being closed. This value is exported so <code class="inline">main.rs</code> can size the stack's
+              memory to match.</li>
+          <li><code class="inline">RECONNECT_DELAY_MS = 5000</code> — wait five seconds before retrying a failed
+              Wi-Fi connection, so that at most one connection attempt is made every five seconds while a router
+              is unavailable.</li>
+          <li><code class="inline">SOCKET_TIMEOUT_S = 10</code> — drop a connection that has gone ten seconds
+              without traffic. Without this, a client that stops responding would hold the single available
+              connection indefinitely and no further request would be answered.</li>
+          <li><code class="inline">MAX_PAGE_READINGS = 2000</code> — the maximum number of readings one request
+              may return, regardless of what the client asks for. A full day of SPS30 readings is 17,280
+              entries; sending them in one reply could exceed the ten-second connection timeout, so the client
+              requests them in several smaller pages instead.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= BUFFERS ================= -->
+  <h2 class="section" id="s-buffers">Connection buffers <span class="range">lines 66–69</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Receive buffer for one client connection.</span>
+<span class="k">static mut</span> <span class="ty">RX_BUFFER</span>: [<span class="ty">u8</span>; <span class="nu">1536</span>] = [<span class="nu">0</span>; <span class="nu">1536</span>];
+<span class="cm">/// Transmit buffer for one client connection.</span>
+<span class="k">static mut</span> <span class="ty">TX_BUFFER</span>: [<span class="ty">u8</span>; <span class="nu">1536</span>] = [<span class="nu">0</span>; <span class="nu">1536</span>];</code></pre>
+      <div class="explain">
+        <span class="tag">Memory</span>
+        <p>Two fixed 1536-byte areas of memory, reserved for the entire life of the program. TCP needs somewhere
+           to hold bytes that have arrived but not yet been read, and bytes that have been written but not yet
+           acknowledged by the other side; these are those places.</p>
+        <p>1536 is chosen to be slightly more than the 1500-byte maximum size of a single Ethernet/Wi-Fi packet,
+           so a full packet always fits.</p>
+        <p><code class="inline">static mut</code> means "one single global, changeable copy". Rust treats globals
+           that can change as dangerous, because two tasks touching one at the same time would corrupt it. That
+           is why the code that picks them up (further below) has to be explicitly marked as unchecked, together
+           with a written justification: only one task ever exists that uses them.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TYPE ALIASES ================= -->
+  <h2 class="section" id="s-types">Type aliases shared with main.rs <span class="range">lines 71–74</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">pub type</span> <span class="ty">WifiStackResources</span> = <span class="ty">StackResources</span>&lt;<span class="ty">SOCKET_COUNT</span>&gt;;
+<span class="k">pub type</span> <span class="ty">WifiStack</span> = <span class="ty">Stack</span>&lt;<span class="ty">WifiDevice</span>&lt;<span class="st">'static</span>, <span class="ty">WifiStaDevice</span>&gt;&gt;;</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · to main.rs</span>
+        <p>These create short names for two long type descriptions. They do not create anything at run time.</p>
+        <p><code class="inline">WifiStackResources</code> is the block of bookkeeping memory the network library
+           needs — socket slots, address information, and so on — sized for
+           <code class="inline">SOCKET_COUNT</code> sockets.</p>
+        <p><code class="inline">WifiStack</code> is the network stack itself: the code that turns raw radio frames
+           into IP packets and TCP connections. <code class="inline">'static</code> states that it lives for the
+           whole program run and is never freed, which is required because several tasks hold references to it
+           simultaneously.</p>
+        <p><code class="inline">main.rs</code> creates both of these, stores them permanently, and passes a
+           reference to the stack into two of the tasks defined below.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= WIFI TASK ================= -->
+  <h2 class="section" id="s-wifi">Task 1 — staying connected to the router <span class="range">lines 76–125</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  S["Task starts"] --> E{"Is WIFI_SSID empty?"}
+  E -- yes --> X["Print 'web server disabled'<br/>and end the task permanently"]
+  E -- no --> L["Top of the loop"]
+  L --> C{"Currently associated<br/>with the router?"}
+  C -- yes --> W["Sleep until the radio reports<br/>that it was disconnected"]
+  W --> D["Wait 5 seconds"]
+  D --> R
+  C -- no --> R{"Has the radio<br/>been started?"}
+  R -- no --> CFG["Apply network name and password"]
+  CFG --> ERR1{"Accepted?"}
+  ERR1 -- no --> P1["Print the error, wait 5 s,<br/>back to top of loop"] --> L
+  ERR1 -- yes --> ST["Power up the radio"]
+  ST --> ERR2{"Started?"}
+  ERR2 -- no --> P2["Print the error, wait 5 s,<br/>back to top of loop"] --> L
+  ERR2 -- yes --> CN
+  R -- yes --> CN["Attempt to associate"]
+  CN --> OK{"Associated?"}
+  OK -- yes --> P3["Print success"] --> L
+  OK -- no --> P4["Print the failure, wait 5 s"] --> L
+    </pre>
+    <figcaption>Every failure path returns to the top of the loop and retries after a five-second delay.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="at">#[embassy_executor::task]</span>
+<span class="k">pub async fn</span> <span class="fn">wifi_connection_task</span>(<span class="k">mut</span> controller: <span class="ty">WifiController</span>&lt;<span class="st">'static</span>&gt;) {
+    <span class="k">if</span> <span class="ty">SSID</span>.<span class="fn">is_empty</span>() {
+        <span class="mc">println!</span>(<span class="st">"Wi-Fi: WIFI_SSID not set at build time, web server disabled"</span>);
+        <span class="k">return</span>;
+    }</code></pre>
+      <div class="explain">
+        <p>The <code class="inline">#[embassy_executor::task]</code> marking turns this function into something
+           that can be started as an independent task. Tasks here are not operating-system threads: they all run
+           on the single processor core, and each one runs until it reaches a point where it must wait, at which
+           moment another task gets to run. That switching point is always an <code class="inline">await</code>.</p>
+        <p><code class="inline">controller</code> is the object that commands the radio. It is created in
+           <code class="inline">main.rs</code> and handed over here permanently; nothing else can command the
+           radio afterwards.</p>
+        <p>If no network name was compiled in, there is no network to connect to. The task prints one line to
+           the serial console and returns, which ends the task permanently. The rest of the firmware — sensor
+           reading, the LED, storing history — continues to run; only network access is unavailable.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">loop</span> {
+        <span class="k">if</span> esp_wifi::wifi::<span class="fn">get_wifi_state</span>() == <span class="ty">WifiState</span>::StaConnected {
+            <span class="cm">// Block here until the connection is lost, then fall through and
+            // reconnect below.</span>
+            controller.<span class="fn">wait_for_event</span>(<span class="ty">WifiEvent</span>::StaDisconnected).<span class="k">await</span>;
+            <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">RECONNECT_DELAY_MS</span>).<span class="k">await</span>;
+        }</code></pre>
+      <div class="explain">
+        <p>A loop that repeats for as long as the program runs, supervising the connection.</p>
+        <p>If the radio is already associated with the router, no action is required, so the task waits for the
+           radio to report a disconnection. While waiting it consumes no processor time; other tasks run
+           instead. It resumes only when the connection drops.</p>
+        <p>After a disconnection it waits five seconds before continuing to the reconnection code below. Without
+           that delay the board would retry continuously and produce hundreds of failed attempts per minute
+           while the router is still unavailable.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="k">if</span> !<span class="mc">matches!</span>(controller.<span class="fn">is_started</span>(), <span class="ty">Ok</span>(<span class="k">true</span>)) {
+            <span class="k">let</span> configuration = <span class="ty">Configuration</span>::Client(<span class="ty">ClientConfiguration</span> {
+                ssid: <span class="ty">SSID</span>.<span class="fn">try_into</span>().<span class="fn">unwrap</span>(),
+                password: <span class="ty">PASSWORD</span>.<span class="fn">try_into</span>().<span class="fn">unwrap</span>(),
+                ..<span class="ty">Default</span>::<span class="fn">default</span>()
+            });
+
+            <span class="k">if let</span> <span class="ty">Err</span>(error) = controller.<span class="fn">set_configuration</span>(&amp;configuration) {
+                <span class="mc">println!</span>(<span class="st">"Wi-Fi: configuration rejected: {:?}"</span>, error);
+                <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">RECONNECT_DELAY_MS</span>).<span class="k">await</span>;
+                <span class="k">continue</span>;
+            }</code></pre>
+      <div class="explain">
+        <p>This block only runs if the radio has not been powered up and configured yet — normally just once,
+           right after boot.</p>
+        <p><code class="inline">Configuration::Client</code> selects client (station) behaviour rather than
+           hotspot behaviour. The network name and password are copied into fixed-size fields inside the radio
+           driver; <code class="inline">unwrap()</code> causes the program to stop with an error message if they
+           are too long to fit (over 32 characters for a network name, 64 for a password). This can only be
+           caused by an incorrect build-time setting, not by anything received from the network.</p>
+        <p><code class="inline">..Default::default()</code> fills in every remaining setting (security mode,
+           channel selection, and so on) with its standard value.</p>
+        <p>If the driver rejects the settings, the error is printed, the task waits five seconds, and
+           <code class="inline">continue</code> jumps back to the top of the loop to try again from scratch.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>            <span class="k">if let</span> <span class="ty">Err</span>(error) = controller.<span class="fn">start</span>().<span class="k">await</span> {
+                <span class="mc">println!</span>(<span class="st">"Wi-Fi: could not start radio: {:?}"</span>, error);
+                <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">RECONNECT_DELAY_MS</span>).<span class="k">await</span>;
+                <span class="k">continue</span>;
+            }
+
+            <span class="mc">println!</span>(<span class="st">"Wi-Fi: radio started, connecting to \"{}\""</span>, <span class="ty">SSID</span>);
+        }
+
+        <span class="k">match</span> controller.<span class="fn">connect</span>().<span class="k">await</span> {
+            <span class="ty">Ok</span>(()) =&gt; <span class="mc">println!</span>(<span class="st">"Wi-Fi: associated with \"{}\""</span>, <span class="ty">SSID</span>),
+            <span class="ty">Err</span>(error) =&gt; {
+                <span class="mc">println!</span>(<span class="st">"Wi-Fi: association failed: {:?}"</span>, error);
+                <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">RECONNECT_DELAY_MS</span>).<span class="k">await</span>;
+            }
+        }
+    }
+}</code></pre>
+      <div class="explain">
+        <p><code class="inline">start()</code> powers up the radio hardware. Like every other step, a failure is
+           printed, followed by a five-second pause and a fresh attempt.</p>
+        <p><code class="inline">connect()</code> performs the actual association with the router: scanning for
+           the named network, authenticating with the password, and joining. Success or failure is reported on
+           the serial console — these printed lines are the primary way to diagnose a device that will not come
+           online.</p>
+        <p>After a successful association the loop returns to the top, finds that the radio is connected, and
+           waits for a disconnection event. From that point reconnection is automatic: a router restart, a
+           temporary loss of signal, or a re-authentication are all recovered without a manual reset.</p>
+        <div class="note">Association is only step one. Being joined to the router does not yet mean having an IP
+          address — that arrives via DHCP, which is handled by the next task.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NET TASK ================= -->
+  <h2 class="section" id="s-net">Task 2 — running the network stack <span class="range">lines 127–131</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Drive the embassy-net stack; it does no work unless this task runs.</span>
+<span class="at">#[embassy_executor::task]</span>
+<span class="k">pub async fn</span> <span class="fn">net_task</span>(stack: &amp;<span class="st">'static</span> <span class="ty">WifiStack</span>) {
+    stack.<span class="fn">run</span>().<span class="k">await</span>
+}</code></pre>
+      <div class="explain">
+        <p>The networking library is not a background service and has no thread of its own. All of its work —
+           reading incoming radio frames, reassembling IP packets, retransmitting lost TCP data, requesting and
+           renewing the DHCP address lease, answering ARP requests — happens inside
+           <code class="inline">stack.run()</code>. That call does not return; it processes events and then
+           waits for the next event, for as long as the program runs.</p>
+        <p>If this task were not started, the device would still be associated with the router but would never
+           obtain an IP address and would never respond to anything.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= WEB SERVER TASK ================= -->
+  <h2 class="section" id="s-server">Task 3 — the HTTP server loop <span class="range">lines 133–179</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Task starts"] --> B["Wait, checking every 500 ms,<br/>until the wireless link is up"]
+  B --> C["Wait, checking every 500 ms,<br/>until DHCP has assigned an IP address"]
+  C --> D["Print the address to the serial console"]
+  D --> E["Take the two global buffers and<br/>build one TCP socket from them"]
+  E --> F["Set a 10 second inactivity timeout"]
+  F --> G["Wait for a browser to connect on port 80"]
+  G --> H{"Connection accepted?"}
+  H -- no --> I["Print the error, discard the socket,<br/>wait 500 ms"] --> G
+  H -- yes --> J["serve_connection:<br/>read the request, write the reply"]
+  J --> K["Close, flush, then forcibly reset the socket<br/>so it is clean for the next client"]
+  K --> G
+    </pre>
+    <figcaption>One connection is handled at a time; the same socket is reused for every client.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="at">#[embassy_executor::task]</span>
+<span class="k">pub async fn</span> <span class="fn">web_server_task</span>(stack: &amp;<span class="st">'static</span> <span class="ty">WifiStack</span>) {
+    <span class="cm">// Wait for the link and then for the DHCP lease before binding.</span>
+    <span class="k">while</span> !stack.<span class="fn">is_link_up</span>() {
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="nu">500</span>).<span class="k">await</span>;
+    }
+
+    <span class="k">loop</span> {
+        <span class="k">if let</span> <span class="ty">Some</span>(config) = stack.<span class="fn">config_v4</span>() {
+            <span class="mc">println!</span>(<span class="st">"Web server: http://{}/"</span>, config.address.<span class="fn">address</span>());
+            <span class="k">break</span>;
+        }
+        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="nu">500</span>).<span class="k">await</span>;
+    }</code></pre>
+      <div class="explain">
+        <p>Two conditions are waited for, in order, before the server can accept connections:</p>
+        <ul>
+          <li><strong>Link up</strong> — the radio is associated with the router. Set by the first task.</li>
+          <li><strong>Address assigned</strong> — the router's DHCP server has handed out an IP address. Handled
+              by the second task.</li>
+        </ul>
+        <p>Both are checked twice a second. This adds at most 500 ms of delay, once, during startup.</p>
+        <p>When the address arrives it is printed as a complete URL, for example
+           <code class="inline">Web server: http://192.168.1.57/</code>. The device has no display and the
+           address is assigned by the router, so this serial output is the normal way to learn which address to
+           open in a browser.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// SAFETY: this task is spawned once, so it is the only user of these
+    // buffers, and the references never outlive the task.</span>
+    <span class="k">let</span> (rx_buffer, tx_buffer) = <span class="k">unsafe</span> {
+        (
+            &amp;<span class="k">mut</span> *core::ptr::<span class="mc">addr_of_mut!</span>(<span class="ty">RX_BUFFER</span>),
+            &amp;<span class="k">mut</span> *core::ptr::<span class="mc">addr_of_mut!</span>(<span class="ty">TX_BUFFER</span>),
+        )
+    };
+    <span class="k">let mut</span> socket = <span class="ty">TcpSocket</span>::<span class="fn">new</span>(stack, rx_buffer, tx_buffer);
+    socket.<span class="fn">set_timeout</span>(<span class="ty">Some</span>(embassy_time::<span class="ty">Duration</span>::<span class="fn">from_secs</span>(<span class="ty">SOCKET_TIMEOUT_S</span>)));</code></pre>
+      <div class="explain">
+        <span class="tag">Why "unsafe" appears here</span>
+        <p>The compiler cannot prove on its own that nobody else is using those two global buffers, so it
+           refuses to hand out exclusive access to them. The <code class="inline">unsafe</code> block is the
+           programmer taking responsibility for that guarantee instead, and the comment above it states the
+           reason: this task is started exactly once in <code class="inline">main.rs</code>, so no second user
+           can exist.</p>
+        <p>The socket is created <strong>once</strong> and reused for every client that connects. The memory used
+           by the server is therefore always the same two 1536-byte buffers, regardless of how many clients have
+           been served.</p>
+        <p>The ten-second inactivity timeout applies to each connection. A client that connects and then sends
+           nothing is disconnected, so a stalled client cannot hold the single socket indefinitely.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">loop</span> {
+        <span class="k">if let</span> <span class="ty">Err</span>(error) = socket.<span class="fn">accept</span>(<span class="ty">HTTP_PORT</span>).<span class="k">await</span> {
+            <span class="mc">println!</span>(<span class="st">"Web server: accept failed: {:?}"</span>, error);
+            socket.<span class="fn">abort</span>();
+            <span class="k">let</span> _ = socket.<span class="fn">flush</span>().<span class="k">await</span>;
+            <span class="ty">Timer</span>::<span class="fn">after</span>(<span class="ty">Duration</span>::<span class="fn">from_millis</span>(<span class="nu">500</span>)).<span class="k">await</span>;
+            <span class="k">continue</span>;
+        }
+
+        <span class="fn">serve_connection</span>(&amp;<span class="k">mut</span> socket).<span class="k">await</span>;
+
+        socket.<span class="fn">close</span>();
+        <span class="k">let</span> _ = socket.<span class="fn">flush</span>().<span class="k">await</span>;
+        socket.<span class="fn">abort</span>();
+        <span class="k">let</span> _ = socket.<span class="fn">flush</span>().<span class="k">await</span>;
+    }
+}</code></pre>
+      <div class="explain">
+        <p><code class="inline">accept(80)</code> waits for a browser to open a connection to port 80. While
+           waiting, this task uses no processor time.</p>
+        <p>Once a connection exists, <code class="inline">serve_connection</code> reads the request and writes the
+           complete reply. The loop only repeats after it returns, so exactly one client is served at a time. A
+           second client that connects during that period waits until the current reply is finished.</p>
+        <p><strong>The four teardown steps, and what each one does:</strong></p>
+        <ul>
+          <li><code class="inline">close()</code> begins an orderly shutdown, telling the browser "that is the
+              end of the data". For <code class="inline">/api/readings</code>, which sends no length in advance,
+              this <em>is</em> how the browser learns the response is complete.</li>
+          <li>the first <code class="inline">flush()</code> waits for the remaining bytes to actually leave.</li>
+          <li><code class="inline">abort()</code> then forcibly resets the connection, discarding any lingering
+              state such as data the browser sent that was never read.</li>
+          <li>the second <code class="inline">flush()</code> waits for that reset to be sent.</li>
+        </ul>
+        <p>Without the forced reset the socket would remain in a half-closed state and the next client would not
+           be answered. Because there is only one socket, it must be returned to an unused state after every
+           connection.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SERVE CONNECTION ================= -->
+  <h2 class="section" id="s-serve">Reading and routing one request <span class="range">lines 181–242</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Read bytes into a 512 byte buffer"] --> B{"Blank line found,<br/>marking the end of the headers?"}
+  B -- "connection closed<br/>with nothing read" --> Z["Return without replying"]
+  B -- "read error" --> Z2["Print the error and give up"]
+  B -- "buffer full first" --> E431["Reply 431 Request Header Fields Too Large"]
+  B -- yes --> C["Split the first line into<br/>method and target"]
+  C --> D{"Is the method GET?"}
+  D -- no --> E405["Reply 405 Method Not Allowed"]
+  D -- yes --> E["Split the target at '?'<br/>into path and query string"]
+  E --> F{"Which path?"}
+  F -- "/ or /index.html" --> P1["send_page"]
+  F -- "/api/status" --> P2["send_status"]
+  F -- "/api/readings" --> P3["send_readings with the query string"]
+  F -- anything else --> P4["Reply 404 Not Found"]
+    </pre>
+    <figcaption>Request handling. Every branch produces a reply or ends the connection; none can hang.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">serve_connection</span>(socket: &amp;<span class="k">mut</span> <span class="ty">TcpSocket</span>&lt;<span class="st">'_</span>&gt;) {
+    <span class="k">let mut</span> request = [<span class="nu">0u8</span>; <span class="nu">512</span>];
+    <span class="k">let mut</span> filled = <span class="nu">0</span>;
+
+    <span class="cm">// Read until the end of the header block; the request has no body.</span>
+    <span class="k">loop</span> {
+        <span class="k">match</span> socket.<span class="fn">read</span>(&amp;<span class="k">mut</span> request[filled..]).<span class="k">await</span> {
+            <span class="ty">Ok</span>(<span class="nu">0</span>) =&gt; <span class="k">return</span>,
+            <span class="ty">Ok</span>(count) =&gt; {
+                filled += count;
+                <span class="k">if</span> request[..filled].<span class="fn">windows</span>(<span class="nu">4</span>).<span class="fn">any</span>(|w| w == <span class="st">b"\r\n\r\n"</span>) {
+                    <span class="k">break</span>;
+                }</code></pre>
+      <div class="explain">
+        <p>A 512-byte scratch area on the task's own stack holds the incoming request.
+           <code class="inline">filled</code> counts how much of it has been used.</p>
+        <p>Data arrives in arbitrarily sized chunks, so the code reads repeatedly, always into the still-empty
+           part of the buffer (<code class="inline">request[filled..]</code>), until it finds the marker that
+           ends an HTTP header block: a blank line, written as the four bytes carriage-return, line-feed,
+           carriage-return, line-feed. That is what <code class="inline">windows(4).any(...)</code> searches
+           for — it slides a four-byte window across everything received so far and checks each position.</p>
+        <p>A read result of zero means the browser closed the connection without sending anything, so the
+           function returns without replying and the outer loop waits for the next client.</p>
+        <p>Only GET requests are supported, and GET requests carry no body, so there is nothing to read after
+           the blank line.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>                <span class="k">if</span> filled == request.<span class="fn">len</span>() {
+                    <span class="cm">// Header block too large; treat as a bad request.</span>
+                    <span class="k">let</span> _ = socket
+                        .<span class="fn">write_all</span>(<span class="st">b"HTTP/1.1 431 Request Header Fields Too Large\r\n..."</span>)
+                        .<span class="k">await</span>;
+                    <span class="k">return</span>;
+                }
+            }
+            <span class="ty">Err</span>(error) =&gt; {
+                <span class="mc">println!</span>(<span class="st">"Web server: read failed: {:?}"</span>, error);
+                <span class="k">return</span>;
+            }
+        }
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Safety boundary</span>
+        <p>This is the limit on request size. If 512 bytes arrive without the blank line appearing, the buffer
+           is full and reading must stop; continuing would either write past the end of the buffer or loop
+           without terminating. The device replies <code class="inline">431</code> and closes the connection.</p>
+        <p>Because the buffer is a fixed-size array and every read is limited to the space remaining in it, no
+           quantity of data sent by a client can be written past its end.</p>
+        <p>512 bytes is enough for the requests the built-in page makes, but a browser sending unusually large
+           headers, for example many cookies, can exceed it and receive a 431.</p>
+        <p>A read error — the connection dropped part-way through the request — is printed and the function
+           returns; no reply can be delivered over a connection that has already failed.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> head = core::str::<span class="fn">from_utf8</span>(&amp;request[..filled]).<span class="fn">unwrap_or</span>(<span class="st">""</span>);
+    <span class="k">let mut</span> parts = head.<span class="fn">split_whitespace</span>();
+    <span class="k">let</span> method = parts.<span class="fn">next</span>().<span class="fn">unwrap_or</span>(<span class="st">""</span>);
+    <span class="k">let</span> target = parts.<span class="fn">next</span>().<span class="fn">unwrap_or</span>(<span class="st">""</span>);
+
+    <span class="k">if</span> method != <span class="st">"GET"</span> {
+        <span class="k">let</span> _ = socket
+            .<span class="fn">write_all</span>(
+                <span class="st">b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET\r\n..."</span>,
+            )
+            .<span class="k">await</span>;
+        <span class="k">return</span>;
+    }</code></pre>
+      <div class="explain">
+        <p>The received bytes are interpreted as text. If they are not valid text, the result becomes an empty
+           string rather than an error, and the request then fails the method check a few lines below.</p>
+        <p>An HTTP request starts with a line such as <code class="inline">GET /api/status?sensor=scd41
+           HTTP/1.1</code>. Splitting on spaces and taking the first two pieces yields the method
+           (<code class="inline">GET</code>) and the target (<code class="inline">/api/status?sensor=scd41</code>).
+           Missing pieces become empty strings, so a truncated request cannot cause a crash.</p>
+        <p>Anything that is not a GET is refused with <code class="inline">405</code>, and the
+           <code class="inline">Allow: GET</code> header states what is permitted. The device provides no HTTP
+           request that writes, configures or resets anything; all three endpoints are read-only.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// Split `/api/readings?sensor=scd41&amp;from=0` into path and query string.</span>
+    <span class="k">let</span> (path, query) = <span class="k">match</span> target.<span class="fn">split_once</span>(<span class="st">'?'</span>) {
+        <span class="ty">Some</span>((path, query)) =&gt; (path, query),
+        <span class="ty">None</span> =&gt; (target, <span class="st">""</span>),
+    };
+
+    <span class="k">match</span> path {
+        <span class="st">"/"</span> | <span class="st">"/index.html"</span> =&gt; <span class="fn">send_page</span>(socket).<span class="k">await</span>,
+        <span class="st">"/api/status"</span> =&gt; <span class="fn">send_status</span>(socket).<span class="k">await</span>,
+        <span class="st">"/api/readings"</span> =&gt; <span class="fn">send_readings</span>(socket, query).<span class="k">await</span>,
+        _ =&gt; {
+            <span class="k">let</span> _ = socket
+                .<span class="fn">write_all</span>(
+                    <span class="st">b"HTTP/1.1 404 Not Found\r\n..."</span>,
+                )
+                .<span class="k">await</span>;
+        }
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">The complete routing table</span>
+        <p>The target is split at the first question mark into the path and the query string. A target with no
+           question mark yields an empty query string.</p>
+        <p>The path is then compared against exactly four cases. This is the entire public surface of the
+           device:</p>
+        <ul>
+          <li><code class="inline">/</code> and <code class="inline">/index.html</code> both serve the page.</li>
+          <li><code class="inline">/api/status</code> serves the summary.</li>
+          <li><code class="inline">/api/readings</code> serves stored measurements; it is the only handler that
+              is given the query string, because it is the only one with parameters.</li>
+          <li>Everything else is <code class="inline">404 Not Found</code>.</li>
+        </ul>
+        <p>The comparison is exact and literal. There is no directory traversal, no file lookup and no pattern
+           matching, so a request for something like <code class="inline">/../../secret</code> is just another
+           unmatched string that produces a 404.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= QUERY PARAM ================= -->
+  <h2 class="section" id="s-query">Reading one query parameter <span class="range">lines 244–254</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">fn</span> <span class="fn">query_param</span>&lt;<span class="st">'a</span>&gt;(query: &amp;<span class="st">'a</span> <span class="ty">str</span>, name: &amp;<span class="ty">str</span>) -&gt; <span class="ty">Option</span>&lt;&amp;<span class="st">'a</span> <span class="ty">str</span>&gt; {
+    query.<span class="fn">split</span>(<span class="st">'&amp;'</span>).<span class="fn">find_map</span>(|pair| {
+        <span class="k">let</span> (key, value) = pair.<span class="fn">split_once</span>(<span class="st">'='</span>)?;
+        (key == name).<span class="fn">then_some</span>(value)
+    })
+}</code></pre>
+      <div class="explain">
+        <p>Given a query string such as <code class="inline">sensor=scd41&amp;from=100&amp;limit=50</code> and a
+           name such as <code class="inline">from</code>, this returns the matching value
+           (<code class="inline">"100"</code>) or nothing if that name is absent.</p>
+        <p>It splits on <code class="inline">&amp;</code> to get each <code class="inline">key=value</code> pair,
+           then on the first <code class="inline">=</code> to separate the two halves, and returns the value of
+           the first pair whose key matches. A fragment without an <code class="inline">=</code> is skipped.</p>
+        <p>No memory is copied: the returned text points directly into the original request buffer, which is why
+           the function is written with an explicit lifetime marker <code class="inline">'a</code> tying the
+           result's validity to the input's.</p>
+        <p><strong>Percent-escapes such as <code class="inline">%20</code> are not decoded.</strong> The source
+           comment gives the reason: every parameter this server accepts is either a plain number or one of two
+           fixed sensor names, and none of those can contain a character that requires escaping. A value that
+           does contain an escape fails to match a known sensor name, or fails to parse as a number, and is
+           handled by the error paths that already exist.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEND PAGE ================= -->
+  <h2 class="section" id="s-page">Sending the page and building responses <span class="range">lines 256–274</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">send_page</span>(socket: &amp;<span class="k">mut</span> <span class="ty">TcpSocket</span>&lt;<span class="st">'_</span>&gt;) {
+    <span class="fn">send_response</span>(socket, <span class="st">"text/html; charset=utf-8"</span>, <span class="ty">INDEX_HTML</span>).<span class="k">await</span>;
+}</code></pre>
+      <div class="explain">
+        <p>Serving the page is a single line: hand the constant embedded at compile time to the generic response
+           writer, labelled as HTML text.</p>
+        <p><code class="inline">charset=utf-8</code> tells the browser how to interpret the bytes, so accented
+           characters and symbols such as µg/m³ display correctly.</p>
+        <p>There is no template rendering and no substitution. The page arrives containing no data at all; it
+           then fetches everything it displays through the two JSON endpoints.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">send_response</span>(socket: &amp;<span class="k">mut</span> <span class="ty">TcpSocket</span>&lt;<span class="st">'_</span>&gt;, content_type: &amp;<span class="ty">str</span>, body: &amp;<span class="ty">str</span>) {
+    <span class="k">let mut</span> header: <span class="ty">String</span>&lt;<span class="nu">192</span>&gt; = <span class="ty">String</span>::<span class="fn">new</span>();
+    <span class="k">let</span> _ = <span class="mc">write!</span>(
+        header,
+        <span class="st">"HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\n\
+         Cache-Control: no-store\r\nConnection: close\r\n\r\n"</span>,
+        content_type,
+        body.<span class="fn">len</span>()
+    );
+
+    <span class="k">if</span> socket.<span class="fn">write_all</span>(header.<span class="fn">as_bytes</span>()).<span class="k">await</span>.<span class="fn">is_ok</span>() {
+        <span class="k">let</span> _ = socket.<span class="fn">write_all</span>(body.<span class="fn">as_bytes</span>()).<span class="k">await</span>;
+    }
+}</code></pre>
+      <div class="explain">
+        <p>Builds a complete HTTP response for the cases where the entire reply is already available as one
+           piece of text.</p>
+        <p>The header is assembled in a 192-byte fixed buffer, which is longer than the header block this
+           function produces for either of the two content types used. Each header line states one thing:</p>
+        <ul>
+          <li><code class="inline">Content-Type</code> — how the browser should interpret the body.</li>
+          <li><code class="inline">Content-Length</code> — the exact byte count that follows, so the browser
+              knows when the body is finished without waiting for the connection to close.</li>
+          <li><code class="inline">Cache-Control: no-store</code> — the browser must not keep a copy. Without it
+              a browser could redisplay a previously stored reply instead of requesting a current one.</li>
+          <li><code class="inline">Connection: close</code> — this connection carries one request only, which
+              matches the server, where the single socket is reset after every client.</li>
+        </ul>
+        <p>The blank line at the end (<code class="inline">\r\n\r\n</code>) separates headers from body — the
+           same marker the request parser searched for earlier.</p>
+        <p>The body is only sent if the header was sent successfully. Write failures are ignored: if the client
+           has disconnected there is no recovery action to take, and the outer loop resets the socket in either
+           case.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEND STATUS ================= -->
+  <h2 class="section" id="s-status">The status endpoint <span class="range">lines 276–313</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">send_status</span>(socket: &amp;<span class="k">mut</span> <span class="ty">TcpSocket</span>&lt;<span class="st">'_</span>&gt;) {
+    <span class="k">let</span> uptime_ms = <span class="ty">Instant</span>::<span class="fn">now</span>().<span class="fn">as_millis</span>();
+    <span class="k">let</span> scd41 = shared_state::<span class="fn">scd41_status</span>().<span class="k">await</span>;
+    <span class="k">let</span> sps30 = shared_state::<span class="fn">sps30_status</span>().<span class="k">await</span>;
+
+    <span class="k">let mut</span> body: <span class="ty">String</span>&lt;<span class="nu">512</span>&gt; = <span class="ty">String</span>::<span class="fn">new</span>();
+    <span class="k">let</span> _ = <span class="mc">write!</span>(
+        body,
+        <span class="st">"{{\"uptime_ms\":{},\"window_ms\":{},\"sensors\":{{"</span>,
+        uptime_ms,
+        shared_state::<span class="ty">HISTORY_WINDOW_MS</span>
+    );
+    <span class="k">let</span> _ = <span class="fn">write_sensor_status</span>(&amp;<span class="k">mut</span> body, <span class="st">"scd41"</span>, &amp;scd41);
+    <span class="k">let</span> _ = body.<span class="fn">push</span>(<span class="st">','</span>);
+    <span class="k">let</span> _ = <span class="fn">write_sensor_status</span>(&amp;<span class="k">mut</span> body, <span class="st">"sps30"</span>, &amp;sps30);
+    <span class="k">let</span> _ = body.<span class="fn">push_str</span>(<span class="st">"}}"</span>);
+
+    <span class="fn">send_response</span>(socket, <span class="st">"application/json"</span>, &amp;body).<span class="k">await</span>;
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">Calls into shared_state.rs</span>
+        <p>This is the endpoint the page requests repeatedly. It is small, its length is known in advance, and
+           it contains everything a client needs in order to determine which readings it is missing before
+           requesting any of them.</p>
+        <p>Three pieces of information are gathered: the current uptime, and a summary for each of the two
+           sensors. Each summary is copied out of the shared storage while a lock is held; the lock is released
+           before anything is sent to the network, so a slow client cannot block the sensor tasks.</p>
+        <p>The JSON is written by hand into a 512-byte fixed buffer. There is no JSON library involved. In the
+           format string, <code class="inline">{{</code> and <code class="inline">}}</code> produce single literal
+           braces, because a single brace would mean "insert a value here", and
+           <code class="inline">\"</code> produces a literal double quote.</p>
+        <p>Every write result is discarded with <code class="inline">let _ =</code>. These writes can only fail
+           by exhausting the buffer, and the output has a fixed set of fields whose longest possible form is
+           shorter than 512 bytes, so that failure cannot occur.</p>
+        <p><strong>Why uptime is included:</strong> readings are timestamped with the uptime at which they were
+           taken. The browser records its own wall-clock time when a reply arrives, subtracts the reported
+           uptime, and thereby learns what real time the board started at. Every reading can then be placed on a
+           real calendar timeline despite the board having no clock.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">fn</span> <span class="fn">write_sensor_status</span>(
+    body: &amp;<span class="k">mut</span> <span class="ty">String</span>&lt;<span class="nu">512</span>&gt;,
+    name: &amp;<span class="ty">str</span>,
+    status: &amp;shared_state::<span class="ty">HistoryStatus</span>,
+) -&gt; core::fmt::<span class="ty">Result</span> {
+    <span class="mc">write!</span>(
+        body,
+        <span class="st">"\"{}\":{{\"interval_ms\":{},\"capacity\":{},\"len\":{},\
+          \"first_sequence\":{},\"next_sequence\":{}}}"</span>,
+        name, status.interval_ms, status.capacity, status.len,
+        status.first_sequence, status.next_sequence
+    )
+}</code></pre>
+      <div class="explain">
+        <p>Writes one sensor's entry into the JSON object, so the same layout does not have to be typed twice.</p>
+        <p>The five numbers come from <code class="inline">shared_state.rs</code> and describe a ring buffer —
+           storage of fixed size where, once full, each new reading overwrites the oldest one:</p>
+        <ul>
+          <li><code class="inline">interval_ms</code> — how often this sensor is scheduled to measure. The SCD41
+              measures every 10,000 ms and the SPS30 every 5,000 ms. The page uses this to tell a genuine gap in
+              the data apart from normal spacing between points.</li>
+          <li><code class="inline">capacity</code> — how many readings fit; zero means the storage could not be
+              reserved at startup and nothing is being retained.</li>
+          <li><code class="inline">len</code> — how many are held right now.</li>
+          <li><code class="inline">first_sequence</code> — the number of the oldest reading still available.
+              Anything below this has already been overwritten and cannot be requested.</li>
+          <li><code class="inline">next_sequence</code> — the number the next reading will receive; equivalently,
+              the total number of readings ever taken since boot.</li>
+        </ul>
+        <p>Sequence numbers start at zero and increase by one for each reading, for the whole time the program
+           runs. They never repeat and are
+           never reused, which is exactly what makes a stateless "give me everything after N" request possible.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SEND READINGS ================= -->
+  <h2 class="section" id="s-readings">The readings endpoint <span class="range">lines 315–end</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Read the 'sensor' parameter"] --> B{"scd41 or sps30?"}
+  B -- "neither" --> E400["Reply 400 Bad Request and stop"]
+  B -- yes --> C["Fetch that sensor's status<br/>from shared_state"]
+  C --> D["Read 'from' (default 0) and<br/>'limit' (default 2000, capped at 2000)"]
+  D --> F["from = max(requested from, first_sequence)<br/>so discarded readings are skipped"]
+  F --> G["count = min(next_sequence - from, limit)"]
+  G --> H["Send the headers, then the opening<br/>fields and the start of the array"]
+  H --> I["For each sequence number from..from+count"]
+  I --> J{"Is that reading<br/>still stored?"}
+  J -- yes --> K["Format it into a small buffer<br/>and write it to the socket"]
+  J -- no --> L["Write the word null instead"]
+  K --> I
+  L --> I
+  I -- "count elements written" --> M["Write the closing bracket and brace"]
+  M --> N["Return; the caller closes the connection,<br/>which marks the end of the body"]
+    </pre>
+    <figcaption>Readings are streamed one at a time, so no large buffer is ever needed.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">send_readings</span>(socket: &amp;<span class="k">mut</span> <span class="ty">TcpSocket</span>&lt;<span class="st">'_</span>&gt;, query: &amp;<span class="ty">str</span>) {
+    <span class="k">let</span> sensor = <span class="fn">query_param</span>(query, <span class="st">"sensor"</span>).<span class="fn">unwrap_or</span>(<span class="st">""</span>);
+    <span class="k">let</span> status = <span class="k">match</span> sensor {
+        <span class="st">"scd41"</span> =&gt; shared_state::<span class="fn">scd41_status</span>().<span class="k">await</span>,
+        <span class="st">"sps30"</span> =&gt; shared_state::<span class="fn">sps30_status</span>().<span class="k">await</span>,
+        _ =&gt; {
+            <span class="k">let</span> _ = socket
+                .<span class="fn">write_all</span>(
+                    <span class="st">b"HTTP/1.1 400 Bad Request\r\n..."</span>,
+                )
+                .<span class="k">await</span>;
+            <span class="k">return</span>;
+        }
+    };</code></pre>
+      <div class="explain">
+        <p>The sensor name is the only strictly required parameter, and it is validated against a fixed list of
+           exactly two accepted values. A missing or unrecognised name produces
+           <code class="inline">400 Bad Request</code> and the function stops immediately.</p>
+        <p>This is a whitelist, not a filter: the name is never used to look anything up by string, only to
+           choose between two hardcoded branches. An attacker cannot use it to reach data that is not one of
+           these two histories.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> requested_from = <span class="fn">query_param</span>(query, <span class="st">"from"</span>)
+        .<span class="fn">and_then</span>(|value| value.<span class="fn">parse</span>::&lt;<span class="ty">u64</span>&gt;().<span class="fn">ok</span>())
+        .<span class="fn">unwrap_or</span>(<span class="nu">0</span>);
+    <span class="k">let</span> limit = <span class="fn">query_param</span>(query, <span class="st">"limit"</span>)
+        .<span class="fn">and_then</span>(|value| value.<span class="fn">parse</span>::&lt;<span class="ty">usize</span>&gt;().<span class="fn">ok</span>())
+        .<span class="fn">unwrap_or</span>(<span class="ty">MAX_PAGE_READINGS</span>)
+        .<span class="fn">min</span>(<span class="ty">MAX_PAGE_READINGS</span>);</code></pre>
+      <div class="explain">
+        <p>Two optional parameters. If either is absent <em>or cannot be parsed as a number</em>, the default is
+           used instead of the request being rejected. The source comment gives the reason: the built-in page
+           never sends a malformed value, and a URL typed by hand still returns data when it contains a typo.</p>
+        <ul>
+          <li><code class="inline">from</code> — the first sequence number requested. Default 0, which the next
+              step moves forward to the oldest retained reading.</li>
+          <li><code class="inline">limit</code> — the maximum number of readings to return. Default 2000, and
+              <code class="inline">.min(MAX_PAGE_READINGS)</code> enforces that ceiling no matter what was asked
+              for. A client requesting a million readings receives 2000.</li>
+        </ul>
+        <p>That limit keeps a single reply short enough to be sent within the ten-second connection timeout, and
+           it is applied on the device rather than relying on the client to request a reasonable number.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> uptime_ms = <span class="ty">Instant</span>::<span class="fn">now</span>().<span class="fn">as_millis</span>();
+    <span class="k">let</span> from = requested_from.<span class="fn">max</span>(status.first_sequence);
+    <span class="k">let</span> available = status.next_sequence.<span class="fn">saturating_sub</span>(from);
+    <span class="k">let</span> count = core::cmp::<span class="fn">min</span>(available, limit <span class="k">as</span> <span class="ty">u64</span>) <span class="k">as</span> <span class="ty">usize</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Choosing which readings to send</span>
+        <p><strong><code class="inline">from</code></strong> — if the client requested a reading that has already
+           been overwritten, the request is not refused; the starting point is moved forward to the oldest
+           reading still held. The value used is reported back in the reply, so a client that was offline long
+           enough for readings to be overwritten can compare the value it sent with the value returned and
+           determine that those readings are no longer available.</p>
+        <p><strong><code class="inline">available</code></strong> — how many readings exist from that point
+           onwards. <code class="inline">saturating_sub</code> subtracts but stops at zero instead of wrapping
+           around to a very large positive number. Without it, a client requesting a
+           <code class="inline">from</code> beyond the newest reading would produce a count of billions and the
+           device would attempt to send that many entries.</p>
+        <p><strong><code class="inline">count</code></strong> — the smaller of the number available and the
+           number requested. This is the exact number of array elements the reply will contain, and it is fixed
+           <em>before</em> any of them are sent.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> header = <span class="st">"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+        Cache-Control: no-store\r\nConnection: close\r\n\r\n"</span>;
+    <span class="k">if</span> socket.<span class="fn">write_all</span>(header.<span class="fn">as_bytes</span>()).<span class="k">await</span>.<span class="fn">is_err</span>() {
+        <span class="k">return</span>;
+    }
+
+    <span class="k">let mut</span> chunk: <span class="ty">String</span>&lt;<span class="nu">384</span>&gt; = <span class="ty">String</span>::<span class="fn">new</span>();
+    <span class="k">let</span> _ = <span class="mc">write!</span>(
+        chunk,
+        <span class="st">"{{\"sensor\":\"{}\",\"uptime_ms\":{},\"interval_ms\":{},\"capacity\":{},\
+          \"first_sequence\":{},\"next_sequence\":{},\"from\":{},\"count\":{},\"readings\":["</span>,
+        sensor, uptime_ms, status.interval_ms, status.capacity,
+        status.first_sequence, status.next_sequence, from, count
+    );
+    <span class="k">if</span> socket.<span class="fn">write_all</span>(chunk.<span class="fn">as_bytes</span>()).<span class="k">await</span>.<span class="fn">is_err</span>() {
+        <span class="k">return</span>;
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">This reply has no Content-Length</span>
+        <p>Unlike the other replies, this one does not state its length. The body is produced one reading at a
+           time and its total size is not known when the headers are sent. HTTP/1.1 allows this when the reply
+           states <code class="inline">Connection: close</code>: the end of the body is the end of the
+           connection. The close-then-reset sequence in the calling loop is therefore what indicates to the
+           browser that the body is complete.</p>
+        <p>The alternative would be to build the whole reply in memory first, which for 2000 readings would
+           require permanently reserving over a hundred kilobytes of RAM that is unused between requests.</p>
+        <p>The opening fields are sent next: which sensor, the current uptime, the sensor's measuring interval,
+           and the four numbers describing the buffer state, followed by <code class="inline">"readings":[</code>
+           which opens the array. Including the buffer state here means a client can use a readings reply on its
+           own, without a separate status request.</p>
+        <p>One 384-byte buffer is used for this text and reused for every reading that follows, so 384 bytes is
+           the total buffer memory used by the whole reply.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">for</span> offset <span class="k">in</span> <span class="nu">0</span>..count {
+        <span class="k">let</span> sequence = from + offset <span class="k">as</span> <span class="ty">u64</span>;
+        chunk.<span class="fn">clear</span>();
+        <span class="k">let</span> separator = <span class="k">if</span> offset == <span class="nu">0</span> { <span class="st">""</span> } <span class="k">else</span> { <span class="st">","</span> };</code></pre>
+      <div class="explain">
+        <p>The loop goes through the sequence numbers from oldest to newest, so a client can append the page to
+           the readings it already holds without reordering them.</p>
+        <p>The same 384-byte buffer is emptied and refilled on each iteration. The loop therefore uses 384 bytes
+           in total, whether it sends one reading or two thousand.</p>
+        <p>JSON requires commas <em>between</em> array elements but not before the first, so the separator is
+           empty on the first iteration and a comma on every later one.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="k">if</span> sensor == <span class="st">"scd41"</span> {
+            <span class="k">match</span> shared_state::<span class="fn">scd41_reading</span>(sequence).<span class="k">await</span> {
+                <span class="ty">Some</span>(sample) =&gt; {
+                    <span class="k">let</span> m = sample.value;
+                    <span class="k">let</span> _ = <span class="mc">write!</span>(
+                        chunk,
+                        <span class="st">"{}{{\"taken_at_ms\":{},\"co2_ppm\":{},\
+                          \"temperature_celsius\":{},\"humidity_percent\":{}}}"</span>,
+                        separator,
+                        sample.taken_at.<span class="fn">as_millis</span>(),
+                        m.co2_ppm,
+                        m.<span class="fn">temperature_celsius</span>(),
+                        m.<span class="fn">humidity_percent</span>()
+                    );
+                }
+                <span class="ty">None</span> =&gt; {
+                    <span class="k">let</span> _ = <span class="mc">write!</span>(chunk, <span class="st">"{}null"</span>, separator);
+                }
+            }
+        } <span class="k">else</span> {</code></pre>
+      <div class="explain">
+        <span class="tag ext">Calls into shared_state.rs and the sensor driver</span>
+        <p>One reading is fetched per iteration. The lock protecting the shared storage is taken and released
+           inside that single call, so it is never held while data is being written to the network. A slow or
+           stalled client therefore cannot delay the sensor tasks, which measure on a fixed schedule.</p>
+        <p>Each stored entry carries both the measured values and the uptime at which the measurement finished,
+           reported as <code class="inline">taken_at_ms</code>.</p>
+        <p>For the SCD41, CO₂ is published exactly as the sensor reports it, in parts per million. Temperature
+           and humidity are stored as raw 16-bit sensor words and converted here by calling
+           <code class="inline">temperature_celsius()</code> and <code class="inline">humidity_percent()</code>,
+           defined in <code class="inline">src/drivers/scd41.rs</code>, which apply the formulas
+           <code class="inline">-45 + 175 × raw ÷ 65535</code> and
+           <code class="inline">100 × raw ÷ 65535</code>. Storing the raw words and converting only when sending
+           reduces the size of each stored reading, of which 8,640 are retained.</p>
+        <p><strong>When <code class="inline">null</code> appears:</strong> between the point where
+           <code class="inline">count</code> was fixed and the point where this reading is fetched, the sensor
+           tasks may have overwritten it with a newer measurement. Rather than emitting fewer elements, which
+           would move every later element onto the wrong sequence number, the position is filled with
+           <code class="inline">null</code>. The array therefore always has exactly
+           <code class="inline">count</code> elements and position <em>i</em> is always sequence number
+           <code class="inline">from + i</code>.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>            <span class="k">match</span> shared_state::<span class="fn">sps30_reading</span>(sequence).<span class="k">await</span> {
+                <span class="ty">Some</span>(sample) =&gt; {
+                    <span class="k">let</span> m = sample.value;
+                    <span class="k">let</span> _ = <span class="mc">write!</span>(
+                        chunk,
+                        <span class="st">"{}{{\"taken_at_ms\":{},\"pm1_0\":{},\"pm2_5\":{},\
+                          \"pm4_0\":{},\"pm10\":{},\"typical_particle_size\":{}}}"</span>,
+                        separator,
+                        sample.taken_at.<span class="fn">as_millis</span>(),
+                        m.pm1_0, m.pm2_5, m.pm4_0, m.pm10,
+                        m.typical_particle_size
+                    );
+                }
+                <span class="ty">None</span> =&gt; {
+                    <span class="k">let</span> _ = <span class="mc">write!</span>(chunk, <span class="st">"{}null"</span>, separator);
+                }
+            }
+        }
+
+        <span class="k">if</span> socket.<span class="fn">write_all</span>(chunk.<span class="fn">as_bytes</span>()).<span class="k">await</span>.<span class="fn">is_err</span>() {
+            <span class="k">return</span>;
+        }
+    }
+
+    <span class="k">let</span> _ = socket.<span class="fn">write_all</span>(<span class="st">b"]}"</span>).<span class="k">await</span>;
+}</code></pre>
+      <div class="explain">
+        <p>The same handling for the particle sensor. Five values are published: the mass concentrations for
+           particles up to 1.0, 2.5, 4.0 and 10 micrometres in micrograms per cubic metre, plus the typical
+           particle size in micrometres.</p>
+        <p>The sensor's driver also measures particle <em>counts</em> for several size classes
+           (<code class="inline">nc0_5</code> through <code class="inline">nc10</code>). Those are stored but not
+           published, because the page does not display them and omitting them shortens every reply.</p>
+        <p>Each formatted reading is written to the socket as soon as it is produced, so at most one formatted
+           reading is held in memory at a time. If a write fails, because the browser navigated away or the
+           connection dropped, the function returns immediately and the body it has sent is truncated and not
+           valid JSON. No recovery is attempted: the client that would have parsed the body has already
+           disconnected, and the calling loop resets the socket for the next client.</p>
+        <p>Finally <code class="inline">]}</code> closes the array and the object. The connection being closed
+           immediately afterwards, in the calling loop, is what indicates to the browser that the body is
+           complete.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FAILURE BEHAVIOUR ================= -->
+  <div class="card" id="failure">
+    <h2>Failure behaviour</h2>
+    <table>
+      <tr><th>Situation</th><th>Behaviour</th></tr>
+      <tr><td>No network name compiled in</td>
+          <td>One message on the serial console; the Wi-Fi task ends. Sensors, LED and history all continue
+              working. The device is not reachable over the network.</td></tr>
+      <tr><td>Wrong password, or router not present</td>
+          <td>Association fails, the error is printed, and the attempt repeats every five seconds indefinitely.</td></tr>
+      <tr><td>Router reboots</td>
+          <td>The disconnection event wakes the Wi-Fi task, which waits five seconds and rejoins automatically.
+              No device reset is needed.</td></tr>
+      <tr><td>Associated but no IP address</td>
+          <td>The server task waits before binding, so it never listens on an address it does not have. Nothing
+              is printed until the address arrives.</td></tr>
+      <tr><td>Browser connects and then stops responding</td>
+          <td>The ten-second inactivity timeout drops the connection and the socket is reset, freeing the server
+              for the next client.</td></tr>
+      <tr><td>Browser closes mid-reply</td>
+          <td>The write fails, the handler returns early, and the loop resets the socket. Nothing is retried and
+              no state is left behind.</td></tr>
+      <tr><td>Measurement storage could not be reserved at startup</td>
+          <td>Both histories report zero capacity and zero length. The endpoints still work and return empty
+              data; the page shows no history.</td></tr>
+      <tr><td>A reading is overwritten while being sent</td>
+          <td>That array position becomes <code>null</code>. The element count is unaffected, so the client's
+              mapping from position to sequence number stays correct.</td></tr>
+      <tr><td>Client asks for readings that were overwritten</td>
+          <td>The start point moves to the oldest available reading without an error, and the reply reports the
+              value used in its <code>from</code> field.</td></tr>
+      <tr><td>Request headers exceed 512 bytes</td>
+          <td><code>431</code> is returned and the connection ends. No buffer can be overrun.</td></tr>
+    </table>
+  </div>
+
+  <!-- ================= GLOSSARY ================= -->
+  <div class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning as used in this file</th></tr>
+      <tr><td>Task</td><td>An independent piece of work managed by the scheduler. All tasks share one processor
+          core; a task runs until it reaches a waiting point, then another runs.</td></tr>
+      <tr><td><code>await</code></td><td>Marks a waiting point. The task pauses here without consuming processor
+          time and resumes when the thing it waited for is ready.</td></tr>
+      <tr><td>Station mode</td><td>The radio acts as a client of an existing router, like a laptop. The opposite
+          would be creating its own hotspot.</td></tr>
+      <tr><td>DHCP</td><td>The mechanism by which a router hands out an IP address to a device that joins the
+          network.</td></tr>
+      <tr><td>Socket</td><td>One TCP connection together with its send and receive buffers. This file creates
+          exactly one and reuses it for every client.</td></tr>
+      <tr><td>Ring buffer</td><td>Fixed-size storage that, once full, overwrites the oldest entry with each new
+          one. Both sensor histories are ring buffers.</td></tr>
+      <tr><td>Sequence number</td><td>A number given to each reading, starting at zero and increasing by one for
+          each subsequent reading. It identifies a reading even after that reading has been overwritten.</td></tr>
+      <tr><td>Uptime</td><td>Milliseconds since the board powered on. Used instead of a date, because the board
+          has no real-time clock.</td></tr>
+      <tr><td>Heapless string</td><td>A text buffer whose maximum size is fixed at compile time. It cannot grow;
+          text that does not fit is dropped.</td></tr>
+      <tr><td>Flash</td><td>The permanent memory holding the firmware. The web page lives here as a constant.</td></tr>
+      <tr><td>PSRAM</td><td>External memory chip on the board, large enough to hold a day of readings. Used by
+          <code>shared_state.rs</code>, not directly by this file.</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Generated documentation for <code>software/src/tasks/web_server_task.rs</code> — Home Environmental Sensor.
+  </footer>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+
+</body>
+</html>

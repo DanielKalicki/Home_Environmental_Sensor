@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>main.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --warn:#9a6700;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type */
+    --st:#032f62;  /* string */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:22px 40px 16px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:6px;
+  }
+  h1{margin:0 0 6px; font-size:25px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 12px; color:var(--muted); font-size:14.5px; max-width:1100px;}
+  nav.toc{display:flex; flex-wrap:wrap; gap:6px 16px;}
+  nav.toc a{font-size:12.5px; color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card h3{font-size:15px; margin:20px 0 6px;}
+  .card h4{font-size:14px; margin:16px 0 4px;}
+  .card p{font-size:15px;}
+  .card ul,.card ol{margin:10px 0 0; padding-left:20px; font-size:14.5px;}
+  .card li{margin-bottom:6px;}
+  code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  h2.section{
+    margin:46px 0 0; padding:10px 0 8px; font-size:20px;
+    border-bottom:2px solid var(--border);
+  }
+  h2.section .range{font-size:12.5px; color:var(--muted); font-weight:500; margin-left:10px;}
+
+  .lines{margin-top:8px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:18px 6px; border-radius:10px; border-top:1px solid #eaeef2;
+  }
+  .line:hover{background:rgba(9,105,218,0.04);}
+  .code{
+    flex:1 1 0; min-width:280px; margin:0; padding:10px 0;
+    white-space:pre; overflow-x:auto; font-size:13.2px; background:transparent;
+  }
+  .explain{flex:1.15 1 0; min-width:280px; padding-top:4px; font-size:14.5px;}
+  .explain p{margin:0 0 9px;}
+  .explain p:last-child{margin-bottom:0;}
+  .explain ul{margin:0 0 9px; padding-left:20px;}
+  .explain li{margin-bottom:4px;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:8px;
+  }
+  .tag.alt{background:var(--accent);}
+  .tag.ext{background:var(--warn);}
+
+  .note{
+    border-left:3px solid var(--accent); background:#f2f7fd;
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0 0; font-size:13.8px;
+  }
+  .note.warn{border-left-color:var(--warn); background:#fdf7ec;}
+
+  table{border-collapse:collapse; width:100%; margin-top:12px; font-size:13.6px;}
+  th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top;}
+  th{background:#eef1f4;}
+  td code{font-size:12.6px;}
+
+  pre.block{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; line-height:1.55;
+  }
+
+  .diagram{background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px; overflow-x:auto;}
+  .diagram figcaption{font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center;}
+
+  .k{color:var(--k);} .ty{color:var(--ty);} .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;} .mc{color:var(--mc);}
+  .at{color:var(--at);} .fn{color:var(--fn);} .nu{color:var(--ty);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+
+  @media (max-width:1000px){
+    .line{flex-direction:column; gap:8px;}
+    .code{flex:none; width:100%;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/main.rs — the start-up file</h1>
+  <p class="sub">Left column: the source code. Right column: a description of what that code does. This file is the first firmware code that runs after the chip resets. It configures the hardware once, hands each piece of hardware to the part of the program that will use it, starts six independent tasks, and then stops. Everything the firmware does afterwards is done by those tasks.</p>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#model">How the program is arranged</a>
+    <a href="#ownership">Hardware ownership</a>
+    <a href="#order">Why the order matters</a>
+    <a href="#interfaces">External interfaces</a>
+    <a href="#flow">Start-up diagrams</a>
+    <a href="#s-attrs">Crate attributes</a>
+    <a href="#s-imports">Imports</a>
+    <a href="#s-modules">Module declarations</a>
+    <a href="#s-uses">Internal imports</a>
+    <a href="#s-statics">Permanent storage slots</a>
+    <a href="#s-entry">Entry point</a>
+    <a href="#s-psram">PSRAM and clocks</a>
+    <a href="#s-timer">Time source</a>
+    <a href="#s-led">LED pin</a>
+    <a href="#s-i2c">I2C bus</a>
+    <a href="#s-scan">Banner and bus scan</a>
+    <a href="#s-history">History reservation</a>
+    <a href="#s-share">Sharing the bus</a>
+    <a href="#s-spawn">Starting the sensor tasks</a>
+    <a href="#s-wifiinit">Wi-Fi driver</a>
+    <a href="#s-station">Station interface</a>
+    <a href="#s-stack">Network stack</a>
+    <a href="#s-netspawn">Starting the network tasks</a>
+    <a href="#failure">Failure behaviour</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>
+      There is no operating system on this board. When the chip is powered or reset, the boot loader in its
+      internal read-only memory loads the firmware image from flash and jumps into it; the function in this file
+      is where that jump ends up. Nothing has been configured at that point: the processor runs at its start-up
+      clock speed, no pin has been assigned to a peripheral, the external memory is not reachable, and no radio
+      is running.
+    </p>
+    <p>This file performs five kinds of work, in a fixed order:</p>
+    <ol>
+      <li><strong>Claim the hardware.</strong> A single call produces one value per peripheral, and those values
+        are the only way to reach the hardware. Handing one away is what gives another part of the program the
+        right to use that peripheral.</li>
+      <li><strong>Configure the parts that everything else depends on:</strong> the external memory, the processor
+        and peripheral clocks, and the hardware timer that all delays and timeouts are measured against.</li>
+      <li><strong>Set up the connections to the outside world:</strong> the indicator light on GPIO21, and the
+        two-wire I2C bus on GPIO5 and GPIO6 that both sensors are attached to.</li>
+      <li><strong>Reserve the measurement history</strong> in the external memory, so that the first reading a
+        sensor produces already has somewhere to be stored.</li>
+      <li><strong>Start the six tasks</strong> that do the actual work, giving each of them the hardware it needs,
+        and set up the Wi-Fi driver and network stack the last three of them run on.</li>
+    </ol>
+
+    <h3>What this file does not do</h3>
+    <ul>
+      <li>It does not talk to either sensor. It only checks which addresses answer on the bus, and prints them.</li>
+      <li>It does not read, store or serve measurements. The tasks do that.</li>
+      <li>It does not contain a loop. It runs once, from top to bottom, and finishes.</li>
+      <li>It does not join the Wi-Fi network. It creates the driver and the network stack; joining the network,
+        obtaining an address and answering requests are the work of three separate tasks.</li>
+      <li>It does not decide when anything happens. Every interval in the firmware is defined in the task that
+        uses it.</li>
+    </ul>
+  </div>
+
+  <!-- ================= MODEL ================= -->
+  <div class="card" id="model">
+    <h2>How the program is arranged</h2>
+
+    <h3>Tasks instead of threads</h3>
+    <p>
+      The firmware is built on a cooperative scheduler called an <em>executor</em>. A <em>task</em> is a function
+      that runs until it needs to wait — for a timer to expire, for the I2C bus to become free, for a network
+      packet to arrive — and at that point it returns control to the executor, which runs whichever other task is
+      ready. There is no pre-emption: a task keeps the processor until it reaches a waiting point of its own.
+    </p>
+    <p>
+      This means the tasks never interrupt each other in the middle of an operation, and the whole program runs on
+      a single processor core without needing one stack per task. It also means that a task that never waits would
+      stop every other task; every task in this firmware waits on a timer or on the network.
+    </p>
+
+    <h3>Why the start-up function finishes</h3>
+    <p>
+      Starting a task registers it with the executor; it does not call it. When the body of the start-up function
+      reaches its end, the six tasks it registered are still there and the executor keeps running them. The
+      function does not return to a caller, because there is no caller: it is the outermost function of the
+      program.
+    </p>
+
+    <h3>No heap</h3>
+    <p>
+      The firmware allocates nothing at run time in the usual sense. Anything that has to outlive the start-up
+      function — the timer, the clock configuration, the I2C bus, the network stack and its buffers — is placed in
+      a storage slot reserved at compile time and filled exactly once. Filling such a slot returns a reference that
+      is valid for the rest of the program run, which is precisely what a task needs, because a task also lives for
+      the rest of the program run.
+    </p>
+    <p>
+      The one exception is the measurement history, which is far too large for the internal memory. It is carved
+      out of the 8 MB of external memory on the module by the bump allocator in
+      <code class="inline">src/utils/psram.rs</code>. That allocator never frees anything either, so its results
+      are equally permanent.
+    </p>
+  </div>
+
+  <!-- ================= OWNERSHIP ================= -->
+  <div class="card" id="ownership">
+    <h2>Hardware ownership</h2>
+    <p>
+      Each peripheral of the chip is represented by exactly one value. That value cannot be copied, so it can be
+      in only one place at a time, and whoever holds it is the only part of the program that can use the
+      corresponding hardware. This is how the firmware guarantees, without any run-time checking, that two parts
+      of the program never configure the same pin or drive the same bus.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Peripheral</th><th>Configured as</th><th>Given to</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>PSRAM</code></td><td>8 MB external memory window, mapped into the address space</td><td>the bump allocator, which hands parts of it to the measurement history</td></tr>
+        <tr><td><code>SYSTEM</code></td><td>clock configuration raised to the highest supported setting</td><td>kept for the whole program run; every peripheral is set up against it</td></tr>
+        <tr><td><code>TIMG0</code>, first timer</td><td>the time source for all delays, intervals and timeouts</td><td>the executor</td></tr>
+        <tr><td><code>TIMG1</code>, first timer</td><td>the periodic tick the Wi-Fi driver needs</td><td>the Wi-Fi driver</td></tr>
+        <tr><td><code>GPIO</code> + <code>IO_MUX</code>, pin 21</td><td>digital output, starting low</td><td>the blink task</td></tr>
+        <tr><td><code>I2C0</code>, pins 5 and 6</td><td>two-wire bus at 100 kHz</td><td>both sensor tasks, one at a time, through a lock</td></tr>
+        <tr><td><code>RNG</code></td><td>two 32-bit values combined into a 64-bit seed</td><td>the Wi-Fi driver, and the network stack as its starting sequence number</td></tr>
+        <tr><td><code>RADIO_CLK</code></td><td>the clock supply of the radio</td><td>the Wi-Fi driver</td></tr>
+        <tr><td><code>WIFI</code></td><td>a station interface: one side sends and receives packets, the other joins and leaves networks</td><td>the network stack and the connection task respectively</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The one piece of hardware that is shared</h3>
+    <p>
+      Two sensors sit on the same I2C bus, so two tasks need the same peripheral. The bus is therefore placed
+      behind a lock: a task takes the lock, performs a complete exchange with its sensor, and releases it. Because
+      a task can only be interrupted at a point where it waits, and because the lock is held across the whole
+      exchange, the bytes of one sensor's conversation can never be interleaved with the other's. Both sensor
+      tasks receive the same reference to the same locked bus.
+    </p>
+    <div class="note">
+      A task that waits while holding the lock blocks the other task for that long. Both sensor drivers avoid this:
+      they release the lock before their long waits — the five-second conversion of the carbon dioxide sensor and
+      the five-second interval of the particulate sensor — and take it again for the next exchange.
+    </div>
+  </div>
+
+  <!-- ================= ORDER ================= -->
+  <div class="card" id="order">
+    <h2>Why the order matters</h2>
+    <p>
+      Most of the sequence in this file could be rearranged without effect, but four ordering constraints are real
+      and are the reason the file looks the way it does.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Constraint</th><th>Reason</th><th>What would otherwise happen</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>External memory is mapped first, before the clocks are raised</td>
+          <td>Mapping it retunes the timing of the memory interface and reconfigures the data cache</td>
+          <td>Retuning the memory interface after other peripherals are running, or against a clock speed that is
+            about to change, can leave the cache and the memory disagreeing</td>
+        </tr>
+        <tr>
+          <td>Clocks are configured before any peripheral is created</td>
+          <td>Every peripheral derives its own timing from the clock configuration and is given a reference to it</td>
+          <td>Peripherals set up against one clock speed would produce wrong bit rates and wrong delays once the
+            speed changed</td>
+        </tr>
+        <tr>
+          <td>The timer is handed to the executor before anything waits</td>
+          <td>All waiting in the firmware is expressed in terms of that timer</td>
+          <td>The first attempt to wait would have no clock to wait on</td>
+        </tr>
+        <tr>
+          <td>The measurement history is reserved before the sensor tasks are started</td>
+          <td>Readings taken while no history exists are discarded rather than queued</td>
+          <td>The earliest readings would be lost, silently</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The Wi-Fi driver is set up after the sensor tasks are started rather than before. Nothing forces that order,
+      but it means the sensors begin measuring immediately instead of waiting for the radio to come up, and the
+      first readings are already stored by the time a browser can ask for them.
+    </p>
+  </div>
+
+  <!-- ================= INTERFACES ================= -->
+  <div class="card" id="interfaces">
+    <h2>External interfaces</h2>
+
+    <h3>Fixed board wiring assumed by this file</h3>
+    <table>
+      <thead><tr><th>Signal</th><th>Pin</th><th>Where it is defined</th></tr></thead>
+      <tbody>
+        <tr><td>Indicator light</td><td>GPIO21</td><td>here, in this file</td></tr>
+        <tr><td>I2C data line</td><td>GPIO5</td><td>here; the pin number is also published by the bus module as <code>I2C_SDA_PIN</code></td></tr>
+        <tr><td>I2C clock line</td><td>GPIO6</td><td>here; also published as <code>I2C_SCL_PIN</code></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      The pin numbers are written in this file and nowhere else in the program, which is the point: moving a wire
+      on the board is a change to this file alone. The bus module publishes the same two numbers as constants only
+      so that the message printed at start-up cannot disagree with the pins actually used.
+    </div>
+
+    <h3>What this file hands to each task</h3>
+    <table>
+      <thead><tr><th>Task</th><th>Receives</th><th>What it then does</th></tr></thead>
+      <tbody>
+        <tr><td><code>blink_task</code></td><td>the configured output pin</td><td>toggles it twice a second, for as long as the executor is running</td></tr>
+        <tr><td><code>sps30_task::measure_task</code></td><td>a reference to the locked I2C bus</td><td>starts the particulate sensor and reads it every five seconds</td></tr>
+        <tr><td><code>scd41_task::measure_task</code></td><td>a reference to the same locked I2C bus</td><td>reads the carbon dioxide sensor every ten seconds</td></tr>
+        <tr><td><code>web_server_task::wifi_connection_task</code></td><td>the Wi-Fi controller</td><td>joins the configured network and rejoins it if the connection drops</td></tr>
+        <tr><td><code>web_server_task::net_task</code></td><td>a reference to the network stack</td><td>runs the stack itself: moves packets, obtains an address, keeps connections alive</td></tr>
+        <tr><td><code>web_server_task::web_server_task</code></td><td>a reference to the same network stack</td><td>accepts connections on the HTTP port and answers them</td></tr>
+      </tbody>
+    </table>
+
+    <h3>What appears on the serial port</h3>
+    <p>
+      This file prints three things: a banner, the result of the bus scan, and one line about the measurement
+      history. Everything printed after that comes from the tasks.
+    </p>
+<pre class="block">XIAO ESP32-S3 Embassy firmware started; blinking GPIO21
+Scanning I2C0 at 100 kHz (SDA GPIO5, SCL GPIO6)...
+  [progress output from the scan]
+I2C device found at 0x62
+I2C device found at 0x69
+History: 8640 SCD41 and 17280 SPS30 readings (24 h) in NNN KiB of PSRAM, NNN KiB free</pre>
+    <p>
+      The two counts are not written anywhere as numbers; they are worked out at compile time from the retention
+      period and the two measurement intervals: 24 hours divided by 10 seconds is 8640 readings for the carbon
+      dioxide sensor, and 24 hours divided by 5 seconds is 17280 for the particulate sensor. The two sizes in KiB
+      are measured at run time as the difference in free external memory before and after the reservation, and are
+      shown here as <code>NNN</code> rather than invented.
+    </p>
+    <p>
+      If a sensor is not connected, or is not powered, its address simply does not appear in the scan. The
+      corresponding task is started anyway and reports its own failures; the scan is a diagnostic, not a gate.
+    </p>
+  </div>
+
+  <!-- ================= FLOW ================= -->
+  <div class="card" id="flow">
+    <h2>Start-up diagrams</h2>
+
+    <h3>The sequence of start-up steps</h3>
+    <p>Read top to bottom. The steps on the left are ordered by necessity; the notes on the right say why.</p>
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart TD
+  A["Chip reset: boot loader hands control to this function"] --> B["Claim every peripheral (one value each)"]
+  B --> C["Map the 8 MB external memory"]
+  C --> D["Raise processor and peripheral clocks to maximum"]
+  D --> E["Give the executor its timer"]
+  E --> F["Configure GPIO21 as an output"]
+  F --> G["Configure I2C0 on GPIO5 and GPIO6 at 100 kHz"]
+  G --> H["Print banner, scan the bus, print the addresses found"]
+  H --> I["Reserve 24 hours of readings in external memory"]
+  I --> J["Put the bus behind a lock"]
+  J --> K["Start: blink, particulate sensor, carbon dioxide sensor"]
+  K --> L["Set up the Wi-Fi driver: own timer, entropy, radio clock"]
+  L --> M["Create the station interface: packet side and control side"]
+  M --> N["Create the network stack with address assignment by DHCP"]
+  N --> O["Start: network connection, stack runner, web server"]
+  O --> P["Function ends; the executor keeps the six tasks running"]
+
+  C -.->|"retunes memory timing and the data cache"| D
+  D -.->|"every peripheral is built against this"| E
+  E -.->|"nothing can wait before this"| F
+  I -.->|"readings taken earlier would be discarded"| K
+      </pre>
+      <figcaption>Start-up order, with the four constraints that fix it.</figcaption>
+    </figure>
+
+    <h3>Where each peripheral ends up</h3>
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart LR
+  P["Peripherals::take()"]
+
+  P --> PS["PSRAM"] --> HIST["Measurement history<br/>(24 h of readings)"]
+  P --> SYS["SYSTEM"] --> CLK["Clock configuration"]
+  P --> T0["TIMG0 timer 0"] --> EX["Executor time source"]
+  P --> IO["GPIO + IO_MUX"]
+  IO --> LED["GPIO21 output"] --> BT["blink_task"]
+  IO --> PINS["GPIO5 / GPIO6"]
+  P --> I2C["I2C0"]
+  I2C --> BUS["Locked I2C bus"]
+  PINS --> BUS
+  BUS --> ST["sps30 task"]
+  BUS --> CT["scd41 task"]
+  P --> T1["TIMG1 timer 0"] --> WD["Wi-Fi driver"]
+  P --> RNG["RNG"] --> WD
+  P --> RC["RADIO_CLK"] --> WD
+  P --> WIFI["WIFI"] --> IF["Station interface"]
+  IF --> CTRL["Controller"] --> WCT["wifi_connection_task"]
+  IF --> DEV["Packet device"] --> STACK["Network stack"]
+  RNG --> STACK
+  STACK --> NT["net_task"]
+  STACK --> WS["web_server_task"]
+  HIST --> CT
+  HIST --> ST
+  HIST --> WS
+      </pre>
+      <figcaption>Every peripheral claimed at the start, and the task that finally owns or shares it.</figcaption>
+    </figure>
+
+    <h3>What runs after this file has finished</h3>
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart TD
+  EXEC["Executor: runs whichever task is ready"]
+  EXEC --> B["blink_task<br/>toggles GPIO21 every 500 ms"]
+  EXEC --> S["sps30 task<br/>reads the particulate sensor every 5 s"]
+  EXEC --> C["scd41 task<br/>reads the carbon dioxide sensor every 10 s"]
+  EXEC --> W["wifi_connection_task<br/>joins the network, rejoins after a drop"]
+  EXEC --> N["net_task<br/>runs the network stack"]
+  EXEC --> H["web_server_task<br/>answers HTTP requests"]
+  S --> ST["Stored readings"]
+  C --> ST
+  ST --> H
+      </pre>
+      <figcaption>The six tasks the start-up function leaves behind. Nothing else runs.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= CRATE ATTRIBUTES ================= -->
+  <h2 class="section" id="s-attrs">Crate attributes <span class="range">lines 1–2</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="at">#![no_std]</span>
+<span class="at">#![no_main]</span></code></pre>
+      <div class="explain">
+        <span class="tag">Compilation</span>
+        <p>
+          <code class="inline">no_std</code> removes the part of the Rust standard library that assumes an
+          operating system: files, threads, sockets, and everything that needs a heap. What remains is the core
+          library — integers, slices, iterators, results — which needs nothing underneath it. This is a
+          requirement, not a preference: there is no operating system here to provide the rest.
+        </p>
+        <p>
+          <code class="inline">no_main</code> removes the usual program entry point. On a desktop, the C runtime
+          starts, prepares the arguments and the environment, and then calls <code>main</code>. Here the chip
+          jumps straight into the firmware, so the entry point has to be produced by the chip support code
+          instead; the attribute above the start-up function below does that.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IMPORTS ================= -->
+  <h2 class="section" id="s-imports">Imports <span class="range">lines 4–19</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_executor::<span class="ty">Spawner</span>;
+<span class="k">use</span> embassy_net::{<span class="ty">Config</span> <span class="k">as</span> <span class="ty">NetConfig</span>, <span class="ty">Stack</span>};
+<span class="k">use</span> embassy_sync::mutex::<span class="ty">Mutex</span>;
+<span class="k">use</span> esp_backtrace <span class="k">as</span> _;</code></pre>
+      <div class="explain">
+        <span class="tag alt">External code</span>
+        <p>
+          <code class="inline">Spawner</code> is the handle used to register a task with the executor.
+        </p>
+        <p>
+          <code class="inline">Stack</code> is the network stack: it holds the network address, the connection
+          table and the send and receive buffers, and it implements the protocols underneath HTTP.
+          <code class="inline">Config</code> says how the address is obtained; it is renamed to
+          <code class="inline">NetConfig</code> because the word is used for several unrelated things in this
+          program.
+        </p>
+        <p>
+          <code class="inline">Mutex</code> is the lock the I2C bus is placed behind.
+        </p>
+        <p>
+          The last line is unusual. Nothing from <code class="inline">esp_backtrace</code> is used by name; it is
+          imported purely so that it is linked into the program, because it supplies the handler that runs when
+          the firmware panics. Without it the program would not link, since a panic handler is mandatory. The
+          <code class="inline">as _</code> imports it without introducing a name.
+        </p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> esp_hal::{
+    clock::{<span class="ty">ClockControl</span>, <span class="ty">Clocks</span>},
+    delay::<span class="ty">Delay</span>,
+    gpio::{<span class="ty">AnyPin</span>, <span class="ty">Io</span>, <span class="ty">Level</span>, <span class="ty">Output</span>},
+    peripherals::<span class="ty">Peripherals</span>,
+    rng::<span class="ty">Rng</span>,
+    system::<span class="ty">SystemControl</span>,
+    timer::{timg::<span class="ty">TimerGroup</span>, <span class="ty">ErasedTimer</span>, <span class="ty">OneShotTimer</span>, <span class="ty">PeriodicTimer</span>},
+};</code></pre>
+      <div class="explain">
+        <span class="tag alt">Chip support</span>
+        <p>Everything that touches the chip's own hardware comes from one library:</p>
+        <ul>
+          <li><code class="inline">ClockControl</code> chooses the clock speeds; <code class="inline">Clocks</code>
+            is the resulting configuration that peripherals are built against.</li>
+          <li><code class="inline">Delay</code> is a busy-wait: it holds the processor for a given time without
+            involving the executor. The bus recovery routine needs this, because it has to produce pulses of a few
+            microseconds.</li>
+          <li><code class="inline">Io</code> unlocks the pins; <code class="inline">Output</code> is a pin
+            configured to drive a level; <code class="inline">Level</code> is that level;
+            <code class="inline">AnyPin</code> hides which pin it is, so that the blink task does not have to name
+            pin 21 in its own signature.</li>
+          <li><code class="inline">Peripherals</code> is the collection of every peripheral value.</li>
+          <li><code class="inline">Rng</code> is the hardware random number generator.</li>
+          <li><code class="inline">SystemControl</code> gives access to the clock and reset control block.</li>
+          <li><code class="inline">TimerGroup</code> is a pair of hardware timers.
+            <code class="inline">OneShotTimer</code> and <code class="inline">PeriodicTimer</code> are the two
+            ways a timer can be used: fire once at a given moment, or fire repeatedly.
+            <code class="inline">ErasedTimer</code> hides which timer it is, so that timers from different groups
+            have the same type and can be stored in one array.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> esp_println::println;
+<span class="k">use</span> esp_wifi::{initialize, wifi::<span class="ty">WifiStaDevice</span>, <span class="ty">EspWifiInitFor</span>};
+<span class="k">use</span> static_cell::<span class="ty">StaticCell</span>;</code></pre>
+      <div class="explain">
+        <span class="tag alt">External code</span>
+        <p>
+          <code class="inline">println</code> writes a line to the serial port. It has the same name and the same
+          syntax as the standard one, but it writes to the debug output of the chip rather than to a process's
+          standard output.
+        </p>
+        <p>
+          <code class="inline">initialize</code> starts the radio subsystem. <code class="inline">EspWifiInitFor</code>
+          selects which radio is wanted, since the same hardware also does Bluetooth.
+          <code class="inline">WifiStaDevice</code> selects <em>station</em> mode: the board joins an existing
+          network, rather than creating one of its own.
+        </p>
+        <p>
+          <code class="inline">StaticCell</code> is the mechanism used for everything that must outlive this
+          function. It is a storage slot reserved at compile time, empty at start-up, that can be filled exactly
+          once; filling it returns a reference valid for the rest of the program run.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODULES ================= -->
+  <h2 class="section" id="s-modules">Module declarations <span class="range">lines 21–23</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">mod</span> drivers;
+<span class="k">mod</span> tasks;
+<span class="k">mod</span> utils;</code></pre>
+      <div class="explain">
+        <span class="tag">Structure</span>
+        <p>
+          These three lines are what makes the rest of the program part of this program. A source file is not
+          compiled because it exists in the directory; it is compiled because a module declaration names it.
+          Removing one of these lines would leave the corresponding directory on disk and out of the build.
+        </p>
+        <table>
+          <thead><tr><th>Module</th><th>Contains</th></tr></thead>
+          <tbody>
+            <tr><td><code>drivers</code></td><td>the I2C bus, and one file per sensor: the exact bytes each sensor expects and returns</td></tr>
+            <tr><td><code>tasks</code></td><td>the six things that run continuously, and the web page they serve</td></tr>
+            <tr><td><code>utils</code></td><td>the external memory allocator, the ring buffer, and the storage shared between the sensor tasks and the web server</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= INTERNAL IMPORTS ================= -->
+  <h2 class="section" id="s-uses">Internal imports <span class="range">lines 25–29</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> drivers::i2c_bus::{print_scan_result, <span class="ty">I2cBus</span>, <span class="ty">SharedI2cBus</span>, <span class="ty">I2C_SCL_PIN</span>, <span class="ty">I2C_SDA_PIN</span>};
+<span class="k">use</span> tasks::web_server_task::{<span class="ty">WifiStack</span>, <span class="ty">WifiStackResources</span>};
+<span class="k">use</span> tasks::{blink_task, scd41_task, sps30_task, web_server_task};
+<span class="k">use</span> utils::psram::<span class="ty">Psram</span>;
+<span class="k">use</span> utils::shared_state;</code></pre>
+      <div class="explain">
+        <span class="tag">Structure</span>
+        <p>
+          <code class="inline">I2cBus</code> is the bus itself; <code class="inline">SharedI2cBus</code> is the
+          same bus wrapped in a lock, which is the form the sensor tasks accept.
+          <code class="inline">print_scan_result</code> prints the addresses that answered, and the two pin
+          constants are used only in the message printed before the scan.
+        </p>
+        <p>
+          <code class="inline">WifiStack</code> and <code class="inline">WifiStackResources</code> are names
+          defined by the web server file for the network stack and for the memory it needs. They are defined
+          there, next to the code that uses them, rather than here, so that changing the number of simultaneous
+          connections is a change in one place.
+        </p>
+        <p>
+          The task modules are imported whole rather than by function, so that every start below reads
+          <code class="inline">module::function</code> and says plainly which file the task lives in.
+        </p>
+        <p>
+          <code class="inline">Psram</code> is the external memory allocator; <code class="inline">shared_state</code>
+          is the storage the readings are published into, imported as a module because only its functions and
+          constants are used.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STATICS ================= -->
+  <h2 class="section" id="s-statics">Permanent storage slots <span class="range">lines 31–40</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Embassy needs one hardware timer to drive `embassy_time`.</span>
+<span class="k">static</span> <span class="ty">TIMERS</span>: <span class="ty">StaticCell</span>&lt;[<span class="ty">OneShotTimer</span>&lt;<span class="ty">ErasedTimer</span>&gt;; <span class="nu">1</span>]&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();
+<span class="cm">/// The tasks need the clock configuration for the whole program run.</span>
+<span class="k">static</span> <span class="ty">CLOCKS</span>: <span class="ty">StaticCell</span>&lt;<span class="ty">Clocks</span>&lt;<span class="st">'static</span>&gt;&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();
+<span class="cm">/// The I2C bus shared by the sensor tasks.</span>
+<span class="k">static</span> <span class="ty">BUS</span>: <span class="ty">StaticCell</span>&lt;<span class="ty">SharedI2cBus</span>&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();
+<span class="cm">/// Socket and buffer bookkeeping owned by the network stack.</span>
+<span class="k">static</span> <span class="ty">NET_RESOURCES</span>: <span class="ty">StaticCell</span>&lt;<span class="ty">WifiStackResources</span>&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();
+<span class="cm">/// The network stack itself, shared by the runner and the web server.</span>
+<span class="k">static</span> <span class="ty">NET_STACK</span>: <span class="ty">StaticCell</span>&lt;<span class="ty">WifiStack</span>&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">Storage</span>
+        <p>
+          Five things created inside the start-up function have to survive after it ends, because tasks keep
+          using them. A value created on the stack of a function disappears when the function returns, and there
+          is no heap to move it to, so each of them is given a slot here.
+        </p>
+        <p>
+          A slot is exactly the right size for its contents, is reserved by the compiler in the program image, and
+          starts out empty. Filling it is allowed once; a second attempt stops the program rather than
+          overwriting a value that other parts of the program are already using. In return, filling it produces a
+          reference that is guaranteed to remain valid for as long as the program runs — which is what makes it
+          safe to hand that reference to a task that also runs forever.
+        </p>
+        <table>
+          <thead><tr><th>Slot</th><th>Why it must outlive the function</th></tr></thead>
+          <tbody>
+            <tr><td><code>TIMERS</code></td><td>the executor keeps using the timer to decide when a waiting task becomes ready</td></tr>
+            <tr><td><code>CLOCKS</code></td><td>peripherals hold a reference to the clock configuration for as long as they exist</td></tr>
+            <tr><td><code>BUS</code></td><td>both sensor tasks hold a reference to it and lock it on every reading</td></tr>
+            <tr><td><code>NET_RESOURCES</code></td><td>the connection table and packet buffers are used on every packet</td></tr>
+            <tr><td><code>NET_STACK</code></td><td>two tasks hold a reference to it: the one that runs it, and the one that listens on it</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          The array around the timer has one element because the executor accepts a set of timers and this
+          firmware provides one. Erasing the timer's identity is what allows an array to be formed at all: the two
+          timers of a group have different types, and an array requires a single type.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ENTRY ================= -->
+  <h2 class="section" id="s-entry">Entry point <span class="range">lines 42–44</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="at">#[esp_hal_embassy::main]</span>
+<span class="k">async fn</span> <span class="fn">main</span>(spawner: <span class="ty">Spawner</span>) {
+    <span class="k">let</span> peripherals = <span class="ty">Peripherals</span>::<span class="fn">take</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">Entry point</span>
+        <p>
+          The attribute generates the real entry point around this function: the symbol the boot loader jumps to,
+          the code that prepares the processor and the memory before any Rust code runs, the creation of the
+          executor, and the registration of this function as the executor's first task. The
+          <code class="inline">spawner</code> parameter is supplied by that generated code.
+        </p>
+        <p>
+          The function is asynchronous because it waits at one point — while the measurement history is being
+          reserved — and because it is itself a task.
+        </p>
+        <p>
+          <code class="inline">Peripherals::take()</code> produces the collection of peripheral values. The name
+          is exact: it takes them, once. A second call stops the program, and that is the mechanism that prevents
+          two parts of a program from each believing they own the same peripheral. From here on, every peripheral
+          in the program is a field moved out of this one value.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PSRAM AND CLOCKS ================= -->
+  <h2 class="section" id="s-psram">External memory and clocks <span class="range">lines 46–52</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// Map the external PSRAM before anything else: the routine retunes the
+    // memory-SPI timing and reconfigures the data cache, so it has to run
+    // before the clocks are raised and before any other peripheral is set up.</span>
+    <span class="k">let mut</span> psram = <span class="ty">Psram</span>::<span class="fn">init</span>(peripherals.PSRAM);</code></pre>
+      <div class="explain">
+        <span class="tag ext">Hardware</span>
+        <p>
+          The module on this board carries 8 MB of memory outside the chip, reached over a fast serial connection.
+          It is not usable until it is mapped: the chip has to be told the connection's timing and which range of
+          addresses corresponds to it, and the data cache has to be reconfigured so that reads and writes to that
+          range go through the cache correctly.
+        </p>
+        <p>
+          That reconfiguration is why this is the very first step. It changes the timing of a memory interface and
+          the behaviour of the cache, which are exactly the things every later step relies on. Doing it first
+          means no other peripheral has been configured against settings that are about to change.
+        </p>
+        <p>
+          What comes back is not memory but an allocator over it: a marker that starts at the bottom of the
+          mapped range and only moves upwards. It hands out permanent blocks and never takes any back, which is
+          all this firmware needs, because the only thing it allocates is the measurement history and that lives
+          for the whole program run.
+        </p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> system = <span class="ty">SystemControl</span>::<span class="fn">new</span>(peripherals.SYSTEM);
+    <span class="k">let</span> clocks = <span class="ty">CLOCKS</span>.<span class="fn">init</span>(<span class="ty">ClockControl</span>::<span class="fn">max</span>(system.clock_control).<span class="fn">freeze</span>());</code></pre>
+      <div class="explain">
+        <span class="tag ext">Hardware</span>
+        <p>
+          After reset the chip runs slowly, on a conservative clock. The first line takes control of the block
+          that distributes clocks to the processor and to the peripherals; the second raises them to the highest
+          setting this chip supports and then freezes the configuration.
+        </p>
+        <p>
+          Freezing is what makes the configuration trustworthy. Once frozen it cannot be changed, so every
+          peripheral created afterwards can be handed a reference to it and rely on the numbers in it staying
+          true. A bus that computes its bit rate from a clock speed that later changed would silently run at the
+          wrong speed.
+        </p>
+        <p>
+          The result is placed in its permanent slot immediately, because peripherals hold a reference to it and
+          those peripherals are handed to tasks.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TIMER ================= -->
+  <h2 class="section" id="s-timer">Time source <span class="range">lines 54–58</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// Drive `embassy_time` from TIMG0's first timer.</span>
+    <span class="k">let</span> timg0 = <span class="ty">TimerGroup</span>::<span class="fn">new</span>(peripherals.TIMG0, clocks);
+    <span class="k">let</span> timer0: <span class="ty">ErasedTimer</span> = timg0.timer0.<span class="fn">into</span>();
+    <span class="k">let</span> timers = <span class="ty">TIMERS</span>.<span class="fn">init</span>([<span class="ty">OneShotTimer</span>::<span class="fn">new</span>(timer0)]);
+    esp_hal_embassy::<span class="fn">init</span>(clocks, timers);</code></pre>
+      <div class="explain">
+        <span class="tag">Time</span>
+        <p>
+          Every wait in this firmware — a blink interval, a sensor's measurement period, the five seconds a
+          conversion takes, a network timeout — is a request to be woken at a particular moment. Something has to
+          measure those moments, and that something is one hardware timer.
+        </p>
+        <p>The four lines are four separate steps:</p>
+        <ul>
+          <li>Take the first of the chip's two timer groups, built against the frozen clock configuration so that
+            its counting rate is known.</li>
+          <li>Take the first timer of that group and erase its identity, so that it has the same type as any other
+            timer and can be stored in an array.</li>
+          <li>Wrap it as a one-shot timer — one that is armed for a single future moment and re-armed each
+            time — and put the resulting array into its permanent slot.</li>
+          <li>Hand it to the chip support layer, which from now on answers the question "what time is it" and
+            "wake this task at that time".</li>
+        </ul>
+        <p>
+          One timer is enough because the executor only ever needs to know when the <em>earliest</em> waiting task
+          should wake. It arms the timer for that moment, and when the timer fires it re-arms it for the next one.
+        </p>
+        <div class="note">
+          Nothing in the firmware may wait before this line. The second timer group is deliberately left alone
+          here; the Wi-Fi driver claims it later for its own periodic tick.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= LED ================= -->
+  <h2 class="section" id="s-led">LED pin <span class="range">lines 60–62</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> io = <span class="ty">Io</span>::<span class="fn">new</span>(peripherals.GPIO, peripherals.IO_MUX);
+    <span class="cm">// Board-specific wiring belongs here; the blink task only needs an output.</span>
+    <span class="k">let</span> led = <span class="ty">Output</span>::<span class="fn">new</span>(<span class="ty">AnyPin</span>::<span class="fn">new</span>(io.pins.gpio21), <span class="ty">Level</span>::<span class="ty">Low</span>);</code></pre>
+      <div class="explain">
+        <span class="tag ext">Hardware</span>
+        <p>
+          Two peripherals are needed to use a pin. One is the pin block itself, which drives and reads levels; the
+          other is the switch matrix that decides which internal signal a physical pin is connected to. Taking both
+          together produces a value from which individual pins can be taken.
+        </p>
+        <p>
+          Pin 21 is then configured as an output starting at the low level, and its identity is erased. The
+          erasure is the interesting part: the blink task's signature says it accepts an output pin, not that it
+          accepts pin 21. The board's wiring is stated here and only here, so a different board or a moved wire
+          changes one line in one file and nothing in the task.
+        </p>
+        <div class="note">
+          Whether "low" means the light is on or off depends on how the light is wired on the board. Either way
+          the light alternates, which is all it is there for: a steady blink is visible evidence that the executor
+          is still running tasks.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= I2C ================= -->
+  <h2 class="section" id="s-i2c">I2C bus <span class="range">lines 64–70</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> bus = <span class="ty">I2cBus</span>::<span class="fn">new</span>(
+        peripherals.I2C0,
+        io.pins.gpio5,
+        io.pins.gpio6,
+        clocks,
+        <span class="ty">Delay</span>::<span class="fn">new</span>(clocks),
+    );</code></pre>
+      <div class="explain">
+        <span class="tag ext">Hardware</span>
+        <p>
+          Both sensors are on one two-wire bus: a data line on GPIO5 and a clock line on GPIO6. The bus controller
+          and the two pins are handed over together, which is what makes them a bus rather than three separate
+          pieces of hardware.
+        </p>
+        <p>
+          The clock configuration is needed because the bus speed of 100 kHz is produced by dividing a peripheral
+          clock; without knowing that clock's rate the divisor cannot be computed.
+        </p>
+        <p>
+          The busy-wait is needed for a different reason. When a sensor stops responding in the middle of a
+          transfer, the bus can be left with the data line held low, and no further transfer is possible until it
+          is freed. Freeing it means driving the two pins by hand for a few microseconds at a time — too short to
+          go through the executor, which measures waits in whole milliseconds and involves a scheduling round
+          trip. The bus module therefore keeps a busy-wait for that purpose only.
+        </p>
+        <div class="note">
+          The bus is not yet shared at this point. It is an ordinary local value, which is why the scan on the
+          next lines can use it directly without taking any lock.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SCAN ================= -->
+  <h2 class="section" id="s-scan">Banner and bus scan <span class="range">lines 72–79</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="mc">println!</span>(<span class="st">"XIAO ESP32-S3 Embassy firmware started; blinking GPIO21"</span>);
+    <span class="mc">println!</span>(
+        <span class="st">"Scanning I2C0 at 100 kHz (SDA GPIO{}, SCL GPIO{})..."</span>,
+        <span class="ty">I2C_SDA_PIN</span>, <span class="ty">I2C_SCL_PIN</span>
+    );</code></pre>
+      <div class="explain">
+        <span class="tag">Diagnostics</span>
+        <p>
+          The first line printed by the firmware is the first evidence that the image was flashed correctly and
+          that the chip is running it. Anything earlier than this — a failure to map the memory, a failure to
+          configure the clocks — produces silence, and silence at this point points at those steps.
+        </p>
+        <p>
+          The pin numbers in the second message are the constants published by the bus module rather than the
+          numbers written a few lines above. The two are the same numbers today; using the constants means the
+          message cannot start describing wiring that is no longer in use.
+        </p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> devices = bus.<span class="fn">scan</span>();
+    <span class="fn">print_scan_result</span>(&amp;devices);</code></pre>
+      <div class="explain">
+        <span class="tag">Diagnostics</span>
+        <p>
+          The scan addresses every legal address on the bus in turn and records which ones answer. Two are
+          expected: <code class="inline">0x62</code> for the carbon dioxide sensor and
+          <code class="inline">0x69</code> for the particulate sensor. Anything else on the list is another device
+          on the same wires; anything missing is a wiring, power or address problem.
+        </p>
+        <p>
+          The result is only printed. Nothing in the firmware acts on it: the sensor tasks are started regardless,
+          and each of them reports its own failures if its sensor is absent. This is deliberate — a sensor that is
+          plugged in after start-up will begin working on its own, without a restart.
+        </p>
+        <div class="note warn">
+          A scan is unusually demanding on a bus, because most addresses do not answer and each silence has to be
+          recovered from before the next address can be tried. The details, and the fault in the chip support code
+          that makes the recovery necessary, are described in the documentation of
+          <code class="inline">src/drivers/i2c_bus.rs</code>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= HISTORY ================= -->
+  <h2 class="section" id="s-history">History reservation <span class="range">lines 81–93</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// Reserve the measurement histories before any reading can be published;
+    // readings taken before this would be dropped.</span>
+    <span class="k">match</span> shared_state::<span class="fn">init</span>(&amp;<span class="k">mut</span> psram).<span class="k">await</span> {
+        <span class="ty">Some</span>(bytes) =&gt; <span class="mc">println!</span>(
+            <span class="st">"History: {} SCD41 and {} SPS30 readings ({} h) in {} KiB of PSRAM, {} KiB free"</span>,
+            shared_state::<span class="ty">SCD41_CAPACITY</span>,
+            shared_state::<span class="ty">SPS30_CAPACITY</span>,
+            shared_state::<span class="ty">HISTORY_WINDOW_MS</span> / <span class="nu">3_600_000</span>,
+            bytes / <span class="nu">1024</span>,
+            psram.<span class="fn">free_bytes</span>() / <span class="nu">1024</span>
+        ),
+        <span class="ty">None</span> =&gt; <span class="mc">println!</span>(<span class="st">"History: PSRAM too small, readings will not be retained"</span>),
+    }</code></pre>
+      <div class="explain">
+        <span class="tag">Storage</span>
+        <p>
+          This reserves two ring buffers in the external memory, one per sensor, each large enough for a full day
+          of readings. A ring buffer holds a fixed number of entries and, once full, overwrites the oldest; that
+          is what keeps memory use constant no matter how long the board runs.
+        </p>
+        <p>
+          The two capacities are not chosen by hand. They are computed at compile time from the retention period
+          and the interval each task uses: a day divided by ten seconds is 8640 carbon dioxide readings, a day
+          divided by five seconds is 17280 particulate readings. Changing an interval in a task changes the
+          capacity automatically, and the two can never fall out of step.
+        </p>
+        <p>
+          This is the only point in the whole function where it waits, because the shared storage is itself behind
+          a lock and taking that lock is a waiting operation. Nothing else holds it at this moment, so the wait is
+          not a real one.
+        </p>
+        <p>
+          The reservation reports either the number of bytes taken or nothing at all, and both outcomes are
+          handled. The successful message repeats the capacities, the period in hours, the size taken and the size
+          still free, so a single line of output confirms both that the memory is there and how much of it the
+          firmware is using.
+        </p>
+        <div class="note warn">
+          If the memory is absent or too small, the firmware does not stop. It prints one line and carries on with
+          no history at all: readings are still measured and still shown as current values, but nothing is
+          retained, and the web server reports an empty history. This is a deliberate choice — losing the graphs
+          is much less serious than losing the sensor entirely.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SHARING ================= -->
+  <h2 class="section" id="s-share">Sharing the bus <span class="range">lines 95–97</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// Hand the bus to the sensor tasks; each one locks it for a whole
+    // transaction, so their transfers can never interleave.</span>
+    <span class="k">let</span> bus: &amp;<span class="st">'static</span> <span class="ty">SharedI2cBus</span> = <span class="ty">BUS</span>.<span class="fn">init</span>(<span class="ty">Mutex</span>::<span class="fn">new</span>(bus));</code></pre>
+      <div class="explain">
+        <span class="tag">Sharing</span>
+        <p>
+          Up to this line the bus was an ordinary local value used by one piece of code. This line changes that in
+          two ways at once, and the order is significant.
+        </p>
+        <p>
+          First it is wrapped in a lock. A lock turns a value that only one holder may use into one that many may
+          use, provided they take turns: a task asks for the contents, waits if another task has them, and gives
+          them back when it is finished. Second, the locked bus is placed in its permanent slot, producing a
+          reference valid for the rest of the program run. Both sensor tasks are given a copy of that reference,
+          which is possible precisely because the lock is what enforces the taking of turns.
+        </p>
+        <p>
+          What the lock protects against is subtle. Every exchange with a sensor is several separate operations —
+          send a command, wait, read the answer — and a reading is only correct if the answer read belongs to the
+          command sent. If the other task were allowed to speak to its own sensor in between, both sensors would
+          receive commands that were not meant for them. Holding the lock for the whole exchange, rather than for
+          each individual transfer, is what prevents this.
+        </p>
+        <div class="note">
+          The lock is of the kind that briefly disables interrupts while it changes hands, so it works no matter
+          what the executor is doing at that moment. The cost is a very short interrupt-free window, which is
+          acceptable because taking the lock is a short operation, unlike holding it.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SPAWN ================= -->
+  <h2 class="section" id="s-spawn">Starting the sensor tasks <span class="range">lines 99–101</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    spawner.<span class="fn">spawn</span>(blink_task::<span class="fn">blink_task</span>(led)).<span class="fn">ok</span>();
+    spawner.<span class="fn">spawn</span>(sps30_task::<span class="fn">measure_task</span>(bus)).<span class="fn">ok</span>();
+    spawner.<span class="fn">spawn</span>(scd41_task::<span class="fn">measure_task</span>(bus)).<span class="fn">ok</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">Tasks</span>
+        <p>
+          Each of these registers a task with the executor. Note what is <em>not</em> happening: none of these
+          functions runs here. Calling one produces a description of work to be done; the executor is what
+          performs it, once this function reaches a waiting point or ends.
+        </p>
+        <p>
+          Each task is given exactly what it needs and nothing more. The blink task receives the output pin and
+          moves it — after this line no other part of the program can touch pin 21. The two sensor tasks receive
+          the same reference to the same locked bus, which is how two tasks can drive one piece of hardware.
+        </p>
+        <p>
+          The particulate sensor is started before the carbon dioxide sensor for a practical reason: it needs
+          about thirty seconds of running before its readings settle, so the earlier it begins the better.
+        </p>
+        <div class="note warn">
+          Registering a task can fail, and the result is discarded here rather than checked. The only way it can
+          fail is an attempt to start the same task a second time while the first is still running, and each of
+          these is started exactly once, so the case cannot arise. It is worth knowing that if it ever did, the
+          task would simply not start and nothing would be printed.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= WIFI INIT ================= -->
+  <h2 class="section" id="s-wifiinit">Wi-Fi driver <span class="range">lines 103–116</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// The Wi-Fi driver needs its own timer, plus entropy for the radio and
+    // for the TCP initial sequence numbers.</span>
+    <span class="k">let</span> timg1 = <span class="ty">TimerGroup</span>::<span class="fn">new</span>(peripherals.TIMG1, clocks);
+    <span class="k">let mut</span> rng = <span class="ty">Rng</span>::<span class="fn">new</span>(peripherals.RNG);
+    <span class="k">let</span> stack_seed = ((rng.<span class="fn">random</span>() <span class="k">as</span> <span class="ty">u64</span>) &lt;&lt; <span class="nu">32</span>) | rng.<span class="fn">random</span>() <span class="k">as</span> <span class="ty">u64</span>;</code></pre>
+      <div class="explain">
+        <span class="tag ext">Radio</span>
+        <p>
+          The Wi-Fi driver cannot share the executor's timer. It maintains its own schedule of events measured in
+          much smaller units — when to listen, when to transmit, when to acknowledge — and those deadlines are met
+          by interrupts rather than by the executor. It is therefore given the second timer group, untouched until
+          now for exactly this reason.
+        </p>
+        <p>
+          The random generator produces two 32-bit values, which are joined into one 64-bit number: the first is
+          shifted into the upper half, the second occupies the lower half.
+        </p>
+        <p>
+          That number becomes the network stack's starting point for connection sequence numbers. Every TCP
+          connection begins by choosing a number that both ends then count from. If a device chose the same
+          starting number after every restart, a stray packet from an earlier connection could be mistaken for
+          part of a new one, and an outsider who could guess the number could inject data into a connection
+          without seeing it. Starting from an unpredictable value removes both problems.
+        </p>
+        <div class="note warn">
+          The manufacturer's documentation states that this generator produces genuinely unpredictable values only
+          while the radio is active. Both values here are read before the radio has been started, so the seed is
+          less unpredictable than it looks. Reading it after the radio came up would be stronger.
+        </div>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> wifi_init = <span class="fn">initialize</span>(
+        <span class="ty">EspWifiInitFor</span>::<span class="ty">Wifi</span>,
+        <span class="ty">PeriodicTimer</span>::<span class="fn">new</span>(<span class="ty">ErasedTimer</span>::<span class="fn">from</span>(timg1.timer0)),
+        rng,
+        peripherals.RADIO_CLK,
+        clocks,
+    )
+    .<span class="fn">expect</span>(<span class="st">"Wi-Fi initialisation failed"</span>);</code></pre>
+      <div class="explain">
+        <span class="tag ext">Radio</span>
+        <p>
+          This starts the radio subsystem. The five arguments are the five things it cannot work without: which
+          radio is wanted, since the same hardware also does Bluetooth; a timer set up to fire repeatedly, which
+          drives its internal schedule; a source of randomness, used by the protocol itself in places such as the
+          delay before retransmitting; the clock supply of the radio, which is a separate peripheral from the
+          ordinary peripheral clocks; and the frozen clock configuration.
+        </p>
+        <p>
+          Note that the timer is set up as periodic here, while the executor's is one-shot. The difference is real:
+          the executor arms its timer for one specific future moment at a time, whereas the radio subsystem wants
+          a steady tick.
+        </p>
+        <div class="note warn">
+          Failure here stops the firmware. This is the right response, because a failure at this point means the
+          radio hardware is not present or not working, and no amount of retrying will change that. The message is
+          printed together with a backtrace by the handler that was linked in at the top of the file.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STATION ================= -->
+  <h2 class="section" id="s-station">Station interface <span class="range">lines 118–120</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="k">let</span> (wifi_device, wifi_controller) =
+        esp_wifi::wifi::<span class="fn">new_with_mode</span>(&amp;wifi_init, peripherals.WIFI, <span class="ty">WifiStaDevice</span>)
+            .<span class="fn">expect</span>(<span class="st">"could not create the Wi-Fi station interface"</span>);</code></pre>
+      <div class="explain">
+        <span class="tag ext">Radio</span>
+        <p>
+          This creates the network interface itself, in station mode: the board joins a network that already
+          exists, rather than creating one for others to join.
+        </p>
+        <p>
+          The result is deliberately split into two independent halves, and the split is what allows the two
+          concerns to be handled by two separate tasks:
+        </p>
+        <table>
+          <thead><tr><th>Half</th><th>Concerned with</th><th>Ends up in</th></tr></thead>
+          <tbody>
+            <tr><td>the device</td><td>moving packets in and out once a network has been joined</td><td>the network stack</td></tr>
+            <tr><td>the controller</td><td>scanning, joining, leaving, and reporting that the connection dropped</td><td>the connection task</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Because they are separate values, the task that reconnects after a dropped connection and the task that
+          moves packets do not have to coordinate: neither can accidentally do the other's job.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STACK ================= -->
+  <h2 class="section" id="s-stack">Network stack <span class="range">lines 122–129</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// The address is obtained from the network's DHCP server; the assigned
+    // address is printed once the lease arrives.</span>
+    <span class="k">let</span> stack: &amp;<span class="st">'static</span> <span class="ty">WifiStack</span> = <span class="ty">NET_STACK</span>.<span class="fn">init</span>(<span class="ty">Stack</span>::<span class="fn">new</span>(
+        wifi_device,
+        <span class="ty">NetConfig</span>::<span class="fn">dhcpv4</span>(<span class="ty">Default</span>::<span class="fn">default</span>()),
+        <span class="ty">NET_RESOURCES</span>.<span class="fn">init</span>(<span class="ty">WifiStackResources</span>::<span class="fn">new</span>()),
+        stack_seed,
+    ));</code></pre>
+      <div class="explain">
+        <span class="tag alt">Network</span>
+        <p>
+          The stack is the layer between raw packets and connections. It assembles and takes apart the protocol
+          headers, keeps track of open connections, retransmits what was not acknowledged, and answers the
+          low-level requests other machines on the network make. Four things go into it:
+        </p>
+        <ul>
+          <li><strong>The device</strong> — the packet-moving half created just above.</li>
+          <li><strong>The address configuration</strong> — set to obtain an address automatically from the
+            network's server, rather than using a fixed one written into the firmware. This is what allows the
+            same image to be flashed onto any board and used on any network. The cost is that the address is not
+            known in advance, which is why it is printed once it arrives.</li>
+          <li><strong>The resources</strong> — the connection table and the send and receive buffers. The number
+            of simultaneous connections is fixed at compile time, which is what makes the memory use of the
+            network predictable; the value is defined in the web server file, next to the code that uses it.</li>
+          <li><strong>The seed</strong> — the unpredictable starting point for connection sequence numbers.</li>
+        </ul>
+        <p>
+          The resources are placed in their own permanent slot inside the call that places the stack in its slot,
+          so both exist for the rest of the program run. The stack is then referred to by two different tasks
+          through the same reference.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NET SPAWN ================= -->
+  <h2 class="section" id="s-netspawn">Starting the network tasks <span class="range">lines 131–136</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    spawner
+        .<span class="fn">spawn</span>(web_server_task::<span class="fn">wifi_connection_task</span>(wifi_controller))
+        .<span class="fn">ok</span>();
+    spawner.<span class="fn">spawn</span>(web_server_task::<span class="fn">net_task</span>(stack)).<span class="fn">ok</span>();
+    spawner.<span class="fn">spawn</span>(web_server_task::<span class="fn">web_server_task</span>(stack)).<span class="fn">ok</span>();
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Tasks</span>
+        <p>
+          The last three tasks are started, and the function ends. Serving a web page needs all three, and they are
+          separate because they work at three different levels and fail in three different ways.
+        </p>
+        <table>
+          <thead><tr><th>Task</th><th>Level</th><th>Runs</th></tr></thead>
+          <tbody>
+            <tr><td><code>wifi_connection_task</code></td><td>joining the network</td><td>whenever the connection is lost, to join again</td></tr>
+            <tr><td><code>net_task</code></td><td>the stack itself</td><td>continuously: every packet in and out, address renewal, retransmission and connection timers</td></tr>
+            <tr><td><code>web_server_task</code></td><td>the application</td><td>whenever a browser connects</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The middle one is easy to overlook and is the one everything depends on. The stack does no work by
+          itself; it is a collection of state that has to be driven. If that task were not started, the board
+          would join the network and then answer nothing at all.
+        </p>
+        <p>
+          The closing brace is the end of the start-up work. The six tasks remain registered, and the executor
+          runs whichever of them is ready — for the rest of the time the board is powered.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FAILURE ================= -->
+  <div class="card" id="failure">
+    <h2>Failure behaviour</h2>
+    <p>
+      Failures during start-up fall into two groups: those the firmware carries on from, and those that stop it.
+      The distinction is whether continuing would produce something useful.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Situation</th><th>What happens</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A sensor does not answer the scan</td>
+          <td>Its address is missing from the list. Its task is started anyway and reports its own read failures.
+            A sensor connected later starts working without a restart.</td>
+          <td>The missing address in the scan output, followed by failure messages from that sensor's task</td>
+        </tr>
+        <tr>
+          <td>No device answers at all</td>
+          <td>One line is printed saying so. Both tasks are still started; both then fail continuously.</td>
+          <td><code>No I2C devices acknowledged on I2C0</code></td>
+        </tr>
+        <tr>
+          <td>External memory too small or absent</td>
+          <td>The firmware continues with no history: current readings still work, nothing is retained, and the
+            web server reports an empty history.</td>
+          <td><code>History: PSRAM too small, readings will not be retained</code></td>
+        </tr>
+        <tr>
+          <td>Radio subsystem fails to start</td>
+          <td>The firmware stops. Continuing would leave a board that measures but cannot be reached, which is
+            harder to diagnose than a clear stop.</td>
+          <td><code>Wi-Fi initialisation failed</code>, with a backtrace</td>
+        </tr>
+        <tr>
+          <td>The station interface cannot be created</td>
+          <td>The firmware stops, for the same reason.</td>
+          <td><code>could not create the Wi-Fi station interface</code>, with a backtrace</td>
+        </tr>
+        <tr>
+          <td>The network cannot be joined, or no address is issued</td>
+          <td>Nothing here fails. The connection task keeps trying, the light keeps blinking and the sensors keep
+            measuring. The board becomes reachable as soon as the network allows it.</td>
+          <td>Messages from the connection task; no address line</td>
+        </tr>
+        <tr>
+          <td>A task cannot be registered</td>
+          <td>The task does not start and nothing is printed. This can only happen if the same task is started
+            twice, which this file never does.</td>
+          <td>Silence — the task's own output is simply absent</td>
+        </tr>
+        <tr>
+          <td>Nothing at all is printed</td>
+          <td>Execution did not reach the banner. That points at the three steps before it: mapping the external
+            memory, configuring the clocks, or setting up the time source.</td>
+          <td>An empty serial port after reset</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= GLOSSARY ================= -->
+  <div class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <thead><tr><th>Term</th><th>Meaning in this file</th></tr></thead>
+      <tbody>
+        <tr><td>Peripheral</td><td>A block of hardware inside the chip: a bus controller, a timer, the pin block, the radio. Each is represented by exactly one value, and holding that value is what grants the right to use it.</td></tr>
+        <tr><td>Executor</td><td>The scheduler that runs the tasks. It has no threads and does not interrupt a task; it runs whichever task is ready and takes over when a task waits.</td></tr>
+        <tr><td>Task</td><td>A function registered with the executor that runs until it waits, then yields. Six are registered by this file.</td></tr>
+        <tr><td>Spawner</td><td>The handle used to register a task. Registering does not run the task.</td></tr>
+        <tr><td>Storage slot</td><td>Space reserved by the compiler in the program image, empty at start-up and filled once. Filling it yields a reference valid for the rest of the program run, which is what a task needs.</td></tr>
+        <tr><td>Lock</td><td>A wrapper that lets several tasks use one value by taking turns. A task asks for the contents, waits if they are taken, and returns them when finished.</td></tr>
+        <tr><td>PSRAM</td><td>8 MB of memory outside the chip, reached over a fast serial connection and mapped into the address space. Used for the measurement history because the internal memory is needed by the radio and the network stack.</td></tr>
+        <tr><td>Ring buffer</td><td>A fixed-size store that overwrites its oldest entry when full, so memory use stays constant however long the board runs.</td></tr>
+        <tr><td>Clock configuration</td><td>The set of frequencies the processor and the peripherals run at, frozen so that peripherals can rely on it.</td></tr>
+        <tr><td>Timer group</td><td>A pair of hardware counters. The first group's first timer measures time for the executor; the second group's first timer serves the radio.</td></tr>
+        <tr><td>One-shot / periodic timer</td><td>A timer armed for one future moment, versus one that fires repeatedly. The executor needs the first, the radio subsystem the second.</td></tr>
+        <tr><td>I2C</td><td>A two-wire bus, one data line and one clock line, shared by several devices that are distinguished by address.</td></tr>
+        <tr><td>Busy-wait</td><td>Holding the processor for a short time without involving the executor. Needed only for the microsecond-scale pulses that free a stuck bus.</td></tr>
+        <tr><td>Station mode</td><td>Joining an existing wireless network, as opposed to creating one for others to join.</td></tr>
+        <tr><td>Network stack</td><td>The layer that turns packets into connections: headers, connection tracking, retransmission and timers.</td></tr>
+        <tr><td>DHCP</td><td>The mechanism by which a device is issued a network address by the network it joins, rather than having one written into it.</td></tr>
+        <tr><td>Seed</td><td>An unpredictable starting number, used here so that connection sequence numbers do not repeat after a restart.</td></tr>
+        <tr><td>Panic handler</td><td>The code that runs when the firmware stops on an unrecoverable error. It prints the message and a backtrace, and is linked in by the unnamed import at the top of the file.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    src/main.rs — Home Environmental Sensor firmware documentation
+  </footer>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+
+</body>
+</html>

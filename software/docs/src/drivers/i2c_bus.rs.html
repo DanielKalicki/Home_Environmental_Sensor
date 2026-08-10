@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>i2c_bus.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --warn:#9a6700;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type */
+    --st:#032f62;  /* string */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:22px 40px 16px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:6px;
+  }
+  h1{margin:0 0 6px; font-size:25px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 12px; color:var(--muted); font-size:14.5px; max-width:1100px;}
+  nav.toc{display:flex; flex-wrap:wrap; gap:6px 16px;}
+  nav.toc a{font-size:12.5px; color:var(--accent); text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card h3{font-size:15px; margin:20px 0 6px;}
+  .card h4{font-size:14px; margin:16px 0 4px;}
+  .card p{font-size:15px;}
+  .card ul,.card ol{margin:10px 0 0; padding-left:20px; font-size:14.5px;}
+  .card li{margin-bottom:6px;}
+  code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  h2.section{
+    margin:46px 0 0; padding:10px 0 8px; font-size:20px;
+    border-bottom:2px solid var(--border);
+  }
+  h2.section .range{font-size:12.5px; color:var(--muted); font-weight:500; margin-left:10px;}
+
+  .lines{margin-top:8px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:18px 6px; border-radius:10px; border-top:1px solid #eaeef2;
+  }
+  .line:hover{background:rgba(9,105,218,0.04);}
+  .code{
+    flex:1 1 0; min-width:280px; margin:0; padding:10px 0;
+    white-space:pre; overflow-x:auto; font-size:13.2px; background:transparent;
+  }
+  .explain{flex:1.15 1 0; min-width:280px; padding-top:4px; font-size:14.5px;}
+  .explain p{margin:0 0 9px;}
+  .explain p:last-child{margin-bottom:0;}
+  .explain ul{margin:0 0 9px; padding-left:20px;}
+  .explain li{margin-bottom:4px;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#fff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:8px;
+  }
+  .tag.alt{background:var(--accent);}
+  .tag.ext{background:var(--warn);}
+
+  .note{
+    border-left:3px solid var(--accent); background:#f2f7fd;
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:10px 0 0; font-size:13.8px;
+  }
+  .note.warn{border-left-color:var(--warn); background:#fdf7ec;}
+
+  table{border-collapse:collapse; width:100%; margin-top:12px; font-size:13.6px;}
+  th,td{border:1px solid var(--border); padding:7px 10px; text-align:left; vertical-align:top;}
+  th{background:#eef1f4;}
+  td code{font-size:12.6px;}
+
+  pre.block{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; line-height:1.55;
+  }
+
+  .diagram{background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px; overflow-x:auto;}
+  .diagram figcaption{font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center;}
+
+  .k{color:var(--k);} .ty{color:var(--ty);} .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;} .mc{color:var(--mc);}
+  .at{color:var(--at);} .fn{color:var(--fn);} .nu{color:var(--ty);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+
+  @media (max-width:1000px){
+    .line{flex-direction:column; gap:8px;}
+    .code{flex:none; width:100%;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Firmware documentation</span>
+  <h1>src/drivers/i2c_bus.rs — the shared I2C bus, its recovery routine and its address scan</h1>
+  <p class="sub">Left column: the source code. Right column: a description of what that code does. The items this file receives from <code class="inline">main.rs</code>, the items it hands to the sensor tasks, and the exact electrical sequence it produces on the two wires are all described here, so no other document is required.</p>
+  <nav class="toc">
+    <a href="#overview">Overview</a>
+    <a href="#i2c-primer">How I2C works</a>
+    <a href="#problem">The problem this file solves</a>
+    <a href="#interfaces">External interfaces</a>
+    <a href="#flow">Structure and data flow</a>
+    <a href="#s-moduledoc">Module description</a>
+    <a href="#s-imports">Imports</a>
+    <a href="#s-pins">Pin numbers</a>
+    <a href="#s-constants">Constants</a>
+    <a href="#s-struct">I2cBus / SharedI2cBus</a>
+    <a href="#s-impl">new / acquire / scan</a>
+    <a href="#s-result">I2cScanResult</a>
+    <a href="#s-progress">print_scan_progress</a>
+    <a href="#s-recover">recover_i2c_bus</a>
+    <a href="#s-scan">scan_i2c</a>
+    <a href="#s-print">print_scan_result</a>
+    <a href="#failure">Failure behaviour</a>
+    <a href="#glossary">Glossary</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= OVERVIEW ================= -->
+  <div class="card" id="overview">
+    <h2>What this file does</h2>
+    <p>
+      Both sensors on this board — the SCD41 carbon dioxide sensor and the SPS30 particle sensor — are wired to
+      the same pair of signal wires, GPIO5 and GPIO6. Only one of them may be spoken to at a time. This file owns
+      those two wires and the hardware block that drives them, and provides three services:
+    </p>
+    <ol>
+      <li><strong>Exclusive access.</strong> It packages the hardware in a lock, so a sensor task can claim the
+          wires for the whole of one exchange and no second task can interrupt it half way through.</li>
+      <li><strong>Recovery.</strong> Before every exchange it forces the two wires back to their idle state by
+          driving them by hand, so an exchange that was abandoned earlier cannot leave the wires stuck.</li>
+      <li><strong>Discovery.</strong> At start-up it tries every valid device address in turn and prints which
+          ones answered, which confirms the wiring without a logic analyser.</li>
+    </ol>
+
+    <h3>What this file does not do</h3>
+    <ul>
+      <li>It does not know any sensor command. The byte sequences for the SCD41 and the SPS30 live in
+          <code class="inline">src/drivers/scd41.rs</code> and <code class="inline">src/drivers/sps30.rs</code>.</li>
+      <li>It does not decide when a measurement is taken. That timing lives in
+          <code class="inline">src/tasks/</code>.</li>
+      <li>It does not store readings. Storage lives in <code class="inline">src/utils/shared_state.rs</code>.</li>
+    </ul>
+
+    <h3>Constraints that shaped the implementation</h3>
+    <ul>
+      <li>The firmware has no heap, so every buffer in this file is a fixed-size array whose size is fixed when
+          the program is compiled.</li>
+      <li>The pin numbers are part of the type of the pins, so they cannot be chosen while the program runs.
+          They are constants at the top of the file.</li>
+      <li>The hardware block cannot reconfigure the pins while it owns them, so recovery is only possible in the
+          gaps between exchanges, when the block has been taken apart.</li>
+    </ul>
+  </div>
+
+  <!-- ================= I2C PRIMER ================= -->
+  <div class="card" id="i2c-primer">
+    <h2>How I2C works, in the detail needed to read this file</h2>
+    <p>
+      I2C is a two-wire connection shared by one controller (here, the microcontroller) and any number of
+      peripheral devices (here, the two sensors).
+    </p>
+    <table>
+      <tr><th>Wire</th><th>Name</th><th>Purpose</th><th>On this board</th></tr>
+      <tr><td>SDA</td><td>Serial data</td><td>Carries the bits, one at a time, in either direction.</td><td>GPIO5</td></tr>
+      <tr><td>SCL</td><td>Serial clock</td><td>Driven by the controller; each pulse transfers one bit.</td><td>GPIO6</td></tr>
+    </table>
+    <p>
+      Neither wire is ever driven high by a device. Every device can only pull a wire down to 0 V or let go of it;
+      a resistor on the board pulls the wire back up to the supply voltage when nobody is holding it down. This
+      arrangement is called <strong>open drain</strong>, and it is why two devices can share a wire without
+      damaging each other, and also why a device that is holding a wire down blocks everybody else.
+    </p>
+    <p>An exchange has a fixed shape:</p>
+    <ul>
+      <li><strong>START</strong> — SDA goes from high to low while SCL is high. This tells every device that an
+          exchange is beginning.</li>
+      <li><strong>Address byte</strong> — seven address bits and one bit stating whether the controller intends to
+          write or to read.</li>
+      <li><strong>Acknowledge</strong> — the device with that address pulls SDA low for one clock pulse. This is
+          the <strong>ACK</strong>. If no device holds that address, SDA stays high, which is a
+          <strong>NACK</strong>: nothing answered.</li>
+      <li><strong>Data bytes</strong>, each also acknowledged.</li>
+      <li><strong>STOP</strong> — SDA goes from low to high while SCL is high. This releases the wires and returns
+          them to idle, which is both wires high.</li>
+    </ul>
+    <div class="note">
+      An address-only write — a START, an address byte, then a STOP with no data — is a complete, legal exchange
+      that changes nothing inside the device. The scan in this file uses exactly that, which is why scanning
+      cannot alter a sensor's settings.
+    </div>
+  </div>
+
+  <!-- ================= PROBLEM ================= -->
+  <div class="card" id="problem">
+    <h2>The specific fault this file exists to work around</h2>
+    <p>
+      The hardware driver used here, <code class="inline">esp-hal</code>, abandons an exchange the moment it sees a
+      NACK. It resets its internal state machine, but it does <strong>not</strong> emit the closing STOP condition.
+      From the point of view of the wires, the exchange never ended.
+    </p>
+    <p>The consequences build up:</p>
+    <ul>
+      <li>A device that was part-way through sending a byte is still holding SDA low, waiting for clock pulses
+          that never arrive.</li>
+      <li>Because SDA is held low, the next START cannot be produced — a START requires SDA to fall from high, and
+          it is already low.</li>
+      <li>Every following exchange therefore fails as well, including exchanges with a sensor that is present and
+          working.</li>
+    </ul>
+    <p>
+      During an address scan this is unavoidable: most of the 117 addresses have no device behind them, so most
+      probes end in a NACK. Without a fix, a scan reports a device at the first address only, or nothing at all.
+    </p>
+    <p>
+      The fix is <code class="inline">recover_i2c_bus</code>, described in full further down. It takes the pins away
+      from the hardware block, drives them by hand to produce nine clock pulses and one STOP, and hands them back.
+      Nine pulses is the worst case: a device can be at most eight bits plus one acknowledge bit into a byte, so
+      nine pulses always let it finish and release SDA.
+    </p>
+  </div>
+
+  <!-- ================= EXTERNAL INTERFACES ================= -->
+  <div class="card" id="interfaces">
+    <h2>External interfaces — everything this file touches</h2>
+
+    <h3>1. Items received from <code class="inline">src/main.rs</code></h3>
+    <table>
+      <tr><th>Item</th><th>Type</th><th>What it is</th></tr>
+      <tr><td><code>peripherals.I2C0</code></td><td><code>I2C0</code></td>
+          <td>The first of the chip's two I2C hardware blocks. Passing it here transfers ownership, so no other
+              part of the firmware can use it.</td></tr>
+      <tr><td><code>io.pins.gpio5</code></td><td><code>GpioPin&lt;5&gt;</code></td>
+          <td>The SDA pin. The number 5 is part of the type, checked when the program is compiled.</td></tr>
+      <tr><td><code>io.pins.gpio6</code></td><td><code>GpioPin&lt;6&gt;</code></td>
+          <td>The SCL pin.</td></tr>
+      <tr><td><code>clocks</code></td><td><code>&amp;'static Clocks</code></td>
+          <td>The frozen clock settings of the chip. The I2C block needs them to work out how many processor
+              cycles make one 100 kHz clock pulse.</td></tr>
+      <tr><td><code>Delay::new(clocks)</code></td><td><code>Delay</code></td>
+          <td>A busy-wait timer that counts processor cycles. Used for the microsecond-scale pulses of the
+              recovery routine.</td></tr>
+    </table>
+
+    <h3>2. Items this file exposes</h3>
+    <table>
+      <tr><th>Item</th><th>Used by</th><th>Purpose</th></tr>
+      <tr><td><code>I2C_SDA_PIN</code>, <code>I2C_SCL_PIN</code></td><td><code>main.rs</code></td>
+          <td>Printed in the start-up message so the serial log states which pins were used.</td></tr>
+      <tr><td><code>I2cBus::new</code></td><td><code>main.rs</code></td>
+          <td>Collects the peripheral, the two pins, the clocks and the delay into one value.</td></tr>
+      <tr><td><code>I2cBus::scan</code></td><td><code>main.rs</code></td>
+          <td>Runs the start-up address scan, before the tasks are started.</td></tr>
+      <tr><td><code>print_scan_result</code></td><td><code>main.rs</code></td>
+          <td>Prints the addresses that answered.</td></tr>
+      <tr><td><code>SharedI2cBus</code></td><td><code>main.rs</code>, both sensor tasks</td>
+          <td>The bus wrapped in a lock. <code>main.rs</code> stores it permanently and gives both sensor tasks a
+              reference to the same one.</td></tr>
+      <tr><td><code>I2cBus::acquire</code></td><td>both sensor tasks</td>
+          <td>Recovers the wires and builds a working I2C block for one exchange.</td></tr>
+      <tr><td><code>recover_i2c_bus</code>, <code>scan_i2c</code></td><td>this file</td>
+          <td>Public so they can be called directly with loose pins, but within this project they are only used
+              through <code>I2cBus</code>.</td></tr>
+    </table>
+
+    <h3>3. The devices expected on this bus</h3>
+    <table>
+      <tr><th>Address</th><th>Device</th><th>Declared in</th></tr>
+      <tr><td><code>0x62</code></td><td>SCD41 — carbon dioxide, temperature, humidity</td><td><code>src/drivers/scd41.rs</code></td></tr>
+      <tr><td><code>0x69</code></td><td>SPS30 — particle mass concentration</td><td><code>src/drivers/sps30.rs</code></td></tr>
+    </table>
+    <p>
+      A healthy board therefore prints exactly two lines from the scan. Any other outcome points at the wiring:
+      no lines at all usually means a missing supply or missing pull-up resistors; one line means one sensor is
+      not connected.
+    </p>
+
+    <h4>Serial output produced by a scan</h4>
+<pre class="block"><code>Scanning I2C0 at 100 kHz (SDA GPIO5, SCL GPIO6)...
+Scanning I2C0: [##############################] 0x77 (117/117)
+I2C device found at 0x62
+I2C device found at 0x69</code></pre>
+    <p>
+      The progress line is rewritten in place while the scan runs; only its final state remains on screen. The
+      first line above is printed by <code class="inline">main.rs</code>, not by this file.
+    </p>
+  </div>
+
+  <!-- ================= FLOW ================= -->
+  <div class="card" id="flow">
+    <h2>Structure and data flow</h2>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+flowchart LR
+  subgraph MAIN["main.rs (start-up, runs once)"]
+    M1["Takes I2C0, GPIO5, GPIO6,<br/>clocks and a delay from the chip"]
+    M2["I2cBus::new<br/>collects them into one value"]
+    M3["bus.scan()<br/>probes every address"]
+    M4["print_scan_result<br/>prints what answered"]
+    M5["Wraps the bus in a lock and<br/>stores it for the whole run"]
+  end
+
+  subgraph THISFILE["i2c_bus.rs (this file)"]
+    F1["I2cBus<br/>owns the peripheral and both pins"]
+    F2["recover_i2c_bus<br/>forces the wires back to idle"]
+    F3["acquire<br/>recover, then build a fresh I2C block"]
+  end
+
+  subgraph TASKS["Sensor tasks (other files)"]
+    T1["scd41_task"]
+    T2["sps30_task"]
+  end
+
+  M1 --> M2 --> M3 --> M4 --> M5
+  M2 -.creates.-> F1
+  M3 -.calls.-> F2
+  M5 -- "one shared reference each" --> T1
+  M5 -- "one shared reference each" --> T2
+  T1 -- "lock, then acquire" --> F3
+  T2 -- "lock, then acquire" --> F3
+  F3 --> F2
+      </pre>
+      <figcaption>The bus is built and scanned once at start-up, then shared by both sensor tasks for the rest of the run.</figcaption>
+    </figure>
+
+    <figure class="diagram">
+      <pre class="mermaid">
+sequenceDiagram
+  participant A as scd41_task
+  participant L as The lock around the bus
+  participant B as I2cBus
+  participant W as SDA / SCL wires
+  participant C as sps30_task
+
+  A->>L: lock().await
+  L-->>A: granted
+  A->>B: acquire()
+  B->>W: nine clock pulses, then STOP (recovery)
+  B-->>A: a working I2C block
+  A->>W: start a measurement (one short exchange)
+  A->>L: release the lock
+  Note over A: waits five seconds for the sensor to convert,<br/>holding no lock at all
+
+  C->>L: lock().await
+  L-->>C: granted
+  C->>B: acquire()
+  B->>W: recovery, then its own exchange
+  C->>L: release the lock
+
+  A->>L: lock().await
+  L-->>A: granted
+  A->>W: read the finished measurement
+  A->>L: release the lock
+      </pre>
+      <figcaption>The lock is held for one exchange only. Long sensor delays happen with the lock released, so the two tasks do not block each other.</figcaption>
+    </figure>
+  </div>
+
+  <!-- ================= MODULE DOC ================= -->
+  <h2 class="section" id="s-moduledoc">Module description <span class="range">lines 1–9</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">//! I2C bus helpers: bit-banged bus recovery and a full 7-bit address scan.
+//!
+//! The SDA/SCL pins are fixed at compile time so that the bus-recovery routine
+//! can take the concrete `GpioPin` types it needs to reconfigure them as
+//! open-drain outputs.
+//!
+//! [`I2cBus`] owns the I2C0 peripheral together with both pins, so that a task
+//! can recover the bus and rebuild the peripheral. Because the sensors share
+//! one bus, it is handed to the tasks inside an `embassy_sync` mutex.</span></code></pre>
+      <div class="explain">
+        <span class="tag">Documentation</span>
+        <p>Lines beginning <code class="inline">//!</code> describe the file as a whole rather than any single item
+           below them. They are ignored when the program runs.</p>
+        <p><strong>"Bit-banged"</strong> means the signal is produced by setting and clearing a pin in software,
+           one edge at a time, instead of by a hardware block. It is slower and occupies the processor, but it is
+           the only way to drive the wires when the hardware block has been taken apart.</p>
+        <p><strong>"Fixed at compile time"</strong> refers to the pin numbers being part of the pin types. The
+           recovery routine has to name those exact types in its signature, so the numbers cannot be selected
+           while the program runs.</p>
+        <p><strong>"Mutex"</strong> is a lock that only one holder may possess at a time. It is described in
+           detail at the <code class="inline">SharedI2cBus</code> section below.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IMPORTS ================= -->
+  <h2 class="section" id="s-imports">Imports <span class="range">lines 11–21</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_sync::{blocking_mutex::raw::<span class="ty">CriticalSectionRawMutex</span>, mutex::<span class="ty">Mutex</span>};
+<span class="k">use</span> esp_hal::{
+    clock::<span class="ty">Clocks</span>,
+    delay::<span class="ty">Delay</span>,
+    gpio::{<span class="ty">GpioPin</span>, <span class="ty">Level</span>, <span class="ty">OutputOpenDrain</span>, <span class="ty">Pull</span>},
+    i2c::<span class="ty">I2C</span>,
+    peripherals::<span class="ty">I2C0</span>,
+    prelude::*,
+    <span class="ty">Blocking</span>,
+};
+<span class="k">use</span> esp_println::{print, println};</code></pre>
+      <div class="explain">
+        <span class="tag alt">Imports</span>
+        <p>Each line makes names from another package usable in this file without writing their full path.</p>
+        <ul>
+          <li><code class="inline">Mutex</code> and <code class="inline">CriticalSectionRawMutex</code> together
+              form the lock that gives one task exclusive use of the bus.</li>
+          <li><code class="inline">Clocks</code> carries the chip's settled clock frequencies.</li>
+          <li><code class="inline">Delay</code> is a busy-wait timer with microsecond resolution.</li>
+          <li><code class="inline">GpioPin</code> is a single pin; <code class="inline">Level</code> is high or
+              low; <code class="inline">Pull</code> selects the internal pull-up or pull-down resistor;
+              <code class="inline">OutputOpenDrain</code> reconfigures a pin into the open-drain output described
+              in the primer above.</li>
+          <li><code class="inline">I2C</code> is the hardware block's driver and
+              <code class="inline">I2C0</code> is the first instance of that block.</li>
+          <li><code class="inline">Blocking</code> marks the driver as the variant whose calls return only when the
+              transfer has finished, rather than the interrupt-driven variant.</li>
+          <li><code class="inline">prelude::*</code> brings in the extension that allows the
+              <code class="inline">100.kHz()</code> notation used further down.</li>
+          <li><code class="inline">print</code> and <code class="inline">println</code> write to the serial
+              console; <code class="inline">print</code> adds no line break, which is what allows the progress bar
+              to overwrite itself.</li>
+        </ul>
+        <div class="note">This file imports nothing from the rest of the project. It depends only on the chip
+          support package and the synchronisation package, which is why it can be read on its own.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PINS ================= -->
+  <h2 class="section" id="s-pins">Pin numbers and pin types <span class="range">lines 23–30</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// GPIO number carrying I2C0 SDA.</span>
+<span class="k">pub const</span> <span class="ty">I2C_SDA_PIN</span>: <span class="ty">u8</span> = <span class="nu">5</span>;
+<span class="cm">/// GPIO number carrying I2C0 SCL.</span>
+<span class="k">pub const</span> <span class="ty">I2C_SCL_PIN</span>: <span class="ty">u8</span> = <span class="nu">6</span>;
+
+<span class="cm">/// Concrete pin types accepted by the helpers in this module.</span>
+<span class="k">pub type</span> <span class="ty">SdaPin</span> = <span class="ty">GpioPin</span>&lt;<span class="ty">I2C_SDA_PIN</span>&gt;;
+<span class="k">pub type</span> <span class="ty">SclPin</span> = <span class="ty">GpioPin</span>&lt;<span class="ty">I2C_SCL_PIN</span>&gt;;</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · board wiring</span>
+        <p>The two constants record the physical wiring: the data wire is on GPIO5, the clock wire on GPIO6. They
+           are public so that <code class="inline">main.rs</code> can print them in the start-up message rather
+           than repeating the numbers in a second place.</p>
+        <p>The two type aliases attach those numbers to the pin types. <code class="inline">GpioPin&lt;5&gt;</code>
+           and <code class="inline">GpioPin&lt;6&gt;</code> are different types, not one type holding a number, so
+           handing the wrong pin to a function in this file is rejected when the program is compiled rather than
+           producing a silent wiring fault at run time.</p>
+        <div class="note warn">Changing the wiring means changing these two constants and re-flashing. The pin
+          numbers cannot be supplied while the program runs, because a type cannot be chosen at run time.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= CONSTANTS ================= -->
+  <h2 class="section" id="s-constants">Tuning constants <span class="range">lines 32–42</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">I2C_FIRST_ADDRESS</span>: <span class="ty">u8</span> = <span class="nu">0x03</span>;
+<span class="k">const</span> <span class="ty">I2C_LAST_ADDRESS</span>: <span class="ty">u8</span> = <span class="nu">0x77</span>;
+<span class="k">const</span> <span class="ty">MAX_I2C_DEVICES</span>: <span class="ty">usize</span> = (<span class="ty">I2C_LAST_ADDRESS</span> - <span class="ty">I2C_FIRST_ADDRESS</span> + <span class="nu">1</span>) <span class="k">as</span> <span class="ty">usize</span>;
+<span class="k">const</span> <span class="ty">I2C_ADDRESS_COUNT</span>: <span class="ty">usize</span> = <span class="ty">MAX_I2C_DEVICES</span>;
+<span class="k">const</span> <span class="ty">SCAN_PROGRESS_BAR_WIDTH</span>: <span class="ty">usize</span> = <span class="nu">30</span>;
+<span class="k">const</span> <span class="ty">I2C_SCAN_RETRIES</span>: <span class="ty">usize</span> = <span class="nu">3</span>;
+<span class="k">const</span> <span class="ty">I2C_SCAN_RETRY_DELAY_MS</span>: <span class="ty">u32</span> = <span class="nu">10</span>;
+<span class="cm">/// Half period of the bit-banged bus-recovery clock (~100 kHz).</span>
+<span class="k">const</span> <span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>: <span class="ty">u32</span> = <span class="nu">5</span>;
+<span class="cm">/// Bus speed used for every sensor transfer.</span>
+<span class="k">const</span> <span class="ty">I2C_FREQUENCY_KHZ</span>: <span class="ty">u32</span> = <span class="nu">100</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">Configuration</span>
+        <table>
+          <tr><th>Constant</th><th>Value</th><th>Meaning</th></tr>
+          <tr><td><code>I2C_FIRST_ADDRESS</code></td><td>0x03</td>
+              <td>The lowest address a device may hold. Addresses 0x00–0x02 are reserved by the I2C standard for
+                  broadcast and other special purposes, so probing them is meaningless.</td></tr>
+          <tr><td><code>I2C_LAST_ADDRESS</code></td><td>0x77</td>
+              <td>The highest usable address. 0x78–0x7F are also reserved.</td></tr>
+          <tr><td><code>MAX_I2C_DEVICES</code></td><td>117</td>
+              <td>0x77 − 0x03 + 1. The size of the array that holds the scan result, so the result can never
+                  overflow even in the impossible case that every address answers.</td></tr>
+          <tr><td><code>I2C_ADDRESS_COUNT</code></td><td>117</td>
+              <td>The same number under a name that reads correctly in the progress calculation, where it means
+                  "how many probes in total" rather than "how large is the array".</td></tr>
+          <tr><td><code>SCAN_PROGRESS_BAR_WIDTH</code></td><td>30</td>
+              <td>The width of the progress bar in characters.</td></tr>
+          <tr><td><code>I2C_SCAN_RETRIES</code></td><td>3</td>
+              <td>How many times one address is probed before it is declared empty. A device that is still
+                  starting up may miss the first probe.</td></tr>
+          <tr><td><code>I2C_SCAN_RETRY_DELAY_MS</code></td><td>10</td>
+              <td>The pause between those retries, giving a slow device time to become ready.</td></tr>
+          <tr><td><code>I2C_RECOVERY_HALF_PERIOD_US</code></td><td>5</td>
+              <td>Half of one hand-driven clock pulse. Five microseconds high plus five low is ten microseconds
+                  per pulse, which is 100 kHz — the same speed as normal traffic, so no device sees anything
+                  unusual.</td></tr>
+          <tr><td><code>I2C_FREQUENCY_KHZ</code></td><td>100</td>
+              <td>The speed of ordinary transfers. 100 kHz is the standard I2C speed and is supported by both
+                  sensors.</td></tr>
+        </table>
+        <p>A full scan therefore costs at most 117 addresses × 3 attempts, each preceded by a recovery sequence,
+           plus a 10 ms pause between attempts. It runs once, at start-up, before any task is started.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= STRUCT ================= -->
+  <h2 class="section" id="s-struct">The bus value and its shared form <span class="range">lines 44–61</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Everything needed to drive I2C0, owned in one place.
+///
+/// The peripheral is deliberately *not* kept alive between transactions: a NACK
+/// leaves the bus held, so it has to be bit-banged back to idle and rebuilt,
+/// which is only possible while the pins are not owned by the peripheral.</span>
+<span class="k">pub struct</span> <span class="ty">I2cBus</span> {
+    i2c0: <span class="ty">I2C0</span>,
+    sda: <span class="ty">SdaPin</span>,
+    scl: <span class="ty">SclPin</span>,
+    clocks: &amp;<span class="st">'static</span> <span class="ty">Clocks</span>&lt;<span class="st">'static</span>&gt;,
+    delay: <span class="ty">Delay</span>,
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>One value holding the five things needed to run the bus: the hardware block, the two pins, the clock
+           settings and the busy-wait timer. Keeping them together is what makes the alternation between
+           hand-driven recovery and hardware-driven transfers possible, because both halves need the same two
+           pins.</p>
+        <p><strong>The important design decision is stated in the comment.</strong> The natural approach — build
+           the I2C driver once at start-up and keep it — cannot work here. While the driver exists it owns the
+           pins, and while it owns the pins they cannot be reconfigured as plain outputs, so the recovery
+           sequence cannot be produced. The driver is therefore built and discarded around every single exchange.
+        </p>
+        <p><code class="inline">&amp;'static Clocks</code> is a reference to something that exists for the whole
+           run of the program. <code class="inline">main.rs</code> arranges this by placing the clock settings in
+           permanent storage. Without it the bus value could not be stored permanently either.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="cm">/// The single I2C bus, shared by every sensor task.
+///
+/// A task holds the lock for a whole transaction, including the awaited
+/// datasheet delays, so the two sensors can never interleave transfers.</span>
+<span class="k">pub type</span> <span class="ty">SharedI2cBus</span> = <span class="ty">Mutex</span>&lt;<span class="ty">CriticalSectionRawMutex</span>, <span class="ty">I2cBus</span>&gt;;</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · to the sensor tasks</span>
+        <p>A short name for "an <code class="inline">I2cBus</code> behind a lock". This is the form both sensor
+           tasks receive.</p>
+        <p><strong>Mutex</strong> is short for mutual exclusion. The value inside cannot be reached at all except
+           by calling <code class="inline">lock()</code>. If another task already holds the lock, the caller is
+           suspended until the holder releases it; it does not spin or waste processor time. Because the value is
+           unreachable without the lock, it is impossible to forget to take it.</p>
+        <p><strong>CriticalSectionRawMutex</strong> selects how the lock protects its own internal state. This
+           variant briefly disables interrupts, which makes it safe even if an interrupt handler were to touch
+           the bus. It is the conservative choice and costs a few microseconds per lock.</p>
+        <p><strong>Duration of the lock.</strong> A task takes the lock, performs one exchange, and releases it.
+           The multi-second waits while a sensor produces a measurement happen with the lock released — see the
+           sequence diagram above. The comment describes the guarantee this provides: an exchange is never cut in
+           half by the other task.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= IMPL ================= -->
+  <h2 class="section" id="s-impl">Construction, acquisition and scanning <span class="range">lines 63–105</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">impl</span> <span class="ty">I2cBus</span> {
+    <span class="k">pub fn</span> <span class="fn">new</span>(
+        i2c0: <span class="ty">I2C0</span>,
+        sda: <span class="ty">SdaPin</span>,
+        scl: <span class="ty">SclPin</span>,
+        clocks: &amp;<span class="st">'static</span> <span class="ty">Clocks</span>&lt;<span class="st">'static</span>&gt;,
+        delay: <span class="ty">Delay</span>,
+    ) -&gt; <span class="ty">Self</span> {
+        <span class="ty">Self</span> {
+            i2c0,
+            sda,
+            scl,
+            clocks,
+            delay,
+        }
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by main.rs</span>
+        <p>Takes ownership of the five items and stores them. No hardware is touched and no signal appears on the
+           wires; this only gathers the parts.</p>
+        <p>Ownership transfer matters here. Once <code class="inline">main.rs</code> has passed
+           <code class="inline">peripherals.I2C0</code> and the two pins in, it no longer holds them, and any
+           later attempt to use them elsewhere is rejected when the program is compiled. This is what guarantees
+           there is exactly one user of the bus.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Recover the bus, then build a fresh I2C peripheral on it.
+    ///
+    /// The returned peripheral borrows the bus, so the caller keeps exclusive
+    /// access for as long as it uses it.</span>
+    <span class="k">pub fn</span> <span class="fn">acquire</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">I2C</span>&lt;<span class="st">'_</span>, <span class="ty">I2C0</span>, <span class="ty">Blocking</span>&gt; {
+        <span class="fn">recover_i2c_bus</span>(&amp;<span class="k">mut</span> <span class="k">self</span>.sda, &amp;<span class="k">mut</span> <span class="k">self</span>.scl, &amp;<span class="k">self</span>.delay);
+        <span class="ty">I2C</span>::<span class="fn">new</span>(
+            &amp;<span class="k">mut</span> <span class="k">self</span>.i2c0,
+            &amp;<span class="k">mut</span> <span class="k">self</span>.sda,
+            &amp;<span class="k">mut</span> <span class="k">self</span>.scl,
+            <span class="ty">I2C_FREQUENCY_KHZ</span>.<span class="fn">kHz</span>(),
+            <span class="k">self</span>.clocks,
+        )
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by both sensor tasks</span>
+        <p>This is the routine every sensor exchange begins with. It does two things in order:</p>
+        <ol>
+          <li>Runs the recovery sequence, so the wires are known to be idle whatever happened previously.</li>
+          <li>Builds a fresh I2C driver at 100 kHz on those pins and returns it.</li>
+        </ol>
+        <p>The returned driver borrows the pins rather than taking them. When the caller finishes with it and it
+           goes out of scope, the borrow ends and the pins become available for the next recovery. This is what
+           makes the build-and-discard cycle described earlier possible without any manual clean-up step.</p>
+        <p><code class="inline">I2C_FREQUENCY_KHZ.kHz()</code> converts the plain number 100 into a frequency
+           value. The unit is attached in the type, so a value in kilohertz cannot be passed where megahertz is
+           expected.</p>
+        <div class="note">Recovery costs roughly 100 microseconds and runs before every exchange, including the
+          ones that would have succeeded anyway. At measurement intervals of five and ten seconds this is not
+          measurable, and it removes an entire class of intermittent fault.</div>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Probe every valid 7-bit address. See [`scan_i2c`].</span>
+    <span class="k">pub fn</span> <span class="fn">scan</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">I2cScanResult</span> {
+        <span class="fn">scan_i2c</span>(
+            &amp;<span class="k">mut</span> <span class="k">self</span>.i2c0,
+            &amp;<span class="k">mut</span> <span class="k">self</span>.sda,
+            &amp;<span class="k">mut</span> <span class="k">self</span>.scl,
+            <span class="k">self</span>.clocks,
+            &amp;<span class="k">self</span>.delay,
+        )
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by main.rs</span>
+        <p>Passes the five stored parts to the free function <code class="inline">scan_i2c</code>, which holds the
+           actual scanning logic. Nothing else happens here.</p>
+        <p>The split exists so that the scan can also be run before an <code class="inline">I2cBus</code> value
+           has been created, directly from loose pins. Within this project only this path is used.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RESULT ================= -->
+  <h2 class="section" id="s-result">The scan result <span class="range">lines 107–117</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// The 7-bit addresses that acknowledged during an I2C bus scan.</span>
+<span class="k">pub struct</span> <span class="ty">I2cScanResult</span> {
+    addresses: [<span class="ty">u8</span>; <span class="ty">MAX_I2C_DEVICES</span>],
+    count: <span class="ty">usize</span>,
+}
+
+<span class="k">impl</span> <span class="ty">I2cScanResult</span> {
+    <span class="k">pub fn</span> <span class="fn">addresses</span>(&amp;<span class="k">self</span>) -&gt; &amp;[<span class="ty">u8</span>] {
+        &amp;<span class="k">self</span>.addresses[..<span class="k">self</span>.count]
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Data structure</span>
+        <p>A list of addresses without a heap. The array always has room for 117 entries, and
+           <code class="inline">count</code> records how many of those entries were actually filled. On a healthy
+           board <code class="inline">count</code> is 2 and the remaining 115 entries are left at zero.</p>
+        <p>Both fields are private, so the only way to read the result is
+           <code class="inline">addresses()</code>, which returns a view of exactly the filled part. A caller
+           therefore cannot accidentally read the unused zeros and report a device at address 0x00.</p>
+        <p>The value occupies 117 bytes plus a length and is created on the caller's stack. It exists only during
+           start-up and is discarded once printed.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PROGRESS ================= -->
+  <h2 class="section" id="s-progress">The progress bar <span class="range">lines 119–132</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">fn</span> <span class="fn">print_scan_progress</span>(address: <span class="ty">u8</span>, completed: <span class="ty">usize</span>) {
+    <span class="k">let mut</span> bar = [<span class="st">b'.'</span>; <span class="ty">SCAN_PROGRESS_BAR_WIDTH</span>];
+    <span class="k">let</span> filled = completed * <span class="ty">SCAN_PROGRESS_BAR_WIDTH</span> / <span class="ty">I2C_ADDRESS_COUNT</span>;
+
+    <span class="k">for</span> segment <span class="k">in</span> &amp;<span class="k">mut</span> bar[..filled] {
+        *segment = <span class="st">b'#'</span>;
+    }
+
+    <span class="k">let</span> bar = core::str::<span class="fn">from_utf8</span>(&amp;bar).<span class="fn">unwrap_or</span>(<span class="st">"??????????????????????????????"</span>);
+    <span class="mc">print!</span>(
+        <span class="st">"\rScanning I2C0: [{}] 0x{:02X} ({}/{})"</span>,
+        bar, address, completed, <span class="ty">I2C_ADDRESS_COUNT</span>
+    );
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Serial output</span>
+        <p>Draws one frame of the progress display. It is called once per address, so the line is redrawn 118
+           times during a scan.</p>
+        <p>A 30-character array is filled with full stops, then the leading portion is overwritten with hashes.
+           The number of hashes is <code class="inline">completed × 30 ÷ 117</code>, using whole-number division,
+           so the bar advances by one character roughly every four addresses and reaches 30 only on the final
+           call.</p>
+        <p><code class="inline">\r</code> at the start of the text is a carriage return: it moves the cursor back
+           to the start of the current line without moving down. Combined with
+           <code class="inline">print!</code>, which adds no line break, each frame overwrites the previous one,
+           so a scrolling wall of 118 lines is avoided.</p>
+        <p><code class="inline">from_utf8</code> converts the array of bytes into text. It can fail in general,
+           but here the array only ever contains full stops and hashes, so it cannot fail. The fallback text of
+           thirty question marks exists solely to satisfy the requirement that every outcome be handled; it
+           cannot be printed.</p>
+        <p><code class="inline">0x{:02X}</code> prints the address in hexadecimal, in upper case, padded to two
+           digits, which is the notation sensor datasheets use.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RECOVER ================= -->
+  <h2 class="section" id="s-recover">Bus recovery <span class="range">lines 134–163</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Take SDA and SCL away from the I2C block<br/>and reconfigure both as open-drain outputs,<br/>starting high with the pull-up enabled"] --> B["Repeat nine times"]
+  B --> C["Pull SCL low"] --> D["Wait 5 microseconds"] --> E["Release SCL (it rises high)"] --> F["Wait 5 microseconds"] --> B
+  B -- "nine pulses done" --> G["Pull SDA low"]
+  G --> H["Wait 5 microseconds"] --> I["Ensure SCL is high"] --> J["Wait 5 microseconds"]
+  J --> K["Release SDA: it rises while SCL is high.<br/>This is the STOP condition."]
+  K --> L["Wait 5 microseconds, then return.<br/>Both wires are now idle and high."]
+    </pre>
+    <figcaption>Nine clock pulses let any device finish the byte it was sending; the STOP then returns the bus to idle.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Return the bus to a known idle state.
+///
+/// `esp-hal` aborts a transfer as soon as a NACK is seen and resets the I2C
+/// state machine *without* emitting a STOP condition, so every non-answering
+/// address leaves SCL/SDA in an undefined state. Those aborts accumulate over a
+/// long scan until the bus is effectively locked and even a device that is
+/// present stops answering. Clocking SCL nine times (so any slave that is
+/// holding SDA can finish its byte) followed by a manual STOP releases it.
+///
+/// The pulses are microseconds wide, so this deliberately busy-waits with a
+/// blocking `Delay` instead of yielding to the Embassy executor.</span></code></pre>
+      <div class="explain">
+        <span class="tag">Documentation</span>
+        <p>This comment records the reason the routine exists. The behaviour it describes is a property of the
+           chip support package, not of the sensors, and the full explanation is given in the section
+           <a href="#problem">The specific fault this file exists to work around</a> above.</p>
+        <p>The final paragraph explains the choice of timer. Everything else in this firmware is asynchronous: a
+           task that waits hands the processor to another task. Here the waits are five microseconds long, which
+           is far shorter than the cost of suspending and resuming a task, so an ordinary busy-wait is both
+           simpler and faster. The whole routine occupies the processor for about 100 microseconds.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">pub fn</span> <span class="fn">recover_i2c_bus</span>(sda: &amp;<span class="k">mut</span> <span class="ty">SdaPin</span>, scl: &amp;<span class="k">mut</span> <span class="ty">SclPin</span>, delay: &amp;<span class="ty">Delay</span>) {
+    <span class="k">let mut</span> sda = <span class="ty">OutputOpenDrain</span>::<span class="fn">new</span>(sda, <span class="ty">Level</span>::High, <span class="ty">Pull</span>::Up);
+    <span class="k">let mut</span> scl = <span class="ty">OutputOpenDrain</span>::<span class="fn">new</span>(scl, <span class="ty">Level</span>::High, <span class="ty">Pull</span>::Up);</code></pre>
+      <div class="explain">
+        <p>Reconfigures both pins as software-controlled outputs for the duration of this function.</p>
+        <p><code class="inline">OutputOpenDrain</code> is the mode required by I2C and described in the primer: the
+           pin can pull the wire low or release it, but never drives it high. Any other output mode would fight
+           the sensors for control of the wire.</p>
+        <p><code class="inline">Level::High</code> makes both pins start released, so reconfiguring the pins does
+           not itself disturb a bus that was already idle.</p>
+        <p><code class="inline">Pull::Up</code> enables the chip's internal pull-up resistor, so the wire still
+           returns to the high state even on a board without external pull-up resistors.</p>
+        <p>The new names <code class="inline">sda</code> and <code class="inline">scl</code> deliberately hide the
+           parameters of the same name. The parameters cannot be used again inside this function, which prevents
+           any attempt to drive a pin through two different configurations at once.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">for</span> _ <span class="k">in</span> <span class="nu">0</span>..<span class="nu">9</span> {
+        scl.<span class="fn">set_low</span>();
+        delay.<span class="fn">delay_micros</span>(<span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>);
+        scl.<span class="fn">set_high</span>();
+        delay.<span class="fn">delay_micros</span>(<span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>);
+    }</code></pre>
+      <div class="explain">
+        <p>Nine clock pulses, each five microseconds low and five microseconds high, giving 100 kHz.</p>
+        <p><strong>Why nine.</strong> A device that was interrupted while sending can be at most eight data bits
+           plus one acknowledge bit away from finishing. Nine pulses therefore always carry it past the end of
+           the byte, at which point it stops holding SDA down and the wire becomes usable again.</p>
+        <p>SDA is not touched during this loop. It is left released, so whatever a device is doing with it can be
+           observed by the device itself; the controller is only supplying the clock the device is waiting for.</p>
+        <p>The loop variable is written <code class="inline">_</code> because the pulse number is not used. The
+           name states that the value is deliberately discarded.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">// STOP condition: SDA goes low-&gt;high while SCL is high.</span>
+    sda.<span class="fn">set_low</span>();
+    delay.<span class="fn">delay_micros</span>(<span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>);
+    scl.<span class="fn">set_high</span>();
+    delay.<span class="fn">delay_micros</span>(<span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>);
+    sda.<span class="fn">set_high</span>();
+    delay.<span class="fn">delay_micros</span>(<span class="ty">I2C_RECOVERY_HALF_PERIOD_US</span>);
+}</code></pre>
+      <div class="explain">
+        <p>Produces one STOP condition by hand, which is the signal that formally ends any exchange still thought
+           to be in progress and returns the bus to idle.</p>
+        <p>The order is fixed by the I2C standard and each step matters:</p>
+        <ul>
+          <li>SDA is pulled low, so that there is a low-to-high edge available to produce.</li>
+          <li>SCL is set high. It is already high after the last pulse of the loop; this makes the requirement
+              explicit and independent of the loop.</li>
+          <li>SDA is released and rises. Because SCL is high at that moment, every device on the bus interprets
+              this edge as STOP.</li>
+        </ul>
+        <p>The five-microsecond pauses between the steps hold each level long enough for the devices to register
+           it, and give the wire time to rise through the pull-up resistor.</p>
+        <p>When the function ends, the two <code class="inline">OutputOpenDrain</code> values are discarded and the
+           pins are released, leaving them free for the I2C block to claim. Both wires are high, which is the
+           idle state.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SCAN ================= -->
+  <h2 class="section" id="s-scan">The address scan <span class="range">lines 165–217</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["Start with an empty result"] --> B["For each address from 0x03 to 0x77"]
+  B --> C["Redraw the progress bar"]
+  C --> D["Attempt 1 of 3"]
+  D --> E["Recover the bus"]
+  E --> F["Build a fresh I2C block"]
+  F --> G["Write zero bytes to this address"]
+  G --> H{"Did anything acknowledge?"}
+  H -- yes --> I["Record the address"] --> B
+  H -- no --> J{"Attempts left?"}
+  J -- yes --> K["Wait 10 ms"] --> D
+  J -- no --> B
+  B -- "all 117 addresses done" --> L["Recover once more"]
+  L --> M["Redraw the bar as complete<br/>and end the line"]
+  M --> N["Return the recorded addresses"]
+    </pre>
+    <figcaption>Every probe starts from a recovered bus, so a silent address cannot hide a device at a later address.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Probe every valid 7-bit I2C address and return the ones that acknowledge.
+///
+/// Each probe is an address-only write, so no device registers are modified.
+/// The bus is recovered and the I2C peripheral is rebuilt before every probe so
+/// that a NACK at one address cannot hide a device at a later address.</span>
+<span class="k">pub fn</span> <span class="fn">scan_i2c</span>(
+    i2c0: &amp;<span class="k">mut</span> <span class="ty">I2C0</span>,
+    sda: &amp;<span class="k">mut</span> <span class="ty">SdaPin</span>,
+    scl: &amp;<span class="k">mut</span> <span class="ty">SclPin</span>,
+    clocks: &amp;<span class="ty">Clocks</span>&lt;<span class="st">'_</span>&gt;,
+    delay: &amp;<span class="ty">Delay</span>,
+) -&gt; <span class="ty">I2cScanResult</span> {
+    <span class="k">let mut</span> result = <span class="ty">I2cScanResult</span> {
+        addresses: [<span class="nu">0</span>; <span class="ty">MAX_I2C_DEVICES</span>],
+        count: <span class="nu">0</span>,
+    };</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by I2cBus::scan</span>
+        <p>Takes the parts of the bus by reference rather than by ownership, so the caller keeps them and can
+           continue using the bus after the scan.</p>
+        <p>The two guarantees in the comment are the ones a reader needs. <strong>No device is modified</strong>,
+           because an address-only write carries no data, so the scan is safe to run on any bus. <strong>Each
+           probe is independent</strong>, because the bus is returned to idle beforehand.</p>
+        <p>The result starts as 117 zeros with a count of zero, meaning "nothing found yet". This is the only
+           storage the function uses.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">for</span> address <span class="k">in</span> <span class="ty">I2C_FIRST_ADDRESS</span>..=<span class="ty">I2C_LAST_ADDRESS</span> {
+        <span class="k">let</span> completed = (address - <span class="ty">I2C_FIRST_ADDRESS</span>) <span class="k">as</span> <span class="ty">usize</span>;
+        <span class="fn">print_scan_progress</span>(address, completed);
+
+        <span class="k">let mut</span> acknowledged = <span class="k">false</span>;</code></pre>
+      <div class="explain">
+        <p>Walks every address from 0x03 to 0x77. The <code class="inline">..=</code> notation includes the last
+           value, so 0x77 is probed rather than skipped.</p>
+        <p><code class="inline">completed</code> converts the address into a count of finished probes: at address
+           0x03 nothing is finished, at 0x77 all but one are. That count drives the progress bar.</p>
+        <p><code class="inline">acknowledged</code> records the outcome for this one address, and is reset for
+           each address.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="k">for</span> attempt <span class="k">in</span> <span class="nu">0</span>..<span class="ty">I2C_SCAN_RETRIES</span> {
+            <span class="fn">recover_i2c_bus</span>(sda, scl, delay);
+
+            {
+                <span class="k">let mut</span> i2c = <span class="ty">I2C</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> *i2c0, &amp;<span class="k">mut</span> *sda, &amp;<span class="k">mut</span> *scl, <span class="nu">100</span>.<span class="fn">kHz</span>(), clocks);
+                <span class="k">if</span> i2c.<span class="fn">write</span>(address, &amp;[]).<span class="fn">is_ok</span>() {
+                    acknowledged = <span class="k">true</span>;
+                }
+            }</code></pre>
+      <div class="explain">
+        <p>Up to three attempts at one address. Each attempt repeats the full cycle: recover the wires, build an
+           I2C block, probe, discard the block.</p>
+        <p><code class="inline">i2c.write(address, &amp;[])</code> is the probe. The empty pair of brackets is a
+           list of zero data bytes, so the exchange consists of a START, the address, and a STOP. Its result is
+           success if some device acknowledged the address and failure if none did.</p>
+        <p>The extra pair of braces around these lines is deliberate. They end the life of
+           <code class="inline">i2c</code> at the closing brace, which releases the pins immediately, before the
+           next attempt's recovery needs them. Without them the block would stay alive until the end of the loop
+           body and the recovery at the top of the next attempt would be rejected when the program is compiled.</p>
+        <p>Retrying is worthwhile because a sensor that is still powering up may miss the first probe; the SPS30
+           in particular takes time to become responsive after power is applied.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>            <span class="k">if</span> acknowledged {
+                <span class="k">break</span>;
+            }
+
+            <span class="k">if</span> attempt + <span class="nu">1</span> &lt; <span class="ty">I2C_SCAN_RETRIES</span> {
+                delay.<span class="fn">delay_millis</span>(<span class="ty">I2C_SCAN_RETRY_DELAY_MS</span>);
+            }
+        }
+
+        <span class="k">if</span> acknowledged {
+            result.addresses[result.count] = address;
+            result.count += <span class="nu">1</span>;
+        }
+    }</code></pre>
+      <div class="explain">
+        <p>A successful probe stops the retries immediately, so a present device costs one attempt rather than
+           three.</p>
+        <p>The 10 ms pause is skipped after the final attempt, since nothing follows it. Only the two gaps
+           <em>between</em> the three attempts are paid for, which keeps the worst case for an empty address at
+           roughly 20 ms.</p>
+        <p>When an address answered, it is appended to the array and the count is increased. The array holds 117
+           entries and there are only 117 addresses, so the write can never run past the end.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="fn">recover_i2c_bus</span>(sda, scl, delay);
+    <span class="fn">print_scan_progress</span>(<span class="ty">I2C_LAST_ADDRESS</span>, <span class="ty">I2C_ADDRESS_COUNT</span>);
+    <span class="mc">println!</span>();
+
+    result
+}</code></pre>
+      <div class="explain">
+        <p>Three closing steps.</p>
+        <p>The final recovery leaves the bus idle for whoever uses it next. The last probe in the loop was almost
+           certainly a NACK at 0x77, which would otherwise leave the wires in the abandoned state described
+           earlier, and the first sensor exchange after start-up would fail.</p>
+        <p>The progress bar is redrawn once more with the completed count set to 117, which is the only call that
+           produces a full bar of thirty hashes. Inside the loop the count is always at least one short.</p>
+        <p><code class="inline">println!()</code> with nothing in it emits a line break, ending the line that the
+           progress bar has been overwriting so that later output starts on a fresh line.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PRINT ================= -->
+  <h2 class="section" id="s-print">Printing the outcome <span class="range">lines 219–228</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Print the outcome of [`scan_i2c`] to the serial monitor.</span>
+<span class="k">pub fn</span> <span class="fn">print_scan_result</span>(result: &amp;<span class="ty">I2cScanResult</span>) {
+    <span class="k">if</span> result.<span class="fn">addresses</span>().<span class="fn">is_empty</span>() {
+        <span class="mc">println!</span>(<span class="st">"No I2C devices acknowledged on I2C0"</span>);
+    } <span class="k">else</span> {
+        <span class="k">for</span> address <span class="k">in</span> result.<span class="fn">addresses</span>() {
+            <span class="mc">println!</span>(<span class="st">"I2C device found at 0x{:02X}"</span>, address);
+        }
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by main.rs</span>
+        <p>Turns the scan result into serial output. Reporting is kept separate from scanning so the scan can be
+           run without producing output.</p>
+        <p>An empty result gets one explicit line rather than silence, which distinguishes "the scan ran and found
+           nothing" from "the scan did not run".</p>
+        <p>Otherwise one line per address is printed, in ascending order, because the scan appends them in the
+           order it probes.</p>
+        <p>This is the check to perform first when a sensor stops reporting: if its address is missing here, the
+           fault is electrical — supply, wiring or pull-up resistors — and not in the sensor driver.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FAILURE ================= -->
+  <div class="card" id="failure">
+    <h2>Failure behaviour</h2>
+    <table>
+      <tr><th>Situation</th><th>What happens</th><th>Effect on the rest of the firmware</th></tr>
+      <tr><td>An address does not answer during the scan</td>
+          <td>Probed three times with 10 ms pauses, then treated as empty.</td>
+          <td>None. This is the expected outcome for 115 of the 117 addresses.</td></tr>
+      <tr><td>No device answers at all</td>
+          <td><code>No I2C devices acknowledged on I2C0</code> is printed.</td>
+          <td>Start-up continues. The sensor tasks are started anyway and report their own errors as they fail
+              to communicate.</td></tr>
+      <tr><td>A device is holding SDA low after an abandoned exchange</td>
+          <td>The next call to <code>acquire</code> clocks it out and issues a STOP.</td>
+          <td>Recovered automatically, without a reset and without any error being reported.</td></tr>
+      <tr><td>A sensor exchange fails part-way through</td>
+          <td>This file takes no action; the failure is returned to the calling task.</td>
+          <td>The task prints the error, waits, and repeats. Its next <code>acquire</code> begins with a
+              recovery, so the failure does not carry over.</td></tr>
+      <tr><td>SDA is permanently held low, for example by a short circuit</td>
+          <td>Recovery still runs and still completes; the STOP simply has no effect.</td>
+          <td>Every exchange fails and every scan reports nothing. No part of the firmware hangs, because
+              recovery has a fixed number of steps and cannot wait for the wire to rise.</td></tr>
+      <tr><td>Both sensor tasks want the bus at the same instant</td>
+          <td>One takes the lock; the other is suspended until it is released.</td>
+          <td>None beyond a short delay. The waiting task uses no processor time while suspended.</td></tr>
+    </table>
+    <div class="note">There is no situation in which this file waits indefinitely. Recovery is a fixed sequence of
+      delays, the scan is a fixed number of probes, and the only unbounded wait — for the lock — is bounded in
+      practice by the single short exchange the other task performs while holding it.</div>
+  </div>
+
+  <!-- ================= GLOSSARY ================= -->
+  <div class="card" id="glossary">
+    <h2>Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning in this file</th></tr>
+      <tr><td>I2C</td><td>The two-wire connection shared by both sensors.</td></tr>
+      <tr><td>SDA / SCL</td><td>The data wire and the clock wire; GPIO5 and GPIO6 on this board.</td></tr>
+      <tr><td>Controller / device</td><td>The microcontroller starts every exchange; the sensors only answer.</td></tr>
+      <tr><td>Open drain</td><td>An output that can pull a wire low or release it, but never drives it high. Required so several devices can share one wire.</td></tr>
+      <tr><td>Pull-up resistor</td><td>A resistor that returns a released wire to the supply voltage. Enabled inside the chip by <code>Pull::Up</code>.</td></tr>
+      <tr><td>START / STOP</td><td>The two edges on SDA, made while SCL is high, that begin and end an exchange.</td></tr>
+      <tr><td>ACK / NACK</td><td>A device pulling SDA low to confirm it heard the address, or the absence of that confirmation.</td></tr>
+      <tr><td>Bit-banging</td><td>Producing a signal by setting a pin in software rather than with a hardware block.</td></tr>
+      <tr><td>Bus recovery</td><td>The nine clock pulses and STOP that return the wires to idle.</td></tr>
+      <tr><td>Mutex</td><td>A lock allowing one holder at a time; here it makes the bus usable by two tasks safely.</td></tr>
+      <tr><td>Peripheral</td><td>A hardware block inside the chip. <code>I2C0</code> is the first of the two I2C blocks.</td></tr>
+      <tr><td>7-bit address</td><td>The number identifying a device on the bus. 0x03 to 0x77 are usable; the rest are reserved.</td></tr>
+      <tr><td>Busy-wait</td><td>Waiting by counting processor cycles rather than by handing the processor to another task.</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    Home Environmental Sensor — firmware documentation for <code>src/drivers/i2c_bus.rs</code>.
+  </footer>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+</script>
+
+</body>
+</html>
