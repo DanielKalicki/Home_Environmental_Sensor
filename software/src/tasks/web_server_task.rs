@@ -370,7 +370,13 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
         return;
     }
 
-    let mut chunk: String<384> = String::new();
+    // Large enough for the longest single reading, which is the BME690's: it
+    // carries every BSEC output, not just the four measured channels. Its keys
+    // alone come to about 300 bytes and a typical reading to about 460, but the
+    // margin here is deliberate: `write!` into a `String` fails on overflow and
+    // the failure is discarded, which would leave the client parsing truncated
+    // JSON, and a single `f32` printed at its worst case runs to 48 characters.
+    let mut chunk: String<1024> = String::new();
     let _ = write!(
         chunk,
         "{{\"sensor\":\"{}\",\"uptime_ms\":{},\"interval_ms\":{},\"capacity\":{},\"first_sequence\":{},\"next_sequence\":{},\"from\":{},\"count\":{},\"readings\":[",
@@ -419,15 +425,28 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
             match shared_state::bme690_reading(sequence).await {
                 Some(sample) => {
                     let m = sample.value;
+                    // `temperature_celsius` and `humidity_percent` are BSEC's
+                    // heat-compensated values, with the sensor's own heating
+                    // removed; the `raw_` fields are what the sensor reported.
                     let _ = write!(
                         chunk,
-                        "{}{{\"taken_at_ms\":{},\"temperature_celsius\":{},\"pressure_pascals\":{},\"humidity_percent\":{},\"gas_resistance_ohms\":{}}}",
+                        "{}{{\"taken_at_ms\":{},\"temperature_celsius\":{},\"pressure_pascals\":{},\"humidity_percent\":{},\"gas_resistance_ohms\":{},\"raw_temperature_celsius\":{},\"raw_humidity_percent\":{},\"iaq\":{},\"static_iaq\":{},\"iaq_accuracy\":{},\"co2_equivalent_ppm\":{},\"tvoc_equivalent_ppb\":{},\"gas_percentage\":{},\"stabilized\":{},\"run_in_complete\":{}}}",
                         separator,
                         sample.taken_at.as_millis(),
                         m.temperature_celsius,
                         m.pressure_pascals,
                         m.relative_humidity_percent,
-                        m.gas_resistance_ohms
+                        m.gas_resistance_ohms,
+                        m.raw_temperature_celsius,
+                        m.raw_humidity_percent,
+                        m.iaq,
+                        m.static_iaq,
+                        m.iaq_accuracy.as_raw(),
+                        m.co2_equivalent_ppm,
+                        m.tvoc_equivalent_ppb,
+                        m.gas_percentage,
+                        m.stabilized,
+                        m.run_in_complete
                     );
                 }
                 None => {

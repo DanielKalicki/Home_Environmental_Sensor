@@ -145,6 +145,24 @@ impl Oversampling {
         }
     }
 
+    /// Decode a 3-bit `osrs[2:0]` field value.
+    ///
+    /// Needed because BSEC hands its oversampling choices back as those raw
+    /// codes. Returns `None` for the two encodings the datasheet leaves
+    /// undefined, rather than guessing at a setting whose measurement time
+    /// would then be wrong.
+    pub fn from_raw(raw: u8) -> Option<Self> {
+        match raw {
+            0b000 => Some(Oversampling::Skipped),
+            0b001 => Some(Oversampling::X1),
+            0b010 => Some(Oversampling::X2),
+            0b011 => Some(Oversampling::X4),
+            0b100 => Some(Oversampling::X8),
+            0b101 => Some(Oversampling::X16),
+            _ => None,
+        }
+    }
+
     /// Number of ADC conversion cycles this setting costs.
     ///
     /// A skipped channel costs nothing; otherwise the count equals the
@@ -586,6 +604,12 @@ pub enum Error {
     WriteTooLong,
     /// A heater profile index above 9 was requested.
     InvalidHeaterProfile(u8),
+    /// An `osrs[2:0]` code outside the six the datasheet defines was requested.
+    InvalidOversampling(u8),
+    /// An operating mode this driver does not implement was requested. Only
+    /// sleep and forced mode are supported; parallel and sequential mode are
+    /// not.
+    UnsupportedOperatingMode(u8),
     /// The sensor did not return to sleep mode, so a new mode could not be
     /// selected.
     ModeChangeTimeout,

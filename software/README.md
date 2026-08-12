@@ -45,7 +45,18 @@ select the ESP compiler and `xtensa-esp32s3-none-elf` target automatically.
 3. Run `cargo run --release` to flash the firmware and open a monitor.
 
 If automatic port selection cannot identify the board, use
-`espflash flash --chip esp32s3 --port /dev/ttyACM0 target/xtensa-esp32s3-none-elf/release/xiao-esp32s3`.
+`espflash flash --chip esp32s3 --partition-table partitions.csv --port /dev/ttyACM0 target/xtensa-esp32s3-none-elf/release/xiao-esp32s3`.
+
+`--partition-table` is not optional. The firmware saves BSEC's learned gas
+baseline into a partition named `bsec_state`, and without the project's own
+[partitions.csv](partitions.csv) espflash generates its default table, whose
+application partition covers the same address. `cargo run` and
+`tools/flash.sh` both pass the flag already.
+
+Flashing does not erase the saved state. espflash writes the bootloader, the
+partition table and the application, and `bsec_state` sits past the end of all
+three, so a new build starts with the calibration the previous one learned. To
+deliberately discard it, use `espflash erase-parts bsec_state`.
 
 The firmware prints `XIAO ESP32-S3 Embassy firmware started; blinking GPIO21` to
 the USB JTAG serial monitor at boot, then toggles GPIO21 every half second. The
@@ -54,8 +65,8 @@ serial interface is `/dev/ttyACM0` on this system.
 ## Measurement history and PSRAM
 
 The board keeps a full day of readings per sensor: 8640 SCD41 readings at one
-every 10 seconds, 17280 SPS30 readings at one every 5 seconds, and 17280 BME690
-readings at one every 5 seconds. That is far more than the internal RAM can
+every 10 seconds, 17280 SPS30 readings at one every 5 seconds, and 14400 BME690
+readings at one every 6 seconds. That is far more than the internal RAM can
 spare next to the Wi-Fi driver and the network stack, so all three ring buffers
 live in the external PSRAM.
 
@@ -97,15 +108,114 @@ task module, and it is the only thing to change to adjust the behaviour:
 | --- | --- | --- | --- |
 | SCD41 | `src/tasks/scd41_task.rs` | 1 | The first single-shot conversion, taken before the sensor's own temperature has settled. |
 | SPS30 | `src/tasks/sps30_task.rs` | 6 | Roughly the first 30 seconds, while the fan and laser spin up. |
-| BME690 | `src/tasks/bme690_task.rs` | 2 | The first measurements, taken before the gas heater plate reaches its target. |
 
 Setting a count to 0 publishes every reading. The countdown restarts on every
 re-initialisation, not only at boot, so the readings taken right after a bus
 error is recovered from are discarded as well.
 
-The BME690 default is not arbitrary: the first reading after start-up measured
-386 kΩ of gas resistance against a steady 11-16 kΩ afterwards, and it reported
-its heater as stable, so the sensor's own stability flag does not identify it.
+The BME690 does not discard anything, because BSEC reports its own readiness
+instead. See the section below.
+
+## The BME690 and BSEC
+
+The BME690 measures temperature, pressure, humidity and the electrical
+resistance of a heated gas-sensing film. Only the first three mean anything on
+their own. The gas resistance falls as volatile compounds increase, but it also
+moves with humidity and drifts as the film ages, so a single reading cannot be
+turned into an air-quality figure without a baseline learned from the
+environment the sensor sits in.
+
+Bosch supplies that model as **BSEC**, a closed-source library shipped as a
+prebuilt archive. This firmware links the ESP32-S3 build of it from
+`src/drivers/bsec/bsec_v3-3-0-0/release_bin/IAQ/bin/esp/esp32_s3/libalgobsec.a`.
+Only the Rust side is written here:
+
+| File | Contents |
+| --- | --- |
+| `src/drivers/bsec/ffi.rs` | The library's C interface, declared by hand. The struct layouts are checked against the sizes the library was built with at compile time, so a mismatch is a build error rather than a runtime fault. |
+| `src/drivers/bsec/mod.rs` | A safe wrapper: instance memory, the output subscription, and typed inputs and outputs. |
+| `src/drivers/bsec/config.rs` | The tuning blob, transcribed from Bosch's C array. |
+| `src/drivers/bsec/math_shims.rs` | The C maths functions the archive calls, forwarded to the `libm` crate. Rust's `core` does not provide them in a `no_std` binary. |
+| `src/utils/flash_store.rs` | Keeps the learned baseline in the flash across reboots. |
+
+BSEC decides how the sensor is operated, so `src/tasks/bme690_task.rs` is a loop
+around the library rather than a fixed schedule: it asks BSEC what oversampling,
+heater temperature and heater duration to use and when to come back, applies
+them, runs one forced-mode measurement, feeds the compensated result back, and
+sleeps until the moment BSEC named.
+
+The library runs at its low-power rate, one measurement every 3 seconds, which
+is the only rate that produces a TVOC estimate. Every cycle has to run, because
+the estimates depend on a steady stream of measurements, but only every second
+one is stored: air quality indoors does not change fast enough to justify the
+PSRAM that 3-second history would cost. That is why the retained interval is
+6 seconds while the sensor is read every 3.
+
+The tuning blob is chosen to match. `IAQ_33V_3S_4D` means a 3.3 V sensor supply,
+the 3-second rate, and a baseline horizon of four days. The blob encodes the
+rate it was tuned for, so changing the rate means transcribing the matching blob
+from `release_bin/IAQ/config/bme690/` as well.
+
+BSEC needs time before its output is trustworthy, and it says so itself through
+three fields carried with every reading:
+
+| Field | Meaning |
+| --- | --- |
+| `stabilized` | False while the gas film is still burning off after power-up. |
+| `run_in_complete` | False until enough measurements have been collected to place the baseline. |
+| `iaq_accuracy` | 0 unreliable, 1 calibrating, 2 calibrated, 3 high accuracy. |
+
+The learned baseline is written to the flash so that a reboot does not throw it
+away. See the next section.
+
+## Saving the learned baseline
+
+BSEC needs hours of measurements before its air-quality output is trustworthy,
+so losing that work to a power cut would make the sensor close to useless in a
+place where the mains is not perfectly reliable. The library can serialise
+what it has learned into a blob of at most 255 bytes, and the firmware keeps
+that blob in the flash.
+
+[src/utils/flash_store.rs](src/utils/flash_store.rs) is the storage
+side. It is one named slot holding one opaque byte string:
+
+- The address comes from the partition table, looked up at runtime by the label
+  `bsec_state`. Compiling the address in instead would mean keeping two files
+  in step by hand, and a stale constant would not fail cleanly — it would erase
+  a sector of whatever else happened to be there, quite possibly the running
+  firmware.
+- Every record carries a CRC-32. The flash can only be erased a whole 4096-byte
+  sector at a time, so saving 255 bytes briefly blanks a sector, and losing
+  power in that window leaves a half-written record behind. A record that does
+  not check out is reported as if the slot were empty, so the firmware simply
+  starts learning again.
+- Writing to the flash means turning off the instruction cache, so the routines
+  run from RAM inside a critical section. A save blocks every task and every
+  interrupt for the few milliseconds an erase takes. That is why it is done in
+  the gap BSEC leaves between measurements, and never in the middle of one.
+
+A save happens when either of two things is true:
+
+- The IAQ accuracy has risen since the last save. Accuracy only climbs through
+  four values, so this accounts for at most three writes over the life of a
+  boot, and it means a hard-won calibration is on the flash within seconds of
+  being reached rather than hours later.
+- Six hours have passed since the last save. This bounds how much learning a
+  power cut can cost.
+
+That comes to a handful of erases a day against a sector rated for around
+100000, so the flash will not wear out. A restored state is deliberately not
+saved straight back: without that check, every boot would erase a sector to
+store what it had just read out of it.
+
+At boot the firmware prints one of `BSEC: restored N bytes of learned state`,
+`BSEC: no saved state; learning from scratch`, or a line explaining why neither
+happened. If the device was flashed without the project's partition table it
+says so explicitly and keeps running without saving anything.
+
+A state blob is tied to the library version and the tuning blob it was written
+with. Changing either makes BSEC reject the old state, which is reported and
+then ignored.
 
 ## Web API
 
@@ -130,6 +240,28 @@ responses.
 
 The single-page application, served from flash as `text/html`. `GET
 /index.html` returns the same thing.
+
+It shows the latest reading from each sensor as a card, then a day of history as
+charts:
+
+| Chart | Series |
+| --- | --- |
+| Carbon dioxide | The SCD41's measurement and the BME690's estimate, on one axis so the gap between them is visible. |
+| Temperature | SCD41 and BME690. |
+| Humidity | SCD41 and BME690. |
+| Indoor air quality | `iaq` and `static_iaq`. The two separating shows the baseline moving underneath. |
+| Volatile organic compounds | `tvoc_equivalent_ppb`. |
+| Gas | `gas_percentage`, on a fixed 0-100 axis. |
+| Fine particulates | PM1.0, PM2.5 and PM4.0. |
+| Coarse particulates | PM10 and the typical particle size. |
+| Barometric pressure | BME690. |
+| Gas resistance | The BME690's raw film resistance, in kilohms. |
+
+The four gas-derived cards are left uncoloured while `iaq_accuracy` is 0,
+because BSEC emits fixed placeholders until it has a baseline and colouring one
+green would claim the air is fine on the strength of a number it has not
+measured. A line under those cards says which stage the sensor has reached and
+disappears once calibration is done.
 
 ### `GET /api/status`
 
@@ -158,11 +290,11 @@ anything.
       "next_sequence": 720
     },
     "bme690": {
-      "interval_ms": 5000,
-      "capacity": 17280,
-      "len": 720,
+      "interval_ms": 6000,
+      "capacity": 14400,
+      "len": 600,
       "first_sequence": 0,
-      "next_sequence": 720
+      "next_sequence": 600
     }
   }
 }
@@ -232,21 +364,42 @@ number of every following element stays correct.
 The SCD41 reading fields are `taken_at_ms`, `co2_ppm` (integer),
 `temperature_celsius` and `humidity_percent`. The SPS30 reading fields are
 `taken_at_ms`, `pm1_0`, `pm2_5`, `pm4_0`, `pm10` (all micrograms per cubic
-metre) and `typical_particle_size` (micrometres). The BME690 reading fields are
-`taken_at_ms`, `temperature_celsius`, `pressure_pascals` (pascals, not
-hectopascals), `humidity_percent` and `gas_resistance_ohms`.
+metre) and `typical_particle_size` (micrometres).
 
-`gas_resistance_ohms` is the raw resistance of the sensor's heated gas-sensing
-film, not an air-quality index. It falls as volatile compounds increase, but it
-also moves with humidity and drifts as the film ages, so only its change over
-time is meaningful. The BME690 measures temperature and humidity independently
-of the SCD41, so the two sensors will not report identical values.
+The BME690 reading fields are everything BSEC produces:
+
+| Field | Meaning |
+| --- | --- |
+| `taken_at_ms` | Device uptime when the reading was taken. |
+| `temperature_celsius` | Temperature with the sensor's own heating removed. |
+| `humidity_percent` | Relative humidity, corrected against the same. |
+| `pressure_pascals` | Pressure in pascals, not hectopascals. |
+| `gas_resistance_ohms` | Resistance of the heated gas-sensing film. |
+| `raw_temperature_celsius` | Temperature as the sensor reported it, uncorrected. |
+| `raw_humidity_percent` | Relative humidity as the sensor reported it, uncorrected. |
+| `iaq` | Indoor air quality index, 0-500, relative to the learned baseline. |
+| `static_iaq` | The same index without the baseline tracking, so it does not drift back towards its own average. |
+| `iaq_accuracy` | 0 unreliable, 1 calibrating, 2 calibrated, 3 high accuracy. |
+| `co2_equivalent_ppm` | CO2 estimated from the gas signal. It is not a measurement; the SCD41 measures CO2 directly. |
+| `tvoc_equivalent_ppb` | Total volatile organic compounds, estimated the same way. |
+| `gas_percentage` | Where the current gas signal sits between the cleanest and dirtiest air seen so far. |
+| `stabilized` | False while the gas film is still burning off after power-up. |
+| `run_in_complete` | False until BSEC has collected enough measurements to place the baseline. |
+
+Everything derived from the gas signal is an estimate against a learned
+baseline, so treat `iaq`, `co2_equivalent_ppm` and `tvoc_equivalent_ppb` as
+meaningful only once `iaq_accuracy` has reached at least 1 and
+`run_in_complete` is true. The baseline is kept in flash across reboots, so
+this normally only has to be waited out once; see the section on saving it
+above. The BME690 measures temperature and
+humidity independently of the SCD41, so the two sensors will not report
+identical values.
 
 ### How the page uses these
 
 On its first load the page fetches `/api/status`, then walks each sensor's
 history with `/api/readings` in pages of 2000, which is 5 requests for the
-SCD41 and 9 each for the SPS30 and the BME690 when a full day is retained. It
+SCD41, 9 for the SPS30 and 8 for the BME690 when a full day is retained. It
 keeps every reading in the browser and redraws after each page arrives.
 
 Afterwards it polls `/api/status` every 5 seconds and requests only the

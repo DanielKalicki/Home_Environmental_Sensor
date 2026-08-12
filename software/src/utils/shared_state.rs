@@ -18,7 +18,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Instant;
 
-use crate::drivers::bme690::CompensatedMeasurement as Bme690Measurement;
+use crate::drivers::bsec::Outputs as Bme690Measurement;
 use crate::drivers::scd41::Measurement as Scd41Measurement;
 use crate::drivers::sps30::Measurement as Sps30Measurement;
 use crate::tasks::bme690_task::MEASUREMENT_INTERVAL_MS as BME690_INTERVAL_MS;

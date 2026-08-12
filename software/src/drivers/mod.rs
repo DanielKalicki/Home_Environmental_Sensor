@@ -4,6 +4,7 @@
 //! read-out logic lives in the matching module under [`crate::tasks`].
 
 pub mod bme690;
+pub mod bsec;
 pub mod i2c_bus;
 pub mod scd41;
 pub mod sps30;

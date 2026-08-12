@@ -288,8 +288,24 @@
       </section>
 
       <section>
-        <h2>Pressure and gas &mdash; BME690</h2>
+        <h2>Air quality, pressure and gas &mdash; BME690</h2>
         <div class="cards">
+          <div class="card" id="card-iaq">
+            <div class="label">Indoor air quality</div>
+            <div class="value"><span data-field="iaq">--</span><span class="unit">IAQ</span></div>
+          </div>
+          <div class="card" id="card-co2eq">
+            <div class="label">CO&#8322; equivalent</div>
+            <div class="value"><span data-field="co2_equivalent">--</span><span class="unit">ppm</span></div>
+          </div>
+          <div class="card" id="card-tvoc">
+            <div class="label">Total volatile organic compounds</div>
+            <div class="value"><span data-field="tvoc">--</span><span class="unit">ppb</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Gas</div>
+            <div class="value"><span data-field="gas_percentage">--</span><span class="unit">%</span></div>
+          </div>
           <div class="card">
             <div class="label">Barometric pressure</div>
             <div class="value"><span data-field="pressure">--</span><span class="unit">hPa</span></div>
@@ -308,11 +324,18 @@
           </div>
         </div>
         <p class="note" id="note-bme690" hidden>Waiting for the first reading.</p>
+        <p class="note" id="note-calibration" hidden></p>
         <p class="note">
-          Gas resistance is the raw resistance of the sensor's heated film. It
-          falls as volatile compounds in the air increase, but it also moves
-          with humidity and drifts as the film ages, so only its change over
-          time carries meaning &mdash; it is not an absolute air-quality figure.
+          Only pressure, temperature and humidity are measured. Everything else
+          in this section is derived by Bosch's BSEC library from the resistance
+          of the sensor's heated film, which falls as volatile compounds in the
+          air increase but also moves with humidity and drifts as the film
+          ages. BSEC corrects for that against a baseline it learns from the
+          last few days, so the indoor air quality index, the CO&#8322;
+          equivalent and the VOC figure are estimates relative to the air this
+          sensor usually sits in, not absolute concentrations. The CO&#8322;
+          equivalent in particular is inferred from the gas signal; the SCD41
+          above measures CO&#8322; directly and is the figure to trust.
           Temperature and humidity are measured independently of the SCD41, so
           the two sections will not agree exactly.
         </p>
@@ -326,7 +349,8 @@
             <div class="chart-head">
               <span class="chart-title">Carbon dioxide</span>
               <span class="legend">
-                <span style="color: #2563eb"><i></i>CO&sup2; (ppm)</span>
+                <span style="color: #2563eb"><i></i>SCD41, measured (ppm)</span>
+                <span style="color: #f59e0b"><i></i>BME690, estimated (ppm)</span>
               </span>
             </div>
             <canvas id="chart-co2"></canvas>
@@ -352,6 +376,39 @@
               </span>
             </div>
             <canvas id="chart-humidity"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Indoor air quality</span>
+              <span class="legend">
+                <span style="color: #16a34a"><i></i>IAQ</span>
+                <span style="color: #94a3b8"><i></i>Static IAQ</span>
+              </span>
+            </div>
+            <canvas id="chart-iaq"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Volatile organic compounds</span>
+              <span class="legend">
+                <span style="color: #7c3aed"><i></i>TVOC (ppb)</span>
+              </span>
+            </div>
+            <canvas id="chart-tvoc"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Gas</span>
+              <span class="legend">
+                <span style="color: #0891b2"><i></i>Cleanest to dirtiest seen (%)</span>
+              </span>
+            </div>
+            <canvas id="chart-gas-percentage"></canvas>
           </div>
         </div>
 
@@ -514,8 +571,89 @@
         );
         setField("bme_humidity", bme690 ? bme690.humidity_percent : null, 1);
 
-        document.getElementById("updated").textContent =
-          new Date().toLocaleTimeString();
+        setField("iaq", bme690 ? bme690.iaq : null, 0);
+        setField(
+          "co2_equivalent",
+          bme690 ? bme690.co2_equivalent_ppm : null,
+          0
+        );
+        setField("tvoc", bme690 ? bme690.tvoc_equivalent_ppb : null, 0);
+        setField("gas_percentage", bme690 ? bme690.gas_percentage : null, 0);
+
+        // Colouring a placeholder would claim the air is fine on the strength
+        // of a number the sensor has not measured yet, so the gas-derived
+        // cards stay neutral until BSEC reports at least some calibration.
+        var gasUsable = !!bme690 && bme690.iaq_accuracy > 0;
+        // Bosch's IAQ bands: up to 100 is good, 101-200 is lightly to
+        // moderately polluted, and above 200 is heavily polluted.
+        setLevel("card-iaq", gasUsable ? levelFor(bme690.iaq, 100, 200) : null);
+        setLevel(
+          "card-co2eq",
+          gasUsable ? levelFor(bme690.co2_equivalent_ppm, 1000, 1400) : null
+        );
+        // Common indoor guidance for total VOCs: below 300 ppb is unremarkable,
+        // above 1000 ppb warrants ventilation.
+        setLevel(
+          "card-tvoc",
+          gasUsable ? levelFor(bme690.tvoc_equivalent_ppb, 300, 1000) : null
+        );
+
+        var calibration = document.getElementById("note-calibration");
+        var explanation = describeCalibration(bme690);
+        calibration.hidden = !explanation;
+        calibration.textContent = explanation;
+
+        document.getElementById("updated").textContent = clockTime(
+          new Date(),
+          true
+        );
+      }
+
+      // Explain how far along the gas sensor's self-calibration is, or return
+      // an empty string once it is finished and there is nothing to say.
+      //
+      // This exists because the gas-derived values are not simply less
+      // accurate before calibration completes: while the sensor is running in,
+      // BSEC has no baseline to compare against and emits fixed placeholders
+      // (an IAQ of exactly 50, 500 ppm, 50 ppb), which look like real readings.
+      function describeCalibration(bme690) {
+        if (!bme690) {
+          return "";
+        }
+        if (!bme690.stabilized) {
+          return (
+            "The gas sensor is stabilising after power-up. Until it finishes," +
+            " the air quality, CO\u2082 equivalent, VOC and gas figures are" +
+            " placeholders rather than measurements."
+          );
+        }
+        if (!bme690.run_in_complete) {
+          return (
+            "The gas sensor is running in: it is burning off what settled on" +
+            " the heated film while it was switched off. Until it finishes," +
+            " the air quality, CO\u2082 equivalent, VOC and gas figures are" +
+            " placeholders rather than measurements."
+          );
+        }
+        if (bme690.iaq_accuracy === 0) {
+          return (
+            "The gas sensor has no baseline yet, so the air quality," +
+            " CO\u2082 equivalent, VOC and gas figures are placeholders" +
+            " rather than measurements."
+          );
+        }
+        if (bme690.iaq_accuracy === 1) {
+          return (
+            "The gas sensor is calibrating. Its readings will only become" +
+            " reliable once it has seen both clean and polluted air \u2014" +
+            " roughly half an hour of each, which airing the room and then" +
+            " breathing near the sensor will provide."
+          );
+        }
+        if (bme690.iaq_accuracy === 2) {
+          return "The gas sensor is still trimming its baseline.";
+        }
+        return "";
       }
 
       // ---------------------------------------------------------------------
@@ -776,21 +914,140 @@
         });
       }
 
-      function formatTimeLabel(timestamp, spanMs) {
-        var date = new Date(timestamp);
-        var time = date.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        // Add the calendar date once the window is long enough to cross days.
-        if (spanMs >= 12 * 3600 * 1000) {
-          return (
-            date.toLocaleDateString([], { day: "2-digit", month: "2-digit" }) +
-            " " +
-            time
-          );
+      // Spacings offered for the time axis, in minutes. Every one of them
+      // divides the clock evenly, so a tick always lands on a round time.
+      var TIME_STEPS_MINUTES = [
+        1, 2, 5, 10, 15, 30, 60, 120, 180, 360, 720, 1440, 2880, 10080,
+      ];
+
+      /**
+       * Choose the ticks for the time axis: the closest spacing from the list
+       * above whose labels still cannot touch at the width available.
+       *
+       * This replaced cutting the window into five equal parts, which had two
+       * faults on the day-long window the charts use. The labels fell at
+       * arbitrary times such as "14:23" and "19:11", which have to be read
+       * digit by digit before the chart can be placed in the day; and six of
+       * them, each carrying a date as well as a time, needed more width than a
+       * chart three to a row has, so they overlapped into an unreadable smear.
+       *
+       * @param ctx    canvas context, already set to the label font
+       * @param xMin   left edge of the axis, in epoch milliseconds
+       * @param xMax   right edge of the axis, in epoch milliseconds
+       * @param plotW  width the labels have to share, in CSS pixels
+       * @returns      [{ time, text, date }, ...], `date` empty unless the
+       *               tick begins a new day
+       */
+      function timeAxisTicks(ctx, xMin, xMax, plotW) {
+        var spanMs = xMax - xMin;
+        var ticks = [];
+        for (var i = 0; i < TIME_STEPS_MINUTES.length; i++) {
+          var minutes = TIME_STEPS_MINUTES[i];
+          ticks = roundTimeTicks(xMin, xMax, minutes);
+          if (ticks.length < 2) {
+            break;
+          }
+          var widest = 0;
+          for (var t = 0; t < ticks.length; t++) {
+            widest = Math.max(
+              widest,
+              ctx.measureText(ticks[t].text).width,
+              ticks[t].date ? ctx.measureText(ticks[t].date).width : 0
+            );
+          }
+          // Worked out from the step rather than measured between the first
+          // and last tick, because those two sit somewhere inside the window
+          // rather than on its edges.
+          var spacing = (plotW * minutes * 60000) / spanMs;
+          if (spacing >= widest + 10) {
+            return ticks;
+          }
         }
-        return time;
+        // Nothing on the list fits; the widest spacing is the least bad of
+        // them, so the labels are crowded rather than absent.
+        return ticks;
+      }
+
+      // Every round wall-clock instant inside the window, at the given
+      // spacing.
+      //
+      // The instants are stepped through with `Date` rather than by adding
+      // milliseconds, because a fixed addition drifts off the clock: aligning
+      // against the epoch puts the ticks on the half hour in the time zones
+      // whose offset is not a whole number of hours, and adding a fixed day
+      // loses an hour across a daylight-saving change.
+      function roundTimeTicks(xMin, xMax, stepMinutes) {
+        // Rounded down, which can place the first candidate before the window;
+        // the guard in the loop drops it if so.
+        var cursor = new Date(xMin);
+        cursor.setSeconds(0, 0);
+        if (stepMinutes < 60) {
+          cursor.setMinutes(
+            Math.floor(cursor.getMinutes() / stepMinutes) * stepMinutes
+          );
+        } else if (stepMinutes < 1440) {
+          cursor.setMinutes(0);
+          cursor.setHours(
+            Math.floor(cursor.getHours() / (stepMinutes / 60)) *
+              (stepMinutes / 60)
+          );
+        } else {
+          cursor.setHours(0, 0, 0, 0);
+        }
+
+        var ticks = [];
+        // The cap is a stop against a spacing far finer than the window, which
+        // would otherwise walk a whole day a minute at a time.
+        while (cursor.getTime() <= xMax && ticks.length < 200) {
+          if (cursor.getTime() >= xMin) {
+            ticks.push(describeTick(cursor, stepMinutes, xMax - xMin));
+          }
+          if (stepMinutes >= 1440) {
+            cursor.setDate(cursor.getDate() + stepMinutes / 1440);
+          } else if (stepMinutes >= 60) {
+            cursor.setHours(cursor.getHours() + stepMinutes / 60);
+          } else {
+            cursor.setMinutes(cursor.getMinutes() + stepMinutes);
+          }
+        }
+        return ticks;
+      }
+
+      // Label one tick. The date goes on a second line under the midnight it
+      // belongs to rather than beside every time, which is what let the labels
+      // shrink to five characters: on a day-long window exactly one tick
+      // carries it, and that tick is the day boundary itself.
+      function describeTick(date, stepMinutes, spanMs) {
+        var day = date.toLocaleDateString([], {
+          day: "2-digit",
+          month: "2-digit",
+        });
+        // At a spacing of a day or more every tick is a midnight, so the time
+        // would read "00:00" throughout and only the date tells them apart.
+        if (stepMinutes >= 1440) {
+          return { time: date.getTime(), text: day, date: "" };
+        }
+        var startsDay = date.getHours() === 0 && date.getMinutes() === 0;
+        return {
+          time: date.getTime(),
+          text: clockTime(date, false),
+          date: startsDay && spanMs >= 12 * 3600000 ? day : "",
+        };
+      }
+
+      // A time on the 24-hour clock, optionally with seconds.
+      //
+      // Written out here rather than left to `toLocaleTimeString` because that
+      // follows the browser's locale, and the twelve-hour clock it picks in
+      // some of them is both three characters wider on an axis that is short
+      // of room and ambiguous once the trailing "AM" has been squeezed off.
+      function clockTime(date, withSeconds) {
+        var text = pad2(date.getHours()) + ":" + pad2(date.getMinutes());
+        return withSeconds ? text + ":" + pad2(date.getSeconds()) : text;
+      }
+
+      function pad2(value) {
+        return (value < 10 ? "0" : "") + value;
       }
 
       // Pick a "nice" step so the axis gets round numbers.
@@ -892,8 +1149,24 @@
           left: Math.ceil(widestLabel) + labelGap * 2,
         };
         var plotW = width - pad.left - pad.right;
+        if (plotW <= 0) {
+          return;
+        }
+
+        // How many time labels fit depends on what the value labels left over,
+        // so the ticks are settled here rather than where they are drawn.
+        var timeTicks = timeAxisTicks(ctx, xMin, xMax, plotW);
+        // A date is written on a second line beneath its time, and that line
+        // has to be reserved before the plot height is fixed.
+        var datedTicks = timeTicks.some(function (tick) {
+          return tick.date !== "";
+        });
+        if (datedTicks) {
+          pad.bottom += 12;
+        }
+
         var plotH = heightPx - pad.top - pad.bottom;
-        if (plotW <= 0 || plotH <= 0) {
+        if (plotH <= 0) {
           return;
         }
 
@@ -916,25 +1189,25 @@
           ctx.fillText(labels[l].text, pad.left - labelGap, gy);
         }
 
-        // Time axis: five evenly spaced labels across the whole window.
+        // Time axis: round clock times, spaced so their labels cannot touch.
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        var spanMs = xMax - xMin;
-        var ticks = 5;
-        for (var i = 0; i <= ticks; i++) {
-          var time = xMin + (spanMs * i) / ticks;
-          var gx = Math.round(x(time)) + 0.5;
+        for (var i = 0; i < timeTicks.length; i++) {
+          var tick = timeTicks[i];
+          var gx = Math.round(x(tick.time)) + 0.5;
           ctx.beginPath();
           ctx.moveTo(gx, pad.top + plotH);
           ctx.lineTo(gx, pad.top + plotH + 4);
           ctx.stroke();
-          var align = i === 0 ? "left" : i === ticks ? "right" : "center";
-          ctx.textAlign = align;
-          ctx.fillText(
-            formatTimeLabel(time, spanMs),
-            gx,
-            pad.top + plotH + 7
-          );
+
+          // Centred on its tick, except where that would hang the text off the
+          // canvas and cut its first or last characters off.
+          var half = ctx.measureText(tick.text).width / 2;
+          var tx = Math.min(Math.max(gx, half + 1), width - half - 1);
+          ctx.fillText(tick.text, tx, pad.top + plotH + 7);
+          if (tick.date) {
+            ctx.fillText(tick.date, tx, pad.top + plotH + 19);
+          }
         }
 
         // One polyline plus, when the history is sparse enough for them to be
@@ -994,9 +1267,19 @@
 
         var scd41 = store.scd41.readings;
         var bme690 = store.bme690.readings;
+        // Both sensors report a carbon dioxide figure, so they share a chart:
+        // the SCD41 measures it optically, while the BME690's is inferred from
+        // its gas signal. Plotting them together is the quickest way to see
+        // how far the estimate is from the measurement.
         drawChart(
           document.getElementById("chart-co2"),
-          [{ color: "#2563eb", points: toPoints(scd41, "co2_ppm") }],
+          [
+            { color: "#2563eb", points: toPoints(scd41, "co2_ppm") },
+            {
+              color: "#f59e0b",
+              points: toPoints(bme690, "co2_equivalent_ppm"),
+            },
+          ],
           windowStart,
           now,
           { min: 0 }
@@ -1088,6 +1371,52 @@
           windowStart,
           now,
           paddedAxis(gas)
+        );
+
+        // The index and its untracked twin share a chart because the gap
+        // between them is the interesting part: `iaq` is pulled back towards
+        // the baseline BSEC keeps learning, `static_iaq` is not, so the two
+        // separating shows the baseline moving underneath.
+        var iaq = toPoints(bme690, "iaq");
+        var staticIaq = toPoints(bme690, "static_iaq");
+        drawChart(
+          document.getElementById("chart-iaq"),
+          [
+            { color: "#16a34a", points: iaq },
+            { color: "#94a3b8", points: staticIaq },
+          ],
+          windowStart,
+          now,
+          // Follows the readings, then clamped to the 0-500 range the index is
+          // defined over.
+          clampAxis(paddedAxis(iaq.concat(staticIaq)), 0, 500)
+        );
+
+        var tvoc = toPoints(bme690, "tvoc_equivalent_ppb");
+        drawChart(
+          document.getElementById("chart-tvoc"),
+          [{ color: "#7c3aed", points: tvoc }],
+          windowStart,
+          now,
+          // A concentration cannot be negative, so the lower bound is held at
+          // zero even when the padding would take the axis below it.
+          clampAxis(paddedAxis(tvoc), 0, Infinity)
+        );
+
+        drawChart(
+          document.getElementById("chart-gas-percentage"),
+          [
+            {
+              color: "#0891b2",
+              points: toPoints(bme690, "gas_percentage"),
+            },
+          ],
+          windowStart,
+          now,
+          // Pinned rather than derived: the value already says where the air
+          // sits between the cleanest and the dirtiest BSEC has seen, so the
+          // whole scale is the point of it.
+          { min: 0, max: 100 }
         );
       }
 

@@ -19,7 +19,10 @@ fi
 
 "${BUILD_SCRIPT}"
 
-FLASH_ARGS=(flash --chip esp32s3)
+# `--partition-table` is not optional: the default table espflash would
+# otherwise generate leaves no room for the `bsec_state` partition, and its
+# application partition covers the address that partition lives at.
+FLASH_ARGS=(flash --chip esp32s3 --partition-table "${ROOT_DIR}/partitions.csv")
 if [[ -n "${ESPFLASH_PORT:-}" ]]; then
     FLASH_ARGS+=(--port "${ESPFLASH_PORT}")
 fi
