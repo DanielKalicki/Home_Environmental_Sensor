@@ -1,0 +1,23 @@
+{
+  "name": "home-environmental-sensor-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone Svelte server that polls the ESP32-S3 sensor device over its HTTP API and keeps its own long-term history.",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node -r dotenv/config build/index.js"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-node": "^5.2.9",
+    "@sveltejs/kit": "^2.8.0",
+    "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "svelte": "^4.2.19",
+    "vite": "^5.4.10"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
