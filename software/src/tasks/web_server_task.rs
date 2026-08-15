@@ -23,7 +23,7 @@ use core::fmt::Write as _;
 
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Stack, StackResources};
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{with_timeout, Duration, Instant, Timer};
 use embedded_io_async::Write as _;
 use esp_println::println;
 use esp_wifi::wifi::{
@@ -32,6 +32,7 @@ use esp_wifi::wifi::{
 };
 use heapless::String;
 
+use crate::drivers::as7343::{Channel as As7343Channel, SPECTRAL_CHANNELS};
 use crate::utils::shared_state;
 
 /// Network credentials, supplied at build time via environment variables.
@@ -56,6 +57,14 @@ pub const SOCKET_COUNT: usize = 3;
 const RECONNECT_DELAY_MS: u64 = 5000;
 /// Close an idle client connection after this long without traffic.
 const SOCKET_TIMEOUT_S: u64 = 10;
+/// Longest wait for a finished connection to drain before it is discarded.
+///
+/// Only the orderly case is worth waiting for. A client that walked away
+/// mid-response leaves part of that response in the transmit buffer, and that
+/// buffer is never drained: it is emptied when the socket is listened on
+/// again, not when the connection ends. Waiting for it unconditionally would
+/// therefore be a wait that never ends.
+const CLOSE_TIMEOUT_MS: u64 = 2000;
 /// Largest number of readings one `/api/readings` request may return.
 ///
 /// The retained history holds a day of readings, which is too much for a
@@ -171,10 +180,25 @@ pub async fn web_server_task(stack: &'static WifiStack) {
 
         serve_connection(&mut socket).await;
 
+        // Hang up, then put the socket back into a state `accept` can reuse.
+        //
+        // Both waits are bounded, because neither is guaranteed to finish.
+        // `flush` returns once the transmit buffer has been sent and
+        // acknowledged, and a connection that ended while a response was
+        // still being written leaves bytes in that buffer that will never be
+        // acknowledged by anyone: the peer is gone, and closing the socket
+        // does not discard them. An unbounded `flush` there would park this
+        // task forever, and because nothing else ever calls `accept`, the
+        // device would keep answering the network yet refuse every connection
+        // to port 80 until it was reset. Abandoning the wait costs nothing:
+        // `accept` listens on the socket again, which resets it and drops
+        // whatever was left queued.
+        let close_timeout = Duration::from_millis(CLOSE_TIMEOUT_MS);
+
         socket.close();
-        let _ = socket.flush().await;
+        let _ = with_timeout(close_timeout, socket.flush()).await;
         socket.abort();
-        let _ = socket.flush().await;
+        let _ = with_timeout(close_timeout, socket.flush()).await;
     }
 }
 
@@ -284,8 +308,14 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let scd41 = shared_state::scd41_status().await;
     let sps30 = shared_state::sps30_status().await;
     let bme690 = shared_state::bme690_status().await;
+    let as7343 = shared_state::as7343_status().await;
 
-    let mut body: String<512> = String::new();
+    // One sensor entry runs to a little over a hundred characters and the
+    // sequence numbers in it grow for as long as the board stays up, so the
+    // buffer is sized well clear of the four entries it has to hold: `write!`
+    // into a `String` fails on overflow and would leave the client parsing
+    // truncated JSON.
+    let mut body: String<768> = String::new();
     let _ = write!(
         body,
         "{{\"uptime_ms\":{},\"window_ms\":{},\"sensors\":{{",
@@ -297,6 +327,8 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let _ = write_sensor_status(&mut body, "sps30", &sps30);
     let _ = body.push(',');
     let _ = write_sensor_status(&mut body, "bme690", &bme690);
+    let _ = body.push(',');
+    let _ = write_sensor_status(&mut body, "as7343", &as7343);
     let _ = body.push_str("}}");
 
     send_response(socket, "application/json", &body).await;
@@ -304,7 +336,7 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
 
 /// Write one `"name":{...}` member of the `sensors` object.
 fn write_sensor_status(
-    body: &mut String<512>,
+    body: &mut String<768>,
     name: &str,
     status: &shared_state::HistoryStatus,
 ) -> core::fmt::Result {
@@ -317,7 +349,7 @@ fn write_sensor_status(
 
 /// Send one page of readings for a single sensor.
 ///
-/// `query` selects the sensor and the page: `sensor=scd41|sps30|bme690`,
+/// `query` selects the sensor and the page: `sensor=scd41|sps30|bme690|as7343`,
 /// `from=` the first sequence number wanted, `limit=` how many readings at
 /// most. A `from` that names an already overwritten reading is moved up to the
 /// oldest reading still retained, and the page reports the `from` it actually
@@ -339,6 +371,7 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
         "scd41" => shared_state::scd41_status().await,
         "sps30" => shared_state::sps30_status().await,
         "bme690" => shared_state::bme690_status().await,
+        "as7343" => shared_state::as7343_status().await,
         _ => {
             let _ = socket
                 .write_all(
@@ -447,6 +480,64 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                         m.gas_percentage,
                         m.stabilized,
                         m.run_in_complete
+                    );
+                }
+                None => {
+                    let _ = write!(chunk, "{}null", separator);
+                }
+            }
+        } else if sensor == "as7343" {
+            match shared_state::as7343_reading(sequence).await {
+                Some(sample) => {
+                    let m = sample.value;
+                    let _ = write!(
+                        chunk,
+                        "{}{{\"taken_at_ms\":{}",
+                        separator,
+                        sample.taken_at.as_millis()
+                    );
+                    // The twelve filtered channels are keyed by the centre
+                    // wavelength of their filter, in nanometres, which is what
+                    // the page plots them against. Every channel in
+                    // `SPECTRAL_CHANNELS` is a filtered one, so it always has
+                    // one.
+                    for channel in SPECTRAL_CHANNELS {
+                        if let Some(wavelength_nm) = channel.wavelength_nm() {
+                            let _ =
+                                write!(chunk, ",\"nm_{}\":{}", wavelength_nm, m.channel(channel));
+                        }
+                    }
+                    // The unfiltered and the flicker-detect photodiode are read
+                    // once per integration cycle, and a measurement runs three
+                    // cycles, so each carries three readings. They are reported
+                    // as they were measured rather than averaged here: they are
+                    // three separate measurements of the same light, and how
+                    // far apart they fall is itself worth seeing.
+                    let _ = write!(
+                        chunk,
+                        ",\"visible\":[{},{},{}],\"flicker\":[{},{},{}]",
+                        m.channel(As7343Channel::Visible1),
+                        m.channel(As7343Channel::Visible2),
+                        m.channel(As7343Channel::Visible3),
+                        m.channel(As7343Channel::FlickerDetect1),
+                        m.channel(As7343Channel::FlickerDetect2),
+                        m.channel(As7343Channel::FlickerDetect3)
+                    );
+                    // The gain the device reported alongside the readings, as
+                    // the factor the counts were taken with. It is absent only
+                    // if the device reported a code that is not a defined gain.
+                    match m.gain {
+                        Some(gain) => {
+                            let _ = write!(chunk, ",\"gain\":{}", gain.multiplier());
+                        }
+                        None => {
+                            let _ = chunk.push_str(",\"gain\":null");
+                        }
+                    }
+                    let _ = write!(
+                        chunk,
+                        ",\"analog_saturation\":{},\"digital_saturation\":{}}}",
+                        m.analog_saturation, m.digital_saturation
                     );
                 }
                 None => {

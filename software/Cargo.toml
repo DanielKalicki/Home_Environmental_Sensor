@@ -15,8 +15,19 @@ embassy-executor = { version = "0.6", features = ["task-arena-size-40960"] }
 embassy-net = { version = "0.4", features = ["tcp", "udp", "dhcpv4", "medium-ethernet", "dns"] }
 embassy-sync = "0.6"
 embassy-time = "0.3"
+# The async read/write traits the TCP sockets are driven through.
 embedded-io-async = "0.6"
+# The `ReadStorage`/`Storage` traits the flash is reached through.
+embedded-storage = "0.3"
+# Raw SPI-flash access, used to keep BSEC's learned gas baseline across
+# reboots; see `src/utils/flash_store.rs`. `critical-section` and `storage` are
+# default features and are both needed: the first keeps interrupts out of the
+# erase/write window, the second supplies the trait implementations.
+esp-storage = { version = "0.4", features = ["esp32s3"] }
 heapless = "0.8"
+# Supplies the C math functions the prebuilt BSEC library links against; see
+# `src/drivers/bsec/math_shims.rs`.
+libm = "0.2"
 static_cell = { version = "2", features = ["nightly"] }
 
 [profile.release]

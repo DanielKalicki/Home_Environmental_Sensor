@@ -179,6 +179,11 @@
         margin-top: 1rem;
       }
 
+      /* A chart placed directly under a row of cards, as the spectrum is. */
+      .cards + .chart-row {
+        margin-top: 1rem;
+      }
+
       .chart-head {
         display: flex;
         flex-wrap: wrap;
@@ -342,6 +347,57 @@
       </section>
 
       <section>
+        <h2>Light &mdash; AS7343</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="label">Visible light</div>
+            <div class="value"><span data-field="visible_light">--</span><span class="unit">counts</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Brightest channel</div>
+            <div class="value"><span data-field="brightest_channel">--</span><span class="unit">nm</span></div>
+          </div>
+          <div class="card">
+            <div class="label">Gain</div>
+            <div class="value"><span data-field="light_gain">--</span><span class="unit">&times;</span></div>
+          </div>
+        </div>
+
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Spectrum, newest reading</span>
+              <span class="legend">
+                <span>Raw counts per channel, by filter centre wavelength (nm)</span>
+              </span>
+            </div>
+            <canvas id="chart-spectrum"></canvas>
+          </div>
+        </div>
+
+        <p class="note" id="note-as7343" hidden>Waiting for the first reading.</p>
+        <p class="note" id="note-as7343-saturated" hidden>
+          The sensor is saturated: the light is brighter than the current gain
+          and integration time can measure, so the highest channels are cut off
+          and the shape of the spectrum cannot be trusted.
+        </p>
+        <p class="note">
+          Each bar is one of the twelve filtered photodiodes, plotted against
+          the centre wavelength of its filter. The bars are spaced evenly rather
+          than to scale, because the filters are not evenly spaced and placing
+          them to scale crowds the four between 515 and 555 nm together.
+          The values are the raw counts the sensor's converter returned, so they
+          say how much light each channel collected during one integration, not
+          how much power arrived at it. The channels do not respond equally, and
+          the counts are not corrected for that, so a bar being taller than its
+          neighbour does not by itself mean there is more light at that
+          wavelength; what the chart shows reliably is how the same channel
+          changes. Every count also scales with the gain above, which the
+          reading is taken with and is not divided out here.
+        </p>
+      </section>
+
+      <section>
         <h2>History</h2>
 
         <div class="chart-row">
@@ -458,6 +514,31 @@
           </div>
         </div>
 
+        <div class="chart-row">
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Light level</span>
+              <span class="legend">
+                <span style="color: #475569"><i></i>Unfiltered visible (counts)</span>
+              </span>
+            </div>
+            <canvas id="chart-light"></canvas>
+          </div>
+
+          <div class="chart">
+            <div class="chart-head">
+              <span class="chart-title">Spectral channels</span>
+              <span class="legend">
+                <span style="color: #2563eb"><i></i>450 nm</span>
+                <span style="color: #16a34a"><i></i>550 nm</span>
+                <span style="color: #dc2626"><i></i>640 nm</span>
+                <span style="color: #78716c"><i></i>855 nm</span>
+              </span>
+            </div>
+            <canvas id="chart-spectral-channels"></canvas>
+          </div>
+        </div>
+
         <p class="note" id="note-history">
           The device keeps the newest <span id="window">--</span> of readings
           per sensor in its external PSRAM. This page downloads that history
@@ -485,7 +566,29 @@
       // endless request loop.
       var MAX_PAGES_PER_SYNC = 40;
       // The sensors to keep, in the order they are fetched.
-      var SENSORS = ["scd41", "sps30", "bme690"];
+      var SENSORS = ["scd41", "sps30", "bme690", "as7343"];
+
+      // The twelve filtered channels of the AS7343, ordered by the centre
+      // wavelength of the filter, which is also the order they are plotted in.
+      // `key` is the field the device reports the channel under. `color`
+      // approximates the colour that wavelength is seen as, so a bar can be
+      // recognised without reading its label; 855 nm is past what the eye
+      // responds to at all, so it is drawn in a neutral brown-grey rather than
+      // pretending it has a colour.
+      var SPECTRUM_CHANNELS = [
+        { nm: 405, key: "nm_405", color: "#6a00d8" },
+        { nm: 425, key: "nm_425", color: "#3b00f0" },
+        { nm: 450, key: "nm_450", color: "#0033ff" },
+        { nm: 475, key: "nm_475", color: "#0093ff" },
+        { nm: 515, key: "nm_515", color: "#00d34a" },
+        { nm: 550, key: "nm_550", color: "#4cdd00" },
+        { nm: 555, key: "nm_555", color: "#7ee000" },
+        { nm: 600, key: "nm_600", color: "#ffbe00" },
+        { nm: 640, key: "nm_640", color: "#ff5a00" },
+        { nm: 690, key: "nm_690", color: "#e10600" },
+        { nm: 745, key: "nm_745", color: "#8f0d0d" },
+        { nm: 855, key: "nm_855", color: "#78716c" },
+      ];
 
       function setField(name, value, digits) {
         var node = document.querySelector('[data-field="' + name + '"]');
@@ -527,6 +630,43 @@
         var status = document.getElementById("status");
         status.textContent = text;
         status.className = state;
+      }
+
+      // Mean of an array of readings of one quantity, ignoring anything in it
+      // that is not a number. The AS7343 reports its unfiltered and its
+      // flicker-detect photodiode this way, once per integration cycle, and
+      // averaging is how three measurements of the same light become the one
+      // figure a card or a chart shows. Returns `null` if nothing is usable.
+      function averageOf(values) {
+        if (!values || typeof values.length !== "number") {
+          return null;
+        }
+        var sum = 0;
+        var counted = 0;
+        for (var i = 0; i < values.length; i++) {
+          if (typeof values[i] === "number" && isFinite(values[i])) {
+            sum += values[i];
+            counted++;
+          }
+        }
+        return counted > 0 ? sum / counted : null;
+      }
+
+      // Centre wavelength of the filtered channel with the highest count. It
+      // is the closest thing to a single colour the twelve channels give, but
+      // only a rough one: the channels are not corrected for their differing
+      // responses, so a channel can lead on counts without leading on light.
+      function brightestWavelength(reading) {
+        var best = null;
+        var highest = -Infinity;
+        for (var i = 0; i < SPECTRUM_CHANNELS.length; i++) {
+          var value = reading[SPECTRUM_CHANNELS[i].key];
+          if (typeof value === "number" && isFinite(value) && value > highest) {
+            highest = value;
+            best = SPECTRUM_CHANNELS[i].nm;
+          }
+        }
+        return best;
       }
 
       function render(data) {
@@ -602,6 +742,27 @@
         var explanation = describeCalibration(bme690);
         calibration.hidden = !explanation;
         calibration.textContent = explanation;
+
+        var as7343 = data.as7343;
+        document.getElementById("note-as7343").hidden = !!as7343;
+        setField("visible_light", as7343 ? averageOf(as7343.visible) : null, 0);
+        setField(
+          "brightest_channel",
+          as7343 ? brightestWavelength(as7343) : null,
+          0
+        );
+        // The gain runs from 0.5x upwards in doublings, so the lowest setting
+        // is the only one that needs a decimal to be reported as it is.
+        setField(
+          "light_gain",
+          as7343 ? as7343.gain : null,
+          as7343 && as7343.gain < 1 ? 1 : 0
+        );
+        // Either kind of saturation means the counts are cut off rather than
+        // merely high, so the whole spectrum is misleading until the gain or
+        // the integration time is lowered.
+        document.getElementById("note-as7343-saturated").hidden =
+          !as7343 || !(as7343.analog_saturation || as7343.digital_saturation);
 
         document.getElementById("updated").textContent = clockTime(
           new Date(),
@@ -682,6 +843,7 @@
         scd41: emptySeries(),
         sps30: emptySeries(),
         bme690: emptySeries(),
+        as7343: emptySeries(),
       };
 
       function emptySeries() {
@@ -837,6 +999,9 @@
             return syncSensor("bme690", MAX_PAGES_PER_SYNC);
           })
           .then(function () {
+            return syncSensor("as7343", MAX_PAGES_PER_SYNC);
+          })
+          .then(function () {
             renderAll();
             setStatus("online", "online");
           })
@@ -856,6 +1021,7 @@
           scd41: newest(store.scd41.readings),
           sps30: newest(store.sps30.readings),
           bme690: newest(store.bme690.readings),
+          as7343: newest(store.as7343.readings),
         });
         drawCharts();
       }
@@ -912,6 +1078,21 @@
         return points.map(function (point) {
           return { time: point.time, value: point.value * factor };
         });
+      }
+
+      // One point per reading at the mean of a field that holds several
+      // readings of the same quantity, such as the AS7343's three unfiltered
+      // readings per measurement. Readings with nothing usable in the field are
+      // dropped, as `toPoints` drops a missing value.
+      function averagePoints(readings, field) {
+        var points = [];
+        for (var index = 0; index < readings.length; index++) {
+          var mean = averageOf(readings[index][field]);
+          if (mean !== null) {
+            points.push({ time: readings[index].time, value: mean });
+          }
+        }
+        return points;
       }
 
       // Spacings offered for the time axis, in minutes. Every one of them
@@ -1253,6 +1434,15 @@
       }
 
       function drawCharts() {
+        // The spectrum is one reading against wavelength rather than anything
+        // against time, so it is drawn before the timeline the rest of the
+        // charts share is worked out, and it appears even before the first
+        // status response has dated the history.
+        drawSpectrum(
+          document.getElementById("chart-spectrum"),
+          newest(store.as7343.readings)
+        );
+
         if (store.bootTime === null) {
           return;
         }
@@ -1418,6 +1608,177 @@
           // whole scale is the point of it.
           { min: 0, max: 100 }
         );
+
+        var as7343 = store.as7343.readings;
+        // The unfiltered photodiode is the one channel that stands for the
+        // light as a whole, so it is what the level over the day is drawn from.
+        var visible = averagePoints(as7343, "visible");
+        drawChart(
+          document.getElementById("chart-light"),
+          [{ color: "#475569", points: visible }],
+          windowStart,
+          now,
+          // Follows the readings, because indoor light spans a far wider range
+          // than any fixed axis could show usefully, but never below zero:
+          // a count cannot be negative.
+          clampAxis(paddedAxis(visible), 0, Infinity)
+        );
+
+        // Four of the twelve channels, spread across the range, rather than
+        // all of them: twelve curves on one chart are unreadable, and these
+        // four are enough to show the light changing colour as daylight gives
+        // way to lamps. They share a zero-based axis so their heights stay
+        // comparable, which is the whole reason for plotting them together.
+        drawChart(
+          document.getElementById("chart-spectral-channels"),
+          [
+            { color: "#2563eb", points: toPoints(as7343, "nm_450") },
+            { color: "#16a34a", points: toPoints(as7343, "nm_550") },
+            { color: "#dc2626", points: toPoints(as7343, "nm_640") },
+            { color: "#78716c", points: toPoints(as7343, "nm_855") },
+          ],
+          windowStart,
+          now,
+          { min: 0 }
+        );
+      }
+
+      /**
+       * Draw the twelve filtered channels of one AS7343 reading as a bar per
+       * channel, in the colour that channel's wavelength is seen as.
+       *
+       * This is deliberately not a line chart: the twelve channels are twelve
+       * separate photodiodes behind twelve filters, not a curve sampled at
+       * twelve points, and joining them would draw values between them that
+       * were never measured.
+       *
+       * @param canvas   target canvas element
+       * @param reading  newest reading, or `null` when there is none yet
+       */
+      function drawSpectrum(canvas, reading) {
+        var ratio = window.devicePixelRatio || 1;
+        var width = canvas.clientWidth;
+        var heightPx = canvas.clientHeight;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(heightPx * ratio);
+
+        var ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.clearRect(0, 0, width, heightPx);
+
+        var text = cssVar("--muted") || "#64748b";
+        var line = cssVar("--line") || "#dde3ec";
+
+        ctx.font =
+          "11px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+        ctx.strokeStyle = line;
+        ctx.fillStyle = text;
+        ctx.lineWidth = 1;
+
+        if (!reading) {
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("No readings yet", width / 2, heightPx / 2);
+          return;
+        }
+
+        var counts = [];
+        var highest = 0;
+        for (var c = 0; c < SPECTRUM_CHANNELS.length; c++) {
+          var value = reading[SPECTRUM_CHANNELS[c].key];
+          var usable = typeof value === "number" && isFinite(value);
+          counts.push(usable ? value : null);
+          if (usable && value > highest) {
+            highest = value;
+          }
+        }
+
+        // The axis starts at zero, because the height of a bar is only
+        // meaningful against no light at all. In the dark every channel reads
+        // zero and there is nothing to derive a top from, so one is imposed to
+        // keep the axis drawable.
+        var step = niceStep(highest > 0 ? highest : 1, 5);
+        var yMax = Math.ceil((highest > 0 ? highest : 1) / step) * step;
+
+        // Sized to the widest label, as in `drawChart`: counts reach five
+        // digits at the top of the range and a fixed margin would cut the
+        // leading ones off.
+        var labels = [];
+        var widestLabel = 0;
+        for (var value = 0; value <= yMax + 1e-9; value += step) {
+          var label = String(Math.round(value));
+          labels.push({ value: value, text: label });
+          widestLabel = Math.max(widestLabel, ctx.measureText(label).width);
+        }
+
+        var labelGap = 6;
+        var pad = {
+          top: 6,
+          right: 4,
+          bottom: 22,
+          left: Math.ceil(widestLabel) + labelGap * 2,
+        };
+        var plotW = width - pad.left - pad.right;
+        var plotH = heightPx - pad.top - pad.bottom;
+        if (plotW <= 0 || plotH <= 0) {
+          return;
+        }
+
+        function y(value) {
+          return pad.top + plotH - (value / yMax) * plotH;
+        }
+
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        for (var l = 0; l < labels.length; l++) {
+          var gy = Math.round(y(labels[l].value)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, gy);
+          ctx.lineTo(pad.left + plotW, gy);
+          ctx.stroke();
+          ctx.fillText(labels[l].text, pad.left - labelGap, gy);
+        }
+
+        // Every channel is given the same width of chart. See the note under
+        // the chart for why they are not placed to scale.
+        var slot = plotW / SPECTRUM_CHANNELS.length;
+        var barWidth = Math.max(2, slot * 0.7);
+        var baseline = pad.top + plotH;
+
+        // Wavelengths are four characters at most, so at a narrow width the
+        // labels are thinned rather than shrunk or turned on their side.
+        var widestTick = 0;
+        for (var t = 0; t < SPECTRUM_CHANNELS.length; t++) {
+          widestTick = Math.max(
+            widestTick,
+            ctx.measureText(String(SPECTRUM_CHANNELS[t].nm)).width
+          );
+        }
+        var labelEvery = slot >= widestTick + 6 ? 1 : 2;
+
+        ctx.textBaseline = "top";
+        for (var i = 0; i < SPECTRUM_CHANNELS.length; i++) {
+          var centre = pad.left + slot * (i + 0.5);
+          if (counts[i] !== null) {
+            var top = y(counts[i]);
+            ctx.fillStyle = SPECTRUM_CHANNELS[i].color;
+            // A channel that read zero would otherwise leave nothing at all
+            // where a measured zero belongs, which is not the same as a
+            // channel that was never reported; a one-pixel stub keeps the two
+            // apart.
+            ctx.fillRect(
+              centre - barWidth / 2,
+              Math.min(top, baseline - 1),
+              barWidth,
+              Math.max(1, baseline - top)
+            );
+          }
+          if (i % labelEvery === 0) {
+            ctx.fillStyle = text;
+            ctx.textAlign = "center";
+            ctx.fillText(String(SPECTRUM_CHANNELS[i].nm), centre, baseline + 7);
+          }
+        }
       }
 
       // Smallest and largest value across several series, or `null` when none

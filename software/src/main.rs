@@ -24,7 +24,7 @@ mod utils;
 
 use drivers::i2c_bus::{print_scan_result, I2cBus, SharedI2cBus, I2C_SCL_PIN, I2C_SDA_PIN};
 use tasks::web_server_task::{WifiStack, WifiStackResources};
-use tasks::{bme690_task, blink_task, scd41_task, sps30_task, web_server_task};
+use tasks::{as7343_task, bme690_task, blink_task, scd41_task, sps30_task, web_server_task};
 use utils::psram::Psram;
 use utils::shared_state;
 
@@ -82,10 +82,11 @@ async fn main(spawner: Spawner) {
     // readings taken before this would be dropped.
     match shared_state::init(&mut psram).await {
         Some(bytes) => println!(
-            "History: {} SCD41, {} SPS30 and {} BME690 readings ({} h) in {} KiB of PSRAM, {} KiB free",
+            "History: {} SCD41, {} SPS30, {} BME690 and {} AS7343 readings ({} h) in {} KiB of PSRAM, {} KiB free",
             shared_state::SCD41_CAPACITY,
             shared_state::SPS30_CAPACITY,
             shared_state::BME690_CAPACITY,
+            shared_state::AS7343_CAPACITY,
             shared_state::HISTORY_WINDOW_MS / 3_600_000,
             bytes / 1024,
             psram.free_bytes() / 1024
@@ -101,6 +102,7 @@ async fn main(spawner: Spawner) {
     spawner.spawn(sps30_task::measure_task(bus)).ok();
     spawner.spawn(scd41_task::measure_task(bus)).ok();
     spawner.spawn(bme690_task::measure_task(bus)).ok();
+    spawner.spawn(as7343_task::measure_task(bus)).ok();
 
     // The Wi-Fi driver needs its own timer, plus entropy for the radio and
     // for the TCP initial sequence numbers.

@@ -65,10 +65,11 @@ serial interface is `/dev/ttyACM0` on this system.
 ## Measurement history and PSRAM
 
 The board keeps a full day of readings per sensor: 8640 SCD41 readings at one
-every 10 seconds, 17280 SPS30 readings at one every 5 seconds, and 14400 BME690
-readings at one every 6 seconds. That is far more than the internal RAM can
-spare next to the Wi-Fi driver and the network stack, so all three ring buffers
-live in the external PSRAM.
+every 10 seconds, 17280 SPS30 readings at one every 5 seconds, 14400 BME690
+readings at one every 6 seconds, and 17280 AS7343 readings at one every 5
+seconds. That is far more than the internal RAM can spare next to the Wi-Fi
+driver and the network stack, so all four ring buffers live in the external
+PSRAM.
 
 - The XIAO carries an ESP32-S3R8 module, so `esp-hal` is built with its
   `opsram-8m` feature (8 MB of octal-SPI PSRAM). A module with a different
@@ -108,6 +109,7 @@ task module, and it is the only thing to change to adjust the behaviour:
 | --- | --- | --- | --- |
 | SCD41 | `src/tasks/scd41_task.rs` | 1 | The first single-shot conversion, taken before the sensor's own temperature has settled. |
 | SPS30 | `src/tasks/sps30_task.rs` | 6 | Roughly the first 30 seconds, while the fan and laser spin up. |
+| AS7343 | `src/tasks/as7343_task.rs` | 1 | The first measurement after the gain is applied, whose `ASTATUS` reports a gain the sensor was not set to. |
 
 Setting a count to 0 publishes every reading. The countdown restarts on every
 re-initialisation, not only at boot, so the readings taken right after a bus
@@ -256,6 +258,19 @@ charts:
 | Coarse particulates | PM10 and the typical particle size. |
 | Barometric pressure | BME690. |
 | Gas resistance | The BME690's raw film resistance, in kilohms. |
+| Light level | The AS7343's unfiltered channel, averaged over the three readings one measurement produces. |
+| Spectral channels | The AS7343's 450, 550, 640 and 855 nm channels on a shared zero-based axis, so the light changing colour is visible. |
+
+The AS7343's own section carries a bar per filtered channel for the newest
+reading, drawn in the colour that channel's wavelength is seen as. It is bars
+rather than a curve because the twelve channels are twelve photodiodes behind
+twelve filters, not a curve sampled at twelve points, and they are spaced
+evenly rather than to scale because placing them by wavelength crowds the four
+between 515 and 555 nm together. The heights are raw converter counts, which
+are not corrected for the differing response of the channels and are not
+divided by the gain, so one bar standing above its neighbour does not by itself
+mean there is more light at that wavelength. What the chart shows reliably is
+how one channel changes.
 
 The four gas-derived cards are left uncoloured while `iaq_accuracy` is 0,
 because BSEC emits fixed placeholders until it has a baseline and colouring one
@@ -295,6 +310,13 @@ anything.
       "len": 600,
       "first_sequence": 0,
       "next_sequence": 600
+    },
+    "as7343": {
+      "interval_ms": 5000,
+      "capacity": 17280,
+      "len": 720,
+      "first_sequence": 0,
+      "next_sequence": 720
     }
   }
 }
@@ -310,7 +332,7 @@ anything.
 | `sensors.<name>.first_sequence` | Sequence number of the oldest retained reading. |
 | `sensors.<name>.next_sequence` | Sequence number the next reading will be given. Equals `first_sequence + len`. |
 
-The sensor names are `scd41`, `sps30` and `bme690`.
+The sensor names are `scd41`, `sps30`, `bme690` and `as7343`.
 
 A client detects a device reboot by `uptime_ms` being lower than the value it
 saw previously, and must then discard everything it holds, because the sequence
@@ -322,7 +344,7 @@ One page of a single sensor's readings, oldest first.
 
 | Parameter | Required | Default | Meaning |
 | --- | --- | --- | --- |
-| `sensor` | yes | — | `scd41`, `sps30` or `bme690`. Any other value is answered `400 Bad Request`. |
+| `sensor` | yes | — | `scd41`, `sps30`, `bme690` or `as7343`. Any other value is answered `400 Bad Request`. |
 | `from` | no | `0` | Lowest sequence number wanted. Raised to `first_sequence` if it names a reading that has already been overwritten. |
 | `limit` | no | `2000` | Largest number of readings to return. Values above 2000 are capped at 2000. |
 
@@ -394,6 +416,28 @@ this normally only has to be waited out once; see the section on saving it
 above. The BME690 measures temperature and
 humidity independently of the SCD41, so the two sensors will not report
 identical values.
+
+The AS7343 reading fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `taken_at_ms` | Device uptime when the reading was taken. |
+| `nm_405` … `nm_855` | One field per filtered channel, named after the centre wavelength of its filter in nanometres: 405, 425, 450, 475, 515, 550, 555, 600, 640, 690, 745 and 855. |
+| `visible` | Three readings of the unfiltered photodiode, one per integration cycle. |
+| `flicker` | Three readings of the flicker-detect photodiode, the same way. |
+| `gain` | The factor the counts were taken with, 0.5 to 2048. `null` if the device reported a code that is not a defined gain. |
+| `analog_saturation` | True when the photodiode current exceeded what the converter can take. |
+| `digital_saturation` | True when a channel reached the top of its count range. |
+
+Every channel value is the raw count the sensor's converter returned for one
+integration, not an irradiance. The counts are not corrected for how differently
+the channels respond, so they cannot be compared with each other as if they
+were, and they scale with `gain`, which is not divided out. A measurement runs
+three integration cycles, which is why `visible` and `flicker` carry three
+values: they are three separate measurements of the same light, reported as
+they were taken rather than averaged here. Either saturation flag being true
+means the counts are cut off rather than merely high, and the reading should be
+discarded.
 
 ### How the page uses these
 
