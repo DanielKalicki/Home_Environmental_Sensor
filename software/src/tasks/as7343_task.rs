@@ -17,15 +17,19 @@ use crate::utils::shared_state;
 
 /// Gain and integration time every measurement is taken with.
 ///
+/// ex:
 /// `ATIME` = 29 and `ASTEP` = 599 give `(29 + 1) * (599 + 1) * 2.78 us` =
 /// 50.04 ms per integration cycle. The 18-channel auto-SMUX sequence runs three
 /// of those, so one measurement occupies the sensor for about 150 ms. 256x gain
 /// is the device's own power-on gain and is a workable starting point for
 /// indoor lighting; lower it if the readings saturate.
 const MEASUREMENT_CONFIGURATION: Configuration = Configuration {
-    gain: Gain::Gain256x,
-    atime: 29,
-    astep: 599,
+    gain: Gain::Gain1024x,
+    atime: 254,
+    astep: 256,
+    // gain: Gain::Gain256x,
+    // atime: 29,
+    // astep: 599,
 };
 
 /// How long the device needs for one 18-channel measurement.
@@ -145,7 +149,11 @@ fn print_measurement(measurement: &Measurement, settling: bool) {
         measurement.channel(Channel::FlickerDetect1),
         measurement.channel(Channel::FlickerDetect2),
         measurement.channel(Channel::FlickerDetect3),
-        if settling { " (warm-up, discarded)" } else { "" }
+        if settling {
+            " (warm-up, discarded)"
+        } else {
+            ""
+        }
     );
 
     if measurement.saturated() {

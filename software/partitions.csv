@@ -1,0 +1,27 @@
+# Flash layout for the 8 MB XIAO ESP32-S3.
+#
+# Reproduces the ESP-IDF single-application default, then adds one partition of
+# our own at the end. Without a table of our own, espflash generates the default
+# one, which reserves nothing for application data: the application partition
+# would extend over the region the firmware writes its saved state to, and
+# flashing a new build would erase it.
+#
+# `bsec_state` holds BSEC's learned gas baseline, so that the air-quality
+# outputs do not have to be relearned from scratch after every reboot. It is
+# read and written by `src/utils/flash_store.rs`, which finds it by label
+# through the table below rather than by a hard-coded address, so moving or
+# resizing it here needs no firmware change.
+#
+# `type` `data` with subtype `undefined` is ESP-IDF's designation for a
+# partition whose contents only the application understands, which is what this
+# is: the format is defined by `flash_store.rs` alone.
+#
+# One sector (4096 bytes) is the smallest a partition can usefully be, because
+# a sector is the smallest region the flash can erase. A saved BSEC state is at
+# most 255 bytes, so a single sector is ample.
+#
+# Name,       Type, SubType,   Offset,   Size,     Flags
+nvs,          data, nvs,       0x9000,   0x6000,
+phy_init,     data, phy,       0xf000,   0x1000,
+factory,      app,  factory,   0x10000,  0x300000,
+bsec_state,   data, undefined, 0x310000, 0x1000,

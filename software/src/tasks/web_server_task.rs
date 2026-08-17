@@ -1,23 +1,24 @@
-//! Wi-Fi station and HTTP server exposing the newest sensor readings.
+//! Wi-Fi station and HTTP API exposing the newest sensor readings.
 //!
 //! The board joins an existing Wi-Fi network as a client (station mode) and
-//! serves a small web application on TCP port 80. Three tasks cooperate:
+//! answers JSON requests on TCP port 80. No user interface is served: the
+//! device publishes data only, and a separate frontend server reads it. Three
+//! tasks cooperate:
 //!
 //! * `wifi_connection_task` keeps the radio associated with the access point.
 //! * `net_task` runs the embassy-net TCP/IP stack.
 //! * `web_server_task` accepts connections and answers HTTP requests.
 //!
-//! Three resources are served, all of them read-only:
+//! Two resources are served, both of them read-only:
 //!
-//! * `GET /` returns the page (HTML, CSS and JavaScript in one file, stored in
-//!   flash).
 //! * `GET /api/status` returns the device uptime and the state of every
 //!   history.
 //! * `GET /api/readings` returns one page of a single sensor's readings.
+//! * `GET /api/thermal` returns the newest thermal image.
 //!
-//! The page fetches the retained history once, a page at a time, keeps it in
-//! the browser, and afterwards asks only for the readings taken since the last
-//! one it holds. `README.md` documents both endpoints in full.
+//! A client fetches the retained history once, a page at a time, and
+//! afterwards asks only for the readings taken since the last one it holds.
+//! `README.md` documents both endpoints in full.
 
 use core::fmt::Write as _;
 
@@ -33,6 +34,7 @@ use esp_wifi::wifi::{
 use heapless::String;
 
 use crate::drivers::as7343::{Channel as As7343Channel, SPECTRAL_CHANNELS};
+use crate::tasks::mlx90640_task::IMAGE_INTERVAL_MS;
 use crate::utils::shared_state;
 
 /// Network credentials, supplied at build time via environment variables.
@@ -49,8 +51,6 @@ const PASSWORD: &str = match option_env!("WIFI_PASSWORD") {
 
 /// TCP port the HTTP server listens on.
 const HTTP_PORT: u16 = 80;
-/// The single page application, compiled into the firmware image.
-const INDEX_HTML: &str = include_str!("web/index.html");
 /// Number of sockets embassy-net may keep open at once.
 pub const SOCKET_COUNT: usize = 3;
 /// Idle time before retrying after a failed association attempt.
@@ -69,7 +69,7 @@ const CLOSE_TIMEOUT_MS: u64 = 2000;
 ///
 /// The retained history holds a day of readings, which is too much for a
 /// single response, so a client fetches it as a handful of pages of this size
-/// and then only asks for the readings taken since its last page.
+/// and then only asks for the readings taken since its last request.
 const MAX_PAGE_READINGS: usize = 2000;
 
 /// Receive buffer for one client connection.
@@ -139,10 +139,11 @@ pub async fn net_task(stack: &'static WifiStack) {
     stack.run().await
 }
 
-/// Serve the measurement page over HTTP.
+/// Serve the measurement API over HTTP.
 ///
-/// Only one connection is handled at a time, which is sufficient for a page
-/// that a person loads manually and keeps the memory footprint small.
+/// Only one connection is handled at a time, which is sufficient for the
+/// single frontend server that polls the device and keeps the memory
+/// footprint small.
 #[embassy_executor::task]
 pub async fn web_server_task(stack: &'static WifiStack) {
     // Wait for the link and then for the DHCP lease before binding.
@@ -252,9 +253,9 @@ async fn serve_connection(socket: &mut TcpSocket<'_>) {
     };
 
     match path {
-        "/" | "/index.html" => send_page(socket).await,
         "/api/status" => send_status(socket).await,
         "/api/readings" => send_readings(socket, query).await,
+        "/api/thermal" => send_thermal(socket).await,
         _ => {
             let _ = socket
                 .write_all(
@@ -277,18 +278,12 @@ fn query_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
-/// Send the page itself, straight from flash.
-async fn send_page(socket: &mut TcpSocket<'_>) {
-    send_response(socket, "text/html; charset=utf-8", INDEX_HTML).await;
-}
-
-/// Write a complete `200 OK` response with `body` as its payload.
-async fn send_response(socket: &mut TcpSocket<'_>, content_type: &str, body: &str) {
+/// Write a complete `200 OK` JSON response with `body` as its payload.
+async fn send_response(socket: &mut TcpSocket<'_>, body: &str) {
     let mut header: String<192> = String::new();
     let _ = write!(
         header,
-        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
-        content_type,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
         body.len()
     );
 
@@ -309,13 +304,14 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let sps30 = shared_state::sps30_status().await;
     let bme690 = shared_state::bme690_status().await;
     let as7343 = shared_state::as7343_status().await;
+    let bmp581 = shared_state::bmp581_status().await;
 
     // One sensor entry runs to a little over a hundred characters and the
     // sequence numbers in it grow for as long as the board stays up, so the
-    // buffer is sized well clear of the four entries it has to hold: `write!`
+    // buffer is sized well clear of the five entries it has to hold: `write!`
     // into a `String` fails on overflow and would leave the client parsing
     // truncated JSON.
-    let mut body: String<768> = String::new();
+    let mut body: String<1024> = String::new();
     let _ = write!(
         body,
         "{{\"uptime_ms\":{},\"window_ms\":{},\"sensors\":{{",
@@ -329,14 +325,16 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let _ = write_sensor_status(&mut body, "bme690", &bme690);
     let _ = body.push(',');
     let _ = write_sensor_status(&mut body, "as7343", &as7343);
+    let _ = body.push(',');
+    let _ = write_sensor_status(&mut body, "bmp581", &bmp581);
     let _ = body.push_str("}}");
 
-    send_response(socket, "application/json", &body).await;
+    send_response(socket, &body).await;
 }
 
 /// Write one `"name":{...}` member of the `sensors` object.
 fn write_sensor_status(
-    body: &mut String<768>,
+    body: &mut String<1024>,
     name: &str,
     status: &shared_state::HistoryStatus,
 ) -> core::fmt::Result {
@@ -349,12 +347,12 @@ fn write_sensor_status(
 
 /// Send one page of readings for a single sensor.
 ///
-/// `query` selects the sensor and the page: `sensor=scd41|sps30|bme690|as7343`,
-/// `from=` the first sequence number wanted, `limit=` how many readings at
-/// most. A `from` that names an already overwritten reading is moved up to the
-/// oldest reading still retained, and the page reports the `from` it actually
-/// used, so a client that has fallen behind can tell that it has lost
-/// readings.
+/// `query` selects the sensor and the page:
+/// `sensor=scd41|sps30|bme690|as7343|bmp581`, `from=` the first sequence number
+/// wanted, `limit=` how many readings at most. A `from` that names an already
+/// overwritten reading is moved up to the oldest reading still retained, and
+/// the page reports the `from` it actually used, so a client that has fallen
+/// behind can tell that it has lost readings.
 ///
 /// The body is streamed one reading at a time rather than rendered into a
 /// single buffer, which would be a wasteful permanent allocation on the
@@ -372,6 +370,7 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
         "sps30" => shared_state::sps30_status().await,
         "bme690" => shared_state::bme690_status().await,
         "as7343" => shared_state::as7343_status().await,
+        "bmp581" => shared_state::bmp581_status().await,
         _ => {
             let _ = socket
                 .write_all(
@@ -383,8 +382,8 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
     };
 
     // Unparsable values fall back to the defaults rather than failing the
-    // request: the page never sends any, and a hand-typed URL is easier to
-    // work with when a typo still returns data.
+    // request: a hand-typed URL is easier to work with when a typo still
+    // returns data.
     let requested_from = query_param(query, "from")
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);
@@ -497,10 +496,9 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                         sample.taken_at.as_millis()
                     );
                     // The twelve filtered channels are keyed by the centre
-                    // wavelength of their filter, in nanometres, which is what
-                    // the page plots them against. Every channel in
-                    // `SPECTRAL_CHANNELS` is a filtered one, so it always has
-                    // one.
+                    // wavelength of their filter, in nanometres. Every channel
+                    // in `SPECTRAL_CHANNELS` is a filtered one, so it always
+                    // has one.
                     for channel in SPECTRAL_CHANNELS {
                         if let Some(wavelength_nm) = channel.wavelength_nm() {
                             let _ =
@@ -544,6 +542,25 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                     let _ = write!(chunk, "{}null", separator);
                 }
             }
+        } else if sensor == "bmp581" {
+            match shared_state::bmp581_reading(sequence).await {
+                Some(sample) => {
+                    let m = sample.value;
+                    // Pressure is reported in pascals like the BME690's, so
+                    // that a chart can draw the two against one axis.
+                    let _ = write!(
+                        chunk,
+                        "{}{{\"taken_at_ms\":{},\"pressure_pascals\":{},\"temperature_celsius\":{}}}",
+                        separator,
+                        sample.taken_at.as_millis(),
+                        m.pressure_pascals(),
+                        m.temperature_celsius()
+                    );
+                }
+                None => {
+                    let _ = write!(chunk, "{}null", separator);
+                }
+            }
         } else {
             match shared_state::sps30_reading(sequence).await {
                 Some(sample) => {
@@ -564,6 +581,90 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                     let _ = write!(chunk, "{}null", separator);
                 }
             }
+        }
+
+        if socket.write_all(chunk.as_bytes()).await.is_err() {
+            return;
+        }
+    }
+
+    let _ = socket.write_all(b"]}").await;
+}
+
+/// Send the newest thermal image.
+///
+/// Unlike the sensors, the camera keeps no history: an image is 768
+/// temperatures, so only the last one exists and this endpoint always returns
+/// that one. `sequence` counts the images the camera has taken, so a client
+/// can tell a new image from the one it already has without comparing 768
+/// numbers.
+///
+/// `pixels` is a flat array of degrees Celsius, `width` per row, rows ordered
+/// from the top of the image. It is streamed one row at a time, both because
+/// the whole array is far larger than any buffer this device can spare and so
+/// that the camera task is never kept waiting for the network: each row is
+/// copied out of the shared image on its own.
+///
+/// A device that has not finished its first image answers with
+/// `"available":false` and an empty `pixels` array rather than an error, so a
+/// client can treat the camera as simply having nothing yet.
+async fn send_thermal(socket: &mut TcpSocket<'_>) {
+    let uptime_ms = Instant::now().as_millis();
+    let status = shared_state::thermal_status().await;
+
+    let header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+    if socket.write_all(header.as_bytes()).await.is_err() {
+        return;
+    }
+
+    // One row of temperatures printed to two decimals runs to about 200
+    // characters; the buffer is sized well clear of that because `write!`
+    // into a `String` fails on overflow and would leave the client parsing
+    // truncated JSON.
+    let mut chunk: String<512> = String::new();
+
+    let Some(status) = status else {
+        let _ = write!(
+            chunk,
+            "{{\"uptime_ms\":{},\"available\":false,\"width\":{},\"height\":{},\"pixels\":[]}}",
+            uptime_ms,
+            shared_state::THERMAL_COLUMNS,
+            shared_state::THERMAL_ROWS
+        );
+        let _ = socket.write_all(chunk.as_bytes()).await;
+        return;
+    };
+
+    let _ = write!(
+        chunk,
+        "{{\"uptime_ms\":{},\"available\":true,\"taken_at_ms\":{},\"sequence\":{},\"interval_ms\":{},\"width\":{},\"height\":{},\"min_celsius\":{:.2},\"max_celsius\":{:.2},\"mean_celsius\":{:.2},\"ambient_celsius\":{:.2},\"pixels\":[",
+        uptime_ms,
+        status.taken_at.as_millis(),
+        status.sequence,
+        IMAGE_INTERVAL_MS,
+        shared_state::THERMAL_COLUMNS,
+        shared_state::THERMAL_ROWS,
+        status.summary.min_celsius,
+        status.summary.max_celsius,
+        status.summary.mean_celsius,
+        status.summary.ambient_celsius
+    );
+    if socket.write_all(chunk.as_bytes()).await.is_err() {
+        return;
+    }
+
+    // Two decimals is well past what the camera can resolve and keeps the
+    // whole image inside about 5 kB.
+    let mut row = [0.0f32; shared_state::THERMAL_COLUMNS];
+    for index in 0..shared_state::THERMAL_ROWS {
+        if !shared_state::thermal_row(index, &mut row).await {
+            break;
+        }
+
+        chunk.clear();
+        for (column, pixel) in row.iter().enumerate() {
+            let separator = if index == 0 && column == 0 { "" } else { "," };
+            let _ = write!(chunk, "{}{:.2}", separator, pixel);
         }
 
         if socket.write_all(chunk.as_bytes()).await.is_err() {

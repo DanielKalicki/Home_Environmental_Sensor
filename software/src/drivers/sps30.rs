@@ -249,7 +249,10 @@ where
         self.read_response(CMD_READ_SERIAL_NUMBER, &mut raw, &mut data)
             .await?;
 
-        let len = data.iter().position(|&byte| byte == 0).unwrap_or(data.len());
+        let len = data
+            .iter()
+            .position(|&byte| byte == 0)
+            .unwrap_or(data.len());
         Ok((data, len))
     }
 
@@ -282,4 +285,3 @@ where
         })
     }
 }
-

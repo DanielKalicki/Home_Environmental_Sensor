@@ -97,11 +97,36 @@ impl From<Error> for CaptureError {
 /// 1664-byte EEPROM read. Returns `false` if any step failed, in which case
 /// the caller should retry later.
 async fn initialize(bus: &SharedI2cBus, parameters: &mut Parameters, eeprom: &mut Eeprom) -> bool {
-    let mut bus = bus.lock().await;
-    let mut i2c = bus.acquire();
-    let mut camera = Mlx90640::new(&mut i2c);
+    println!("MLX90640: reading calibration EEPROM");
 
-    match camera.init(&CAMERA_CONFIGURATION, eeprom, parameters).await {
+    // Hold the bus only for the I2C work. Unpacking the EEPROM is pure CPU and
+    // must not keep the other sensors off the bus.
+    let read_result = {
+        let mut bus = bus.lock().await;
+        let mut i2c = bus.acquire();
+        let mut camera = Mlx90640::new(&mut i2c);
+        camera.read_eeprom(eeprom).await
+    };
+
+    if let Err(error) = read_result {
+        println!("MLX90640: initialisation failed: {:?}", error);
+        return false;
+    }
+
+    println!("MLX90640: unpacking calibration");
+    if let Err(error) = parameters.extract(eeprom) {
+        println!("MLX90640: initialisation failed: {:?}", error);
+        return false;
+    }
+
+    let configure_result = {
+        let mut bus = bus.lock().await;
+        let mut i2c = bus.acquire();
+        let mut camera = Mlx90640::new(&mut i2c);
+        camera.set_configuration(&CAMERA_CONFIGURATION).await
+    };
+
+    match configure_result {
         Ok(()) => {
             println!(
                 "MLX90640 ready, {}x{} pixels, {} ms per subpage, chess pattern",

@@ -150,7 +150,11 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                     measurement.co2_ppm,
                     measurement.temperature_celsius(),
                     measurement.humidity_percent(),
-                    if settling { " (warm-up, discarded)" } else { "" }
+                    if settling {
+                        " (warm-up, discarded)"
+                    } else {
+                        ""
+                    }
                 );
 
                 // Begin a fresh fixed schedule after recovery; this read-out

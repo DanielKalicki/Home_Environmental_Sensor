@@ -481,8 +481,7 @@ impl Calibration {
         let nonlinear_tk = self.par_p10 as f64 / (1u64 << 48) as f64;
         // The divisor is 2^65, which overflows `u64`, so it is split into two
         // factors: 2^(35+30) == 2^35 * 2^30.
-        let nonlinear_cubic =
-            self.par_p11 as f64 / ((1u64 << 35) as f64 * (1u64 << 30) as f64);
+        let nonlinear_cubic = self.par_p11 as f64 / ((1u64 << 35) as f64 * (1u64 << 30) as f64);
 
         let t = temperature_celsius;
         let raw = pressure_raw as f64;
@@ -521,10 +520,7 @@ impl Calibration {
             * sensitivity
             * (1.0
                 + (sensitivity_tk1 * scaled_temperature)
-                + (sensitivity_tk1
-                    * sensitivity_tk2
-                    * scaled_temperature
-                    * scaled_temperature));
+                + (sensitivity_tk1 * sensitivity_tk2 * scaled_temperature * scaled_temperature));
         let humidity = scaled * (1.0 - nonlinear * scaled);
 
         humidity.clamp(0.0, 100.0) as f32
@@ -842,8 +838,8 @@ where
             return Err(Error::InvalidHeaterProfile(profile.index));
         }
 
-        let resistance = calibration
-            .resistance_register(profile.target_temperature_celsius, ambient_celsius);
+        let resistance =
+            calibration.resistance_register(profile.target_temperature_celsius, ambient_celsius);
 
         self.write_registers(&[
             (REG_RES_HEAT0 + profile.index, resistance),
@@ -898,14 +894,22 @@ where
         }
 
         Ok(Some(Measurement {
-            pressure_raw: u32::from_be_bytes([0, raw[FIELD_PRESSURE], raw[FIELD_PRESSURE + 1], raw[FIELD_PRESSURE + 2]]),
+            pressure_raw: u32::from_be_bytes([
+                0,
+                raw[FIELD_PRESSURE],
+                raw[FIELD_PRESSURE + 1],
+                raw[FIELD_PRESSURE + 2],
+            ]),
             temperature_raw: u32::from_be_bytes([
                 0,
                 raw[FIELD_TEMPERATURE],
                 raw[FIELD_TEMPERATURE + 1],
                 raw[FIELD_TEMPERATURE + 2],
             ]),
-            relative_humidity_raw: u16::from_be_bytes([raw[FIELD_HUMIDITY], raw[FIELD_HUMIDITY + 1]]),
+            relative_humidity_raw: u16::from_be_bytes([
+                raw[FIELD_HUMIDITY],
+                raw[FIELD_HUMIDITY + 1],
+            ]),
             // 10-bit result split across a whole MSB byte and the top two bits
             // of the LSB byte.
             gas_resistance_raw: ((raw[FIELD_GAS_MSB] as u16) << 2)
@@ -931,8 +935,7 @@ where
     ) -> Result<Measurement, Error> {
         self.set_mode(Mode::Forced).await?;
 
-        let wait_us =
-            configuration.measurement_duration_us() + heater_duration_ms as u32 * 1000;
+        let wait_us = configuration.measurement_duration_us() + heater_duration_ms as u32 * 1000;
         Timer::after_micros(wait_us as u64).await;
 
         for _ in 0..FIELD_POLL_ATTEMPTS {
@@ -990,4 +993,3 @@ fn gas_wait_register(duration_ms: u16) -> u8 {
 
     duration as u8 | (multiplier << GAS_WAIT_MULTIPLIER_SHIFT)
 }
-

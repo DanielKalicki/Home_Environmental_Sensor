@@ -59,6 +59,7 @@
 
 #![allow(dead_code)]
 
+use embassy_time::Timer;
 use esp_hal::{
     i2c::{Error as I2cError, Instance, I2C},
     Blocking,
@@ -1010,6 +1011,13 @@ impl<'a, 'd, T: Instance> Mlx90640<'a, 'd, T> {
                 *word = u16::from_be_bytes([bytes[0], bytes[1]]);
             }
             read += count;
+
+            // The blocking driver holds the CPU for the whole chunk. Pause
+            // briefly between chunks of a multi-hundred-byte dump so blink,
+            // Wi-Fi and the other sensor tasks can run.
+            if read < out.len() {
+                Timer::after_millis(1).await;
+            }
         }
 
         Ok(())

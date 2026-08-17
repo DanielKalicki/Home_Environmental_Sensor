@@ -232,51 +232,15 @@ or error, carries `Connection: close`: the server handles one connection at a
 time and closes it when it is done, so a client must not issue requests in
 parallel.
 
-`/` and `/api/status` are sent with a `Content-Length`. `/api/readings` is
-written out as it is generated rather than buffered first, so its length is not
-known in advance and it has no `Content-Length`; the end of the body is the
-close of the connection, which HTTP/1.1 permits for `Connection: close`
-responses.
+`/api/status` is sent with a `Content-Length`. `/api/readings` and
+`/api/thermal` are written out as they are generated rather than buffered
+first, so their length is not known in advance and they have no
+`Content-Length`; the end of the body is the close of the connection, which
+HTTP/1.1 permits for `Connection: close` responses.
 
-### `GET /`
-
-The single-page application, served from flash as `text/html`. `GET
-/index.html` returns the same thing.
-
-It shows the latest reading from each sensor as a card, then a day of history as
-charts:
-
-| Chart | Series |
-| --- | --- |
-| Carbon dioxide | The SCD41's measurement and the BME690's estimate, on one axis so the gap between them is visible. |
-| Temperature | SCD41 and BME690. |
-| Humidity | SCD41 and BME690. |
-| Indoor air quality | `iaq` and `static_iaq`. The two separating shows the baseline moving underneath. |
-| Volatile organic compounds | `tvoc_equivalent_ppb`. |
-| Gas | `gas_percentage`, on a fixed 0-100 axis. |
-| Fine particulates | PM1.0, PM2.5 and PM4.0. |
-| Coarse particulates | PM10 and the typical particle size. |
-| Barometric pressure | BME690. |
-| Gas resistance | The BME690's raw film resistance, in kilohms. |
-| Light level | The AS7343's unfiltered channel, averaged over the three readings one measurement produces. |
-| Spectral channels | The AS7343's 450, 550, 640 and 855 nm channels on a shared zero-based axis, so the light changing colour is visible. |
-
-The AS7343's own section carries a bar per filtered channel for the newest
-reading, drawn in the colour that channel's wavelength is seen as. It is bars
-rather than a curve because the twelve channels are twelve photodiodes behind
-twelve filters, not a curve sampled at twelve points, and they are spaced
-evenly rather than to scale because placing them by wavelength crowds the four
-between 515 and 555 nm together. The heights are raw converter counts, which
-are not corrected for the differing response of the channels and are not
-divided by the gain, so one bar standing above its neighbour does not by itself
-mean there is more light at that wavelength. What the chart shows reliably is
-how one channel changes.
-
-The four gas-derived cards are left uncoloured while `iaq_accuracy` is 0,
-because BSEC emits fixed placeholders until it has a baseline and colouring one
-green would claim the air is fine on the strength of a number it has not
-measured. A line under those cards says which stage the sensor has reached and
-disappears once calibration is done.
+The device serves data only. There is no HTML, CSS or JavaScript on it and no
+user interface: the charts and cards are drawn by the separate frontend server
+in `frontend_server/`, which polls these endpoints.
 
 ### `GET /api/status`
 
@@ -439,17 +403,66 @@ they were taken rather than averaged here. Either saturation flag being true
 means the counts are cut off rather than merely high, and the reading should be
 discarded.
 
-### How the page uses these
+### `GET /api/thermal`
 
-On its first load the page fetches `/api/status`, then walks each sensor's
+The last picture the MLX90640 thermal camera took. The camera is a 32 by 24
+grid of thermometers: each pixel is the temperature in degrees Celsius of
+whatever part of the scene it is pointed at.
+
+Unlike the sensors, the camera keeps no history. One image is 768 temperatures,
+so only the newest one is retained and this endpoint always returns that one;
+there is nothing to page through and no `from` or `limit` parameter. A new
+image is taken every 10 seconds.
+
+```json
+{
+  "uptime_ms": 3612345,
+  "available": true,
+  "taken_at_ms": 3610000,
+  "sequence": 361,
+  "interval_ms": 10000,
+  "width": 32,
+  "height": 24,
+  "min_celsius": 18.42,
+  "max_celsius": 33.87,
+  "mean_celsius": 22.15,
+  "ambient_celsius": 29.30,
+  "pixels": [21.44, 21.502, 21.38]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `uptime_ms` | Device uptime when the response was generated. |
+| `available` | False until the first image has been taken. Every field below is then absent and `pixels` is empty. |
+| `taken_at_ms` | Device uptime when the image was completed. |
+| `sequence` | Images taken since boot; the first is 1. It is what tells a new image from one already held, without comparing 768 numbers. |
+| `interval_ms` | How often a new image is taken. |
+| `width`, `height` | Size of the grid, 32 by 24. |
+| `min_celsius`, `max_celsius`, `mean_celsius` | Coldest, warmest and average pixel of this image. |
+| `ambient_celsius` | The camera's own die temperature, which the pixels are compensated against. It runs warmer than the room because the device heats itself. |
+| `pixels` | `width` × `height` temperatures in degrees Celsius, row by row from the top, two decimals each. |
+
+The camera measures the infrared a surface emits and assumes an emissivity of
+0.95, which is about right for painted wall, wood, cloth and skin. Bare or
+polished metal emits far less and reflects its surroundings instead, so it
+reads much colder than it is; that is a property of the surface, not a fault.
+Glass is opaque at these wavelengths, so a window reads as the temperature of
+the pane and not of anything behind it.
+
+The body is about 5 kB and is streamed a row at a time, so the camera task is
+never kept waiting for the network.
+
+### How a client uses these
+
+On its first run a client fetches `/api/status`, then walks each sensor's
 history with `/api/readings` in pages of 2000, which is 5 requests for the
-SCD41, 9 for the SPS30 and 8 for the BME690 when a full day is retained. It
-keeps every reading in the browser and redraws after each page arrives.
+SCD41, 9 for the SPS30 and 8 for the BME690 when a full day is retained.
 
 Afterwards it polls `/api/status` every 5 seconds and requests only the
 readings whose sequence numbers it does not yet have, which is normally none or
-one per sensor. Passes never overlap, and the page drops readings the device
-itself has discarded so its own copy cannot outgrow the device's.
+one per sensor. Requests must never overlap, because the device handles one
+connection at a time.
 
 ### Calling it from a shell
 

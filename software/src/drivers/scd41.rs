@@ -97,7 +97,6 @@ impl SensorVariant {
 /// One complete single-shot result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Measurement {
-
     /// CO2 concentration in ppm, as reported by the sensor.
     pub co2_ppm: u16,
     /// Raw temperature word; convert with [`Measurement::temperature_celsius`].
@@ -378,4 +377,3 @@ where
         self.read_measurement().await
     }
 }
-

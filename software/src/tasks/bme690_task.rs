@@ -25,7 +25,9 @@ use crate::drivers::bme690::{
     Bme690, Calibration, CompensatedMeasurement, Configuration, Error, GasConfig, HeaterProfile,
     IirFilterCoefficient, Mode, Oversampling,
 };
-use crate::drivers::bsec::{config, ffi, BmeSettings, Bsec, InputSet, Instance, Outputs, SampleRate};
+use crate::drivers::bsec::{
+    config, ffi, BmeSettings, Bsec, InputSet, Instance, Outputs, SampleRate,
+};
 use crate::drivers::i2c_bus::SharedI2cBus;
 use crate::utils::flash_store::FlashStore;
 use crate::utils::shared_state;
@@ -166,8 +168,9 @@ async fn run_cycle(
     let configuration = Configuration {
         humidity_oversampling: Oversampling::from_raw(settings.humidity_oversampling)
             .ok_or(Error::InvalidOversampling(settings.humidity_oversampling))?,
-        temperature_oversampling: Oversampling::from_raw(settings.temperature_oversampling)
-            .ok_or(Error::InvalidOversampling(settings.temperature_oversampling))?,
+        temperature_oversampling: Oversampling::from_raw(settings.temperature_oversampling).ok_or(
+            Error::InvalidOversampling(settings.temperature_oversampling),
+        )?,
         pressure_oversampling: Oversampling::from_raw(settings.pressure_oversampling)
             .ok_or(Error::InvalidOversampling(settings.pressure_oversampling))?,
         iir_filter: IIR_FILTER,
