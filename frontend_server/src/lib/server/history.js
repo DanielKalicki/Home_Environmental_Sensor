@@ -46,9 +46,11 @@ export function historyRange({ from, to, points = DEFAULT_POINTS, sensor = null 
  * Only `fields` are kept, and a field is averaged over the readings of its
  * bucket that actually carry it. An array field, which is how the AS7343
  * reports its three integration cycles, is averaged element by element so the
- * three stay distinguishable. A bucket with no readings produces no point, so
- * a gap in the history stays a gap in the chart instead of being bridged by a
- * straight line.
+ * three stay distinguishable. A flag, such as the AS7343's saturation, counts
+ * as one when set and zero when not, so a bucket reports the share of its
+ * readings that were flagged rather than losing the flag altogether. A bucket
+ * with no readings produces no point, so a gap in the history stays a gap in
+ * the chart instead of being bridged by a straight line.
  */
 function downsample(readings, fields, from, to, points) {
 	if (readings.length === 0) {
@@ -92,7 +94,10 @@ function project(reading, fields) {
 	for (const field of fields) {
 		const value = reading[field];
 		if (value !== undefined && value !== null) {
-			point[field] = value;
+			// A flag is sent as a number here as well as when averaged, so a
+			// caller never has to handle the same field arriving as two types
+			// depending on whether the range happened to be downsampled.
+			point[field] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
 		}
 	}
 	return point;
@@ -107,7 +112,8 @@ function average(bucket, fields) {
 		let total = null;
 
 		for (const reading of bucket) {
-			const value = reading[field];
+			const raw = reading[field];
+			const value = typeof raw === 'boolean' ? (raw ? 1 : 0) : raw;
 
 			if (Array.isArray(value)) {
 				if (total === null) {

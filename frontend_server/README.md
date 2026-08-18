@@ -3,7 +3,7 @@
 A small server that follows the sensor device over the network, keeps its own
 copy of every reading, and serves a dashboard drawn from that copy.
 
-It is separate from the web page the device itself serves. The device holds one
+The device itself serves no user interface, only the JSON API. It holds one
 day of readings in PSRAM and overwrites the oldest as it goes, and it loses all
 of them when it restarts; this server appends what it pulls to files on disk, so
 the history it can draw is as long as it has been running. It also means a

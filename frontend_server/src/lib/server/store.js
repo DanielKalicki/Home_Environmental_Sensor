@@ -31,6 +31,17 @@ const lastTimestamps = new Map();
 const latestReadings = new Map();
 
 /**
+ * Oldest stored timestamp across every sensor, or `null` if nothing is stored.
+ *
+ * Held rather than worked out on demand because it is part of every status the
+ * dashboard asks for, several times a minute, and the files it would be worked
+ * out from are megabytes each. It can only ever move earlier, which happens
+ * when a sensor that had no history at all gains one reaching further back
+ * than any other sensor's.
+ */
+let oldestStored = null;
+
+/**
  * Reject a sensor name that is not one the device serves.
  *
  * Sensor names reach this module from query strings and are used to build file
@@ -102,14 +113,55 @@ function readDayFile(sensor, fileName) {
 }
 
 /**
+ * The first reading in one daily file, without reading the rest of it.
+ *
+ * A daily file runs to several megabytes, and reading one to look at its first
+ * line would be the most expensive thing this server does on a request that is
+ * asked for every few seconds.
+ */
+function firstReadingOf(sensor, fileName) {
+	let handle;
+	try {
+		handle = fs.openSync(path.join(sensorDirectory(sensor), fileName), 'r');
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			return null;
+		}
+		throw error;
+	}
+
+	try {
+		// Comfortably longer than one reading: the longest, the BME690's, comes
+		// to about 460 bytes, so the first newline is always inside this much.
+		const buffer = Buffer.alloc(4096);
+		const filled = fs.readSync(handle, buffer, 0, buffer.length, 0);
+		const text = buffer.toString('utf8', 0, filled);
+		const end = text.indexOf('\n');
+
+		// No newline means no complete line, which is an empty file or one whose
+		// first write was cut short; either way there is no reading to report.
+		if (end <= 0) {
+			return null;
+		}
+
+		return JSON.parse(text.slice(0, end));
+	} catch {
+		return null;
+	} finally {
+		fs.closeSync(handle);
+	}
+}
+
+/**
  * Load what is already on disk into the in-memory summaries.
  *
- * Only the newest daily file of each sensor is read: all that is needed is the
- * newest reading and its timestamp, and every older file is by definition
- * older than that.
+ * Only the first and last daily files of each sensor are looked at: all that is
+ * needed is the newest reading, its timestamp, and the oldest timestamp, and
+ * every file in between is by definition between the two.
  */
 export function initialize() {
 	fs.mkdirSync(DATA_DIR, { recursive: true });
+	oldestStored = null;
 
 	for (const sensor of SENSORS) {
 		fs.mkdirSync(sensorDirectory(sensor), { recursive: true });
@@ -124,6 +176,11 @@ export function initialize() {
 		if (newest) {
 			lastTimestamps.set(sensor, newest.t);
 			latestReadings.set(sensor, newest);
+		}
+
+		const oldest = firstReadingOf(sensor, files[0]);
+		if (oldest && (oldestStored === null || oldest.t < oldestStored)) {
+			oldestStored = oldest.t;
 		}
 	}
 }
@@ -156,6 +213,7 @@ export function append(sensor, readings) {
 
 	let newest = lastTimestamps.get(sensor) ?? 0;
 	let newestReading = latestReadings.get(sensor) ?? null;
+	let earliest = null;
 	let written = 0;
 
 	// Group consecutive readings by the day they fall in, so a page that does
@@ -184,6 +242,9 @@ export function append(sensor, readings) {
 		}
 		pendingLines.push(`${JSON.stringify(reading)}\n`);
 
+		if (earliest === null) {
+			earliest = reading.t;
+		}
 		newest = reading.t;
 		newestReading = reading;
 		written += 1;
@@ -194,6 +255,10 @@ export function append(sensor, readings) {
 	if (written > 0) {
 		lastTimestamps.set(sensor, newest);
 		latestReadings.set(sensor, newestReading);
+
+		if (oldestStored === null || earliest < oldestStored) {
+			oldestStored = earliest;
+		}
 	}
 
 	return written;
@@ -228,18 +293,5 @@ export function readRange(sensor, from, to) {
 
 /** Wall-clock time of the oldest stored reading of any sensor, or `null`. */
 export function oldestTimestamp() {
-	let oldest = null;
-
-	for (const sensor of SENSORS) {
-		const files = dayFiles(sensor);
-		if (files.length === 0) {
-			continue;
-		}
-		const first = readDayFile(sensor, files[0])[0];
-		if (first && (oldest === null || first.t < oldest)) {
-			oldest = first.t;
-		}
-	}
-
-	return oldest;
+	return oldestStored;
 }

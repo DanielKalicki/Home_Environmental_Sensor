@@ -7,14 +7,15 @@
  */
 
 /** Sensors, in the order the dashboard shows them. */
-export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343'];
+export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581'];
 
 /** Human-readable name of each sensor and what it measures. */
 export const SENSOR_LABELS = {
 	scd41: 'SCD41 — CO₂, temperature, humidity',
 	sps30: 'SPS30 — particulate matter',
 	bme690: 'BME690 — temperature, humidity, pressure, gas',
-	as7343: 'AS7343 — visible-light spectrum'
+	as7343: 'AS7343 — visible-light spectrum',
+	bmp581: 'BMP581 — pressure, temperature'
 };
 
 /**
@@ -22,6 +23,24 @@ export const SENSOR_LABELS = {
  * The reading field for one of them is `nm_<wavelength>`.
  */
 export const SPECTRAL_WAVELENGTHS_NM = [405, 425, 450, 475, 515, 550, 555, 600, 640, 690, 745, 855];
+
+/**
+ * The AS7343 fields the spectrum chart draws over time.
+ *
+ * The twelve channel counts, the gain they were measured at, and the two
+ * saturation flags. The gain is needed because the device changes it as the
+ * light changes: two readings taken at different gains are not comparable
+ * until each is divided by its own, so a chart that spans a gain change has to
+ * be told what the gain was. The flags mark the readings whose counts were cut
+ * off at the top of the converter's range and are therefore a floor rather
+ * than a measurement.
+ */
+export const SPECTRAL_FIELDS = [
+	...SPECTRAL_WAVELENGTHS_NM.map((nm) => `nm_${nm}`),
+	'gain',
+	'analog_saturation',
+	'digital_saturation'
+];
 
 /**
  * The charts on the dashboard.
@@ -53,7 +72,8 @@ export const CHARTS = [
 		decimals: 2,
 		series: [
 			{ sensor: 'scd41', field: 'temperature_celsius', label: 'SCD41', color: '#f97b4f' },
-			{ sensor: 'bme690', field: 'temperature_celsius', label: 'BME690', color: '#f9c74f' }
+			{ sensor: 'bme690', field: 'temperature_celsius', label: 'BME690', color: '#f9c74f' },
+			{ sensor: 'bmp581', field: 'temperature_celsius', label: 'BMP581', color: '#f472b6' }
 		]
 	},
 	{
@@ -77,6 +97,13 @@ export const CHARTS = [
 				field: 'pressure_pascals',
 				label: 'BME690',
 				color: '#a3e635',
+				scale: 0.01
+			},
+			{
+				sensor: 'bmp581',
+				field: 'pressure_pascals',
+				label: 'BMP581',
+				color: '#38bdf8',
 				scale: 0.01
 			}
 		]
@@ -141,10 +168,12 @@ export const CHARTS = [
  * Every sensor field the charts read, per sensor.
  *
  * The history endpoint sends only these, so a request for a week of readings
- * does not also carry the fields nothing on the page draws.
+ * does not also carry the fields nothing on the page draws. The AS7343's
+ * spectral channels are added on top of what `CHARTS` lists, because the
+ * spectrum chart draws all twelve of them itself rather than as a series.
  */
 export function chartedFields(sensor) {
-	const fields = new Set();
+	const fields = new Set(sensor === 'as7343' ? SPECTRAL_FIELDS : []);
 	for (const chart of CHARTS) {
 		for (const series of chart.series) {
 			if (series.sensor === sensor) {

@@ -2,15 +2,17 @@
 	/**
 	 * The dashboard.
 	 *
-	 * It reads this server's own two endpoints and never contacts the device:
-	 * `/api/status` for the newest values and the state of the collection, and
-	 * `/api/history` for the range being drawn. The history a chart shows can
-	 * therefore reach further back than the day the device itself retains.
+	 * It reads this server's own endpoints and never contacts the device:
+	 * `/api/status` for the newest values and the state of the collection,
+	 * `/api/history` for the range being drawn, and `/api/thermal` for the last
+	 * picture the thermal camera took. The history a chart shows can therefore
+	 * reach further back than the day the device itself retains.
 	 */
 	import { onMount } from 'svelte';
 
 	import LineChart from '$lib/components/LineChart.svelte';
 	import SpectrumChart from '$lib/components/SpectrumChart.svelte';
+	import ThermalImage from '$lib/components/ThermalImage.svelte';
 	import { CHARTS, SENSOR_LABELS, SENSORS, seriesValue } from '$lib/sensors.js';
 
 	/** Selectable spans of history, as milliseconds back from now. */
@@ -27,6 +29,25 @@
 	const STATUS_INTERVAL_MS = 5000;
 	/** How often the charts are redrawn from freshly fetched history. */
 	const HISTORY_INTERVAL_MS = 20000;
+	/**
+	 * How often the thermal image is refreshed. It is fetched separately from
+	 * the status because it is 768 temperatures, and there is no point asking
+	 * for it faster than the device takes one.
+	 */
+	const THERMAL_INTERVAL_MS = 10000;
+	/**
+	 * How often the displayed age of the thermal image is recomputed.
+	 *
+	 * The age has to be driven by a clock of its own rather than by the fetch
+	 * that brings the image in. Measured from the fetch, it is a single reading
+	 * taken the instant the image arrived and then held until the next one
+	 * arrives, so it never counts up; and because the browser asks every 10 s
+	 * while the camera takes one every 10.15 s, the image waiting for it is
+	 * always about equally old, so that held reading is the same number every
+	 * time. The result is an age that sits at a few seconds indefinitely while
+	 * the image behind it is in fact ageing normally.
+	 */
+	const THERMAL_AGE_TICK_MS = 1000;
 	/** Points requested per sensor; the server averages the rest into these. */
 	const CHART_POINTS = 700;
 
@@ -39,25 +60,57 @@
 	let historyError = null;
 	let loadingHistory = false;
 
+	/** The last thermal image fetched, and the moment its age is measured against. */
+	let thermal = null;
+	let thermalNow = Date.now();
+
+	/**
+	 * Sensors the reader has clicked off in a chart's legend. The flag is per
+	 * sensor rather than per series, so turning off the SCD41 hides it from
+	 * every chart it appears on (temperature, humidity, CO₂) with one click,
+	 * instead of leaving it live on the charts that were not clicked. It is
+	 * kept in `localStorage` so a reader who hides the noisy sensors does not
+	 * have to redo it on every visit.
+	 */
+	const DISABLED_SENSORS_KEY = 'disabledSensors';
+	let disabledSensors = new Set();
+
 	$: latest = status?.sensors ?? {};
 
-	// `history` is named here rather than only inside `chartsFrom`, because
-	// Svelte works out what a reactive statement depends on from the names it
-	// mentions, not from what the functions it calls happen to read. A
-	// statement that only called a helper would be computed once, while the
-	// history was still empty, and never again.
-	$: charts = chartsFrom(history);
+	// `history` and `disabledSensors` are named here rather than only inside
+	// `chartsFrom`, because Svelte works out what a reactive statement depends
+	// on from the names it mentions, not from what the functions it calls
+	// happen to read. A statement that only called a helper would be computed
+	// once, while the history was still empty, and never again.
+	$: charts = chartsFrom(history, disabledSensors);
 
 	/** Every chart, with its series turned into points ready to draw. */
-	function chartsFrom(fetched) {
+	function chartsFrom(fetched, disabled) {
 		return CHARTS.map((chart) => ({
 			...chart,
 			drawn: chart.series.map((series) => ({
+				sensor: series.sensor,
 				label: series.label,
 				color: series.color,
-				points: pointsOf(fetched, series)
+				points: pointsOf(fetched, series),
+				hidden: disabled.has(series.sensor)
 			}))
 		}));
+	}
+
+	/** Flips whether `sensor` is hidden from the charts, and remembers it. */
+	function toggleSensor(sensor) {
+		const next = new Set(disabledSensors);
+		if (next.has(sensor)) {
+			next.delete(sensor);
+		} else {
+			next.add(sensor);
+		}
+		disabledSensors = next;
+
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(DISABLED_SENSORS_KEY, JSON.stringify([...next]));
+		}
 	}
 
 	/** The `{ t, v }` points of one chart series, from the fetched history. */
@@ -117,6 +170,19 @@
 		selectedRange = range;
 		void loadHistory();
 	}
+	async function loadThermal() {
+		try {
+			const response = await fetch('/api/thermal');
+			if (!response.ok) {
+				throw new Error(`thermal request failed: ${response.status}`);
+			}
+			thermal = await response.json();
+		} catch (error) {
+			// Same as the status: the collection is unaffected, only this view of
+			// it is stale until the next tick.
+			console.warn(error);
+		}
+	}
 
 	function formatNumber(value, decimals = 1) {
 		if (value === null || value === undefined || !Number.isFinite(value)) {
@@ -159,15 +225,32 @@
 	}
 
 	onMount(() => {
+		try {
+			const saved = JSON.parse(localStorage.getItem(DISABLED_SENSORS_KEY) ?? '[]');
+			if (Array.isArray(saved) && saved.length > 0) {
+				disabledSensors = new Set(saved);
+			}
+		} catch (error) {
+			// A corrupt or missing value just leaves every sensor shown.
+			console.warn(error);
+		}
+
 		void loadStatus();
 		void loadHistory();
+		void loadThermal();
 
 		const statusTimer = setInterval(loadStatus, STATUS_INTERVAL_MS);
 		const historyTimer = setInterval(loadHistory, HISTORY_INTERVAL_MS);
+		const thermalTimer = setInterval(loadThermal, THERMAL_INTERVAL_MS);
+		const thermalAgeTimer = setInterval(() => {
+			thermalNow = Date.now();
+		}, THERMAL_AGE_TICK_MS);
 
 		return () => {
 			clearInterval(statusTimer);
 			clearInterval(historyTimer);
+			clearInterval(thermalTimer);
+			clearInterval(thermalAgeTimer);
 		};
 	});
 </script>
@@ -297,10 +380,22 @@
 				series={chart.drawn}
 				from={history?.from ?? Date.now() - selectedRange.ms}
 				to={history?.to ?? Date.now()}
+				on:toggle={(event) => toggleSensor(event.detail)}
 			/>
 		{/each}
 
-		<SpectrumChart reading={latest.as7343?.latest ?? null} />
+		<!-- The spectrum is twelve channels against time rather than one line, so
+		     it is given the whole width of the grid instead of one of its cells. -->
+		<div class="wide">
+			<SpectrumChart
+				readings={history?.sensors?.as7343 ?? []}
+				latest={latest.as7343?.latest ?? null}
+				from={history?.from ?? Date.now() - selectedRange.ms}
+				to={history?.to ?? Date.now()}
+			/>
+		</div>
+
+		<ThermalImage image={thermal} now={thermalNow} />
 	</section>
 
 	<section class="collection">
@@ -491,6 +586,10 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
 		gap: 0.6rem;
+	}
+
+	.charts .wide {
+		grid-column: 1 / -1;
 	}
 
 	.collection {

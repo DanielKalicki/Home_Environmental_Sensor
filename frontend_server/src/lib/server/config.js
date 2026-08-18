@@ -22,13 +22,29 @@ export const DATA_DIR = env.DATA_DIR ?? 'data';
 /**
  * Readings requested per `/api/readings` call.
  *
- * The device caps a page at 2000 and answers it from a ring buffer in PSRAM,
- * so asking for more only wastes a round trip.
+ * The device caps a page at 2000, but a page that large is not worth asking
+ * for. A reading is written out as JSON, and the BME690's, which carries every
+ * BSEC output, comes to about 460 bytes; 2000 of them are a response of nearly
+ * a megabyte, sent through the device's 1536-byte transmit buffer, which takes
+ * long enough to be at risk of `REQUEST_TIMEOUT_MS`. That matters most on the
+ * first pass after this server starts, which is the one pass that asks for a
+ * sensor's whole retained history rather than the handful of readings taken
+ * since the last pass.
+ *
+ * At this size the largest response is about 115 KB, which the device has been
+ * measured to send in around a second, and a full day of BME690 readings is
+ * recovered in under sixty requests.
  */
-export const DEVICE_PAGE_LIMIT = 2000;
+export const DEVICE_PAGE_LIMIT = 250;
 
-/** Sensors the device exposes, in the order they are shown. */
-export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343'];
+/**
+ * Sensors the device exposes, in the order they are shown.
+ *
+ * Re-exported from the shared definitions rather than listed again here: the
+ * poller collects exactly this list, so a sensor named only in `sensors.js`
+ * would be charted but never fetched, and the charts would stay empty.
+ */
+export { SENSORS } from '$lib/sensors.js';
 
 /**
  * Smallest gap, in milliseconds, between a stored reading and a newly pulled

@@ -18,11 +18,24 @@ import {
 	POLL_INTERVAL_MS,
 	SENSORS
 } from './config.js';
-import { abortInFlight, fetchReadings, fetchStatus } from './device.js';
+import { abortInFlight, fetchReadings, fetchStatus, fetchThermal } from './device.js';
 import * as store from './store.js';
 
 /** Sequence number each sensor should be pulled from next. */
 const cursors = new Map();
+
+/**
+ * The newest thermal image, or `null` before one has been fetched.
+ *
+ * Images are held in memory only and never written to disk. The device keeps
+ * just the last one, so there is no history to collect, and one image is 768
+ * temperatures: storing them at the camera's rate would outgrow every other
+ * sensor's history put together within a day.
+ */
+let thermal = null;
+
+/** Why the last thermal fetch failed, or `null` if it succeeded. */
+let thermalError = null;
 
 /** Snapshot of what the poller is doing, served by `/api/status`. */
 const state = {
@@ -44,7 +57,8 @@ for (const sensor of SENSORS) {
 		intervalMs: null,
 		deviceRetained: null,
 		storedTotal: 0,
-		lastReadingAt: null
+		lastReadingAt: null,
+		lastError: null
 	};
 }
 
@@ -108,21 +122,62 @@ export function snapshot() {
 	return { ...state, sensors, oldestReadingAt: store.oldestTimestamp() };
 }
 
+/**
+ * The newest thermal image, dated against the wall clock.
+ *
+ * It is deliberately not part of `snapshot`: the dashboard asks for the
+ * status several times a minute, and 768 temperatures do not belong in a
+ * response that small. `takenAt` is the local time the image was taken,
+ * worked out the same way a reading's timestamp is.
+ */
+export function latestThermal() {
+	if (thermal === null) {
+		return { available: false, error: thermalError };
+	}
+
+	return {
+		available: true,
+		error: thermalError,
+		takenAt: thermal.receivedAt - (thermal.uptime_ms - thermal.taken_at_ms),
+		sequence: thermal.sequence,
+		intervalMs: thermal.interval_ms ?? null,
+		width: thermal.width,
+		height: thermal.height,
+		minCelsius: thermal.min_celsius,
+		maxCelsius: thermal.max_celsius,
+		meanCelsius: thermal.mean_celsius,
+		ambientCelsius: thermal.ambient_celsius,
+		pixels: thermal.pixels
+	};
+}
+
+/**
+ * Record that the device answered.
+ *
+ * This is called the moment `/api/status` comes back, not when the pass that
+ * asked for it finishes. A pass has to catch up on every reading taken while
+ * this server was not running, and that can take minutes; a device marked
+ * reachable only at the end of it would be reported as unreachable for the
+ * whole of a backfill it is plainly answering.
+ *
+ * Only the change of state is worth a line. Saying the device is reachable
+ * every few seconds tells nobody anything, and saying it is unreachable every
+ * few seconds buries whatever else is in the console.
+ */
+function markReachable() {
+	if (state.lastError !== null) {
+		console.log('poller: device reachable again');
+	}
+
+	state.deviceOnline = true;
+	state.lastError = null;
+	state.lastSuccessAt = Date.now();
+}
+
 async function loop() {
 	while (started) {
 		try {
 			await pollOnce();
-
-			// Only the change of state is worth a line. Saying the device is
-			// reachable every few seconds tells nobody anything, and saying it is
-			// unreachable every few seconds buries whatever else is in the console.
-			if (state.lastError !== null) {
-				console.log('poller: device reachable again');
-			}
-
-			state.deviceOnline = true;
-			state.lastError = null;
-			state.lastSuccessAt = Date.now();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 
@@ -156,6 +211,10 @@ async function loop() {
 async function pollOnce() {
 	const status = await fetchStatus();
 
+	// The device has answered, so it is reachable now, whatever the rest of
+	// this pass turns out to cost.
+	markReachable();
+
 	// A device uptime lower than the one seen last pass means the device
 	// rebooted: its sequence numbers restarted at zero, so the cursors point at
 	// readings that no longer exist and every sensor has to be picked up from
@@ -169,6 +228,15 @@ async function pollOnce() {
 
 	state.deviceUptimeMs = status.uptime_ms;
 	state.deviceWindowMs = status.window_ms;
+
+	// Fetched before the sensors rather than after: a sensor's history can be
+	// a whole day of readings paged 250 at a time, which can take minutes to
+	// catch up on. The thermal image is a single cheap request with nothing to
+	// page through, and the camera takes a new one every 10 s regardless, so
+	// it must not be left waiting behind that backlog — otherwise the image
+	// shown is however old the last full pass was, not the camera's current
+	// frame.
+	await syncThermal();
 
 	for (const sensor of SENSORS) {
 		const sensorStatus = status.sensors?.[sensor];
@@ -185,15 +253,76 @@ async function pollOnce() {
 			continue;
 		}
 
-		await syncSensor(sensor, sensorStatus);
+		// One sensor's failure must not cost the others their pass. The sensors
+		// are pulled in a fixed order, so without this a sensor that cannot be
+		// fetched stops every sensor after it from being fetched at all, for as
+		// long as it keeps failing — and because its own cursor never advances,
+		// that is forever. The result is a history that keeps growing for the
+		// first sensors in the list and is frozen for the rest.
+		try {
+			await syncSensor(sensor, sensorStatus);
+
+			if (state.sensors[sensor].lastError !== null) {
+				console.log(`poller: ${sensor} readable again`);
+				state.sensors[sensor].lastError = null;
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+
+			if (state.sensors[sensor].lastError !== message) {
+				console.warn(`poller: ${sensor}: ${message}`);
+				state.sensors[sensor].lastError = message;
+			}
+		}
+	}
+}
+
+/**
+ * Fetch the newest thermal image, if the camera has taken a new one.
+ *
+ * A failure is recorded rather than thrown: the camera is one device among
+ * several, and an image that could not be fetched must not cost the pass its
+ * readings or mark the whole device unreachable.
+ */
+async function syncThermal() {
+	try {
+		const image = await fetchThermal();
+
+		if (image.available) {
+			// The device restarts its sequence at zero when it reboots, so an
+			// image whose number went backwards is a new image too.
+			thermal = image;
+		} else if (thermal !== null && image.uptime_ms < thermal.uptime_ms) {
+			// The device rebooted and has not finished its first image yet; the
+			// one held here belongs to the previous run.
+			thermal = null;
+		}
+
+		if (thermalError !== null) {
+			console.log('poller: thermal camera readable again');
+			thermalError = null;
+		}
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+
+		if (thermalError !== message) {
+			console.warn(`poller: thermal: ${message}`);
+			thermalError = message;
+		}
 	}
 }
 
 async function syncSensor(sensor, sensorStatus) {
+	// With no cursor yet — the first pass after this server started, or the
+	// first after the device rebooted and renumbered everything — the place to
+	// start has to be found rather than assumed.
+	const known = cursors.get(sensor);
+	const start = known === undefined ? await seekCursor(sensor, sensorStatus) : known;
+
 	// Readings older than `first_sequence` have been overwritten on the device
 	// and cannot be recovered, so a cursor that has fallen behind is moved up
 	// rather than retried.
-	let from = Math.max(cursors.get(sensor) ?? sensorStatus.first_sequence, sensorStatus.first_sequence);
+	let from = Math.max(start, sensorStatus.first_sequence);
 
 	while (from < sensorStatus.next_sequence) {
 		const page = await fetchReadings(sensor, from, DEVICE_PAGE_LIMIT);
@@ -212,6 +341,93 @@ async function syncSensor(sensor, sensorStatus) {
 	}
 
 	cursors.set(sensor, from);
+}
+
+/**
+ * The first sequence number of `sensor` this server does not already hold.
+ *
+ * Starting instead from the device's oldest retained reading is what made a
+ * restart so slow. The device retains a day, so that is a day of readings
+ * pulled a page at a time over a link that manages roughly a hundred kilobytes
+ * a second — minutes of transfers for every sensor, all but the last few
+ * readings of which are already on disk and are thrown away by `datePage` the
+ * moment they arrive. Restarting this server a minute after stopping it should
+ * cost a minute of readings, not a day of them.
+ *
+ * The device numbers its readings in order, so "already stored here" is true
+ * of an unbroken run of the oldest sequence numbers and false of every one
+ * after it. That boundary is found by asking for single readings and comparing
+ * their timestamps against the newest one stored, which is a handful of very
+ * small requests instead of a full history.
+ *
+ * The search walks back from the newest reading in doubling steps before it
+ * halves the interval it lands in, because the boundary is usually within a
+ * few readings of the newest: the common case is this server having been
+ * restarted, not having been away for a day. A pass with nothing new to
+ * collect costs a single request, one that missed a few readings costs two or
+ * three, and a full day's gap costs under twenty — against the seventy full
+ * pages that same gap used to cost.
+ */
+async function seekCursor(sensor, sensorStatus) {
+	const stored = store.lastTimestamp(sensor);
+	const first = sensorStatus.first_sequence;
+	const next = sensorStatus.next_sequence;
+
+	// Nothing stored for this sensor yet, so every retained reading is wanted.
+	if (stored === 0 || next <= first) {
+		return first;
+	}
+
+	// `low` is not yet known to be wanted; `high` is known to be. A sequence
+	// the device does not have counts as wanted, which is what makes `next` a
+	// valid upper bound to start from.
+	let low = first;
+	let high = next;
+
+	for (let step = 1; next - step > first; step *= 2) {
+		const candidate = next - step;
+
+		if (await isWanted(sensor, candidate, stored)) {
+			high = candidate;
+		} else {
+			low = candidate + 1;
+			break;
+		}
+	}
+
+	while (low < high) {
+		const middle = low + Math.floor((high - low) / 2);
+
+		if (await isWanted(sensor, middle, stored)) {
+			high = middle;
+		} else {
+			low = middle + 1;
+		}
+	}
+
+	return low;
+}
+
+/**
+ * Whether the reading at `sequence` is newer than the newest one stored.
+ *
+ * A reading the device no longer has was taken before everything it still
+ * holds, so it is not wanted; a sequence the device has not reached counts as
+ * wanted, so the search never walks past the end of the history.
+ */
+async function isWanted(sensor, sequence, stored) {
+	const page = await fetchReadings(sensor, sequence, 1);
+	const reading = page.readings?.[0];
+
+	if (reading === undefined) {
+		return true;
+	}
+
+	if (reading === null || typeof reading.taken_at_ms !== 'number') {
+		return false;
+	}
+
+	return page.receivedAt - (page.uptime_ms - reading.taken_at_ms) > stored + DUPLICATE_TOLERANCE_MS;
 }
 
 /**

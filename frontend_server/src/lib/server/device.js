@@ -1,10 +1,10 @@
 /**
  * Client for the device's read-only HTTP API.
  *
- * The device serves `GET /api/status` and `GET /api/readings` (see
- * `software/README.md`). Both are plain JSON over HTTP/1.1; `/api/readings`
- * has no `Content-Length` and ends when the device closes the connection,
- * which `fetch` handles on its own.
+ * The device serves `GET /api/status`, `GET /api/readings` and
+ * `GET /api/thermal` (see `software/README.md`). All are plain JSON over
+ * HTTP/1.1; `/api/readings` and `/api/thermal` have no `Content-Length` and
+ * end when the device closes the connection, which `fetch` handles on its own.
  */
 import { DEVICE_URL, DEVICE_PAGE_LIMIT, REQUEST_TIMEOUT_MS } from './config.js';
 
@@ -193,4 +193,27 @@ export async function fetchReadings(sensor, from, limit = DEVICE_PAGE_LIMIT) {
 
 	const page = await getJson(`/api/readings?${query}`);
 	return { ...page, receivedAt: Date.now() };
+}
+
+/**
+ * The newest thermal image the camera has taken.
+ *
+ * The device keeps no history of images, only the last one, so this is always
+ * a single image and there is nothing to page through. `sequence` counts the
+ * images taken since the device booted, which is what tells a new image from
+ * one already held.
+ *
+ * `receivedAt` is added for the same reason as in `fetchReadings`: the device
+ * dates the image by its own uptime, and only the local time the response
+ * arrived can place it on a wall clock.
+ *
+ * @returns {Promise<{uptime_ms: number, available: boolean, width: number,
+ *   height: number, pixels: number[], receivedAt: number,
+ *   taken_at_ms?: number, sequence?: number, interval_ms?: number,
+ *   min_celsius?: number, max_celsius?: number, mean_celsius?: number,
+ *   ambient_celsius?: number}>}
+ */
+export async function fetchThermal() {
+	const image = await getJson('/api/thermal');
+	return { ...image, receivedAt: Date.now() };
 }

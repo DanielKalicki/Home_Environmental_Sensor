@@ -10,12 +10,24 @@
 	 * readings; a longer gap breaks the line, so an interruption in the history
 	 * is visible as one.
 	 */
+	import { createEventDispatcher } from 'svelte';
+	import { formatTime, timeAxisOf } from '$lib/timeAxis.js';
+
 	export let title = '';
 	export let unit = '';
 	export let decimals = 0;
+	/**
+	 * Each entry may carry a `sensor` (the id a legend click reports) and a
+	 * `hidden` flag. A hidden series stays in the legend, dimmed, so clicking
+	 * it again brings it back; it is left out of the drawn line and of the
+	 * axis's range so a chart the reader has narrowed to two series is not
+	 * still scaled for a third they turned off.
+	 */
 	export let series = [];
 	export let from = 0;
 	export let to = 1;
+
+	const dispatch = createEventDispatcher();
 
 	/**
 	 * The chart is drawn in real pixels, not in a fixed viewBox that the browser
@@ -42,67 +54,70 @@
 	 */
 	const GAP_FACTOR = 4;
 
-	const DAY_MS = 86400000;
-
-	/**
-	 * The steps the horizontal axis is allowed to use, in milliseconds. A label
-	 * therefore always falls on a whole minute, quarter hour, hour and so on,
-	 * rather than on whatever moment the range happens to begin at. Anything
-	 * coarser than the last entry is counted in whole days instead, because days
-	 * are not all the same length once the clocks change.
-	 */
-	const TIME_STEPS_MS = [
-		1000,
-		5000,
-		10000,
-		15000,
-		30000,
-		60000,
-		2 * 60000,
-		5 * 60000,
-		10 * 60000,
-		15 * 60000,
-		30 * 60000,
-		3600000,
-		2 * 3600000,
-		3 * 3600000,
-		6 * 3600000,
-		12 * 3600000
-	];
-
-	/** Room a label needs to itself, in pixels, before the next one may start. */
-	const TICK_SPACING_PX = 82;
+	/** How many labels the vertical axis aims for; the rounding may vary it. */
+	const VALUE_TICKS = 5;
 
 	let hoverX = null;
 
-	$: allValues = series.flatMap((entry) => entry.points.map((point) => point.v));
+	$: allValues = series
+		.filter((entry) => !entry.hidden)
+		.flatMap((entry) => entry.points.map((point) => point.v));
 	$: hasData = allValues.length > 0;
-	$: bounds = computeBounds(allValues);
-	$: ticks = hasData ? tickValues(bounds.min, bounds.max) : [];
-	$: timeAxis = hasData ? timeAxisOf(from, to, plotWidth) : [];
+	$: bounds = scaleOf(allValues);
+	$: ticks = hasData ? bounds.ticks : [];
+	$: timeAxis = hasData ? timeAxisOf(from, to, PADDING.left, plotWidth) : [];
 	$: hoverTime =
 		hoverX === null ? null : from + ((hoverX - PADDING.left) / plotWidth) * (to - from);
-	$: hovered = hoverTime === null ? [] : series.map((entry) => nearest(entry, hoverTime));
+	$: hovered =
+		hoverTime === null
+			? []
+			: series.map((entry) => (entry.hidden ? null : nearest(entry, hoverTime)));
 
 	// The drawn shapes are derived here, naming every value they are built from,
 	// because Svelte decides what a statement depends on from the names it
 	// mentions. Calling these out of the markup instead would leave a path drawn
-	// against a scale that has since changed.
+	// against a scale that has since changed. A hidden series gets no path at
+	// all, rather than one drawn and then covered up, so it plays no part in
+	// the picture beyond its dimmed entry in the legend.
 	$: paths = series.map((entry) => ({
 		color: entry.color,
-		d: pathOf(entry.points, bounds, from, to, plotWidth)
+		d: entry.hidden ? '' : pathOf(entry.points, bounds, from, to, plotWidth)
 	}));
+
+	/** Tells the page a legend entry was clicked, so it can flip that sensor. */
+	function toggle(entry) {
+		if (entry.sensor) {
+			dispatch('toggle', entry.sensor);
+		}
+	}
 	$: markers = hovered.map((point) =>
 		point ? { cx: scaleX(point.t, from, to, plotWidth), cy: scaleY(point.v, bounds) } : null
 	);
 
-	function computeBounds(values) {
+	/**
+	 * The vertical scale: the bounds the plot is drawn against, the step between
+	 * labels, and the labelled values themselves.
+	 *
+	 * Two things are deliberate here. The bounds are rounded outwards to whole
+	 * multiples of a step people count in, so the axis reads 0, 25, 50 rather
+	 * than -3.7, 8.4, 20.5. And the axis is never taken below zero unless the
+	 * data itself goes there: the margin that keeps a line off the edge of the
+	 * plot would otherwise invent readings that cannot exist, such as a negative
+	 * air quality index or a negative concentration. A quantity that does go
+	 * below zero, such as an outdoor temperature, still scales normally, because
+	 * the rule looks at the readings rather than at the name of the chart.
+	 */
+	function scaleOf(values) {
 		if (values.length === 0) {
-			return { min: 0, max: 1 };
+			return { min: 0, max: 1, step: 1, ticks: [] };
 		}
 
-		let min = Math.min(...values);
-		let max = Math.max(...values);
+		const lowest = Math.min(...values);
+		const highest = Math.max(...values);
+		const goesNegative = lowest < 0;
+
+		let min = lowest;
+		let max = highest;
 
 		if (min === max) {
 			// A flat series would otherwise have zero height to scale into.
@@ -115,7 +130,63 @@
 			max += margin;
 		}
 
-		return { min, max };
+		const step = chooseStep(min, max);
+
+		min = Math.floor(min / step) * step;
+		max = Math.ceil(max / step) * step;
+
+		if (!goesNegative && min < 0) {
+			min = 0;
+		}
+
+		if (max <= min) {
+			max = min + step;
+		}
+
+		const ticks = [];
+		// The comparison is loosened by a thousandth of a step because the sum
+		// below drifts: ten additions of 0.1 do not land exactly on 1.
+		for (let value = min; value <= max + step / 1000; value += step) {
+			ticks.push(exactly(value));
+		}
+
+		return { min: exactly(min), max: exactly(max), step, ticks };
+	}
+
+	/**
+	 * The finest step that still labels the range in no more than the labels
+	 * wanted, taken from the amounts people count in.
+	 *
+	 * Deriving the step from the span alone is not enough: rounding the bounds
+	 * out to whole multiples of it can widen the axis a long way past the data,
+	 * and a carbon dioxide range of 420 to 1350 would end up drawn against an
+	 * axis of 0 to 1500 with the line squashed into the middle of it. Trying the
+	 * candidates in order and stopping at the first that fits keeps the axis
+	 * close to the readings.
+	 */
+	function chooseStep(min, max) {
+		const span = max - min;
+		if (!(span > 0) || !Number.isFinite(span)) {
+			return 1;
+		}
+
+		const smallest = Math.floor(Math.log10(span)) - 3;
+
+		for (let exponent = smallest; exponent <= smallest + 5; exponent += 1) {
+			for (const factor of [1, 2, 2.5, 5]) {
+				const step = factor * 10 ** exponent;
+				if (Math.ceil(max / step) - Math.floor(min / step) + 1 <= VALUE_TICKS + 1) {
+					return step;
+				}
+			}
+		}
+
+		return span / (VALUE_TICKS - 1);
+	}
+
+	/** Drops the drift that repeated addition leaves in a decimal step. */
+	function exactly(value) {
+		return Number(value.toPrecision(12));
 	}
 
 	/** Horizontal position of a time, within the range the chart covers. */
@@ -165,116 +236,7 @@
 		return path;
 	}
 
-	/** Five round-ish values spanning the vertical axis. */
-	function tickValues(min, max) {
-		const count = 5;
-		const step = (max - min) / (count - 1);
-		return Array.from({ length: count }, (_, i) => min + step * i);
-	}
-
-	/** The horizontal axis: where each label sits, and how it is anchored. */
-	function timeAxisOf(rangeFrom, rangeTo, availableWidth) {
-		const left = PADDING.left;
-		const right = left + availableWidth;
-
-		return timeTicks(rangeFrom, rangeTo, availableWidth).map((tick) => {
-			const x = scaleX(tick.t, rangeFrom, rangeTo, availableWidth);
-
-			// A label centred on a tick near either end would hang over the edge
-			// of the plot, so the outermost ones are aligned inwards instead.
-			const anchor = x - left < 28 ? 'start' : right - x < 28 ? 'end' : 'middle';
-
-			return { x, label: tick.label, anchor };
-		});
-	}
-
-	/** Round moments inside the range, spaced far enough apart to be legible. */
-	function timeTicks(rangeFrom, rangeTo, availableWidth) {
-		const span = rangeTo - rangeFrom;
-		if (!(span > 0) || availableWidth <= 0) {
-			return [];
-		}
-
-		const mostThatFit = Math.max(2, Math.floor(availableWidth / TICK_SPACING_PX));
-		const smallestStep = span / mostThatFit;
-		const step = TIME_STEPS_MS.find((candidate) => candidate >= smallestStep);
-
-		const times =
-			step === undefined
-				? midnights(rangeFrom, rangeTo, smallestStep)
-				: roundMoments(rangeFrom, rangeTo, step);
-
-		// Over a range that crosses midnight the time of day alone is ambiguous,
-		// so the tick that starts each day carries the date.
-		const spansDays = startOfDay(rangeFrom) !== startOfDay(rangeTo);
-
-		return times.map((t) => ({ t, label: tickLabel(t, step ?? DAY_MS, spansDays) }));
-	}
-
-	/**
-	 * Whole multiples of `step`, counted from the local midnight before the
-	 * range starts rather than from the Unix epoch, so the labels line up with
-	 * the clock even where the time zone is not a whole number of hours.
-	 */
-	function roundMoments(rangeFrom, rangeTo, step) {
-		const origin = startOfDay(rangeFrom);
-		const times = [];
-
-		for (let t = origin + Math.ceil((rangeFrom - origin) / step) * step; t <= rangeTo; t += step) {
-			times.push(t);
-		}
-
-		return times;
-	}
-
-	/** Local midnights, every `days` of them, walked by date rather than by sum. */
-	function midnights(rangeFrom, rangeTo, smallestStep) {
-		const days =
-			[1, 2, 7, 14, 28].find((candidate) => candidate * DAY_MS >= smallestStep) ??
-			Math.ceil(smallestStep / DAY_MS);
-
-		const times = [];
-		const cursor = new Date(startOfDay(rangeFrom));
-		if (cursor.getTime() < rangeFrom) {
-			cursor.setDate(cursor.getDate() + 1);
-		}
-
-		while (cursor.getTime() <= rangeTo) {
-			times.push(cursor.getTime());
-			cursor.setDate(cursor.getDate() + days);
-		}
-
-		return times;
-	}
-
-	function startOfDay(t) {
-		const date = new Date(t);
-		date.setHours(0, 0, 0, 0);
-		return date.getTime();
-	}
-
-	/** As much of the moment as the step makes meaningful, and no more. */
-	function tickLabel(t, step, spansDays) {
-		const date = new Date(t);
-		const atMidnight =
-			date.getHours() === 0 && date.getMinutes() === 0 && date.getSeconds() === 0;
-
-		if (step >= DAY_MS || (spansDays && atMidnight)) {
-			return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-		}
-
-		if (step < 60000) {
-			return date.toLocaleTimeString(undefined, {
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit'
-			});
-		}
-
-		return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-	}
-
-	function formatValue(value) {
+	function formatValue(value, places = decimals) {
 		if (value === null || value === undefined) {
 			return '—';
 		}
@@ -282,34 +244,28 @@
 			return value.toExponential(2);
 		}
 		return value.toLocaleString(undefined, {
-			minimumFractionDigits: decimals,
-			maximumFractionDigits: decimals
+			minimumFractionDigits: places,
+			maximumFractionDigits: places
 		});
 	}
 
-	/** The moment under the cursor, to the precision the range justifies. */
-	function formatTime(t) {
-		const date = new Date(t);
-		const span = to - from;
+	/**
+	 * A label on the vertical axis. It carries at least as many decimals as the
+	 * step between ticks has, so an axis stepping by 0.5 does not print the same
+	 * number twice because the chart itself is written in whole units.
+	 */
+	function formatTick(value, step) {
+		return formatValue(value, Math.max(decimals, decimalsOf(step)));
+	}
 
-		if (span > 2 * DAY_MS) {
-			return date.toLocaleString(undefined, {
-				month: 'short',
-				day: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			});
+	function decimalsOf(step) {
+		const text = String(exactly(step));
+		if (text.includes('e')) {
+			return 6;
 		}
 
-		if (span > 30 * 60000) {
-			return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-		}
-
-		return date.toLocaleTimeString(undefined, {
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		});
+		const dot = text.indexOf('.');
+		return dot === -1 ? 0 : Math.min(6, text.length - dot - 1);
 	}
 
 	/** The point of `entry` closest in time to `t`, or `null` if far from any. */
@@ -341,9 +297,23 @@
 		<h3>{title}{unit ? ` (${unit})` : ''}</h3>
 		<ul class="legend">
 			{#each series as entry, index}
-				<li>
-					<span class="swatch" style:background={entry.color}></span>
-					{entry.label}
+				<li class:disabled={entry.hidden}>
+					{#if entry.sensor}
+						<button
+							type="button"
+							class="legend-item"
+							title={entry.hidden ? 'Click to show on this chart' : 'Click to hide on this chart'}
+							on:click={() => toggle(entry)}
+						>
+							<span class="swatch" style:background={entry.color}></span>
+							{entry.label}
+						</button>
+					{:else}
+						<span class="legend-item">
+							<span class="swatch" style:background={entry.color}></span>
+							{entry.label}
+						</span>
+					{/if}
 					<strong>{formatValue(hovered[index]?.v ?? entry.points[entry.points.length - 1]?.v)}</strong>
 				</li>
 			{/each}
@@ -370,7 +340,7 @@
 						y2={scaleY(tick, bounds)}
 					/>
 					<text class="axis" x={PADDING.left - 8} y={scaleY(tick, bounds) + 4} text-anchor="end">
-						{formatValue(tick)}
+						{formatTick(tick, bounds.step)}
 					</text>
 				{/each}
 
@@ -385,7 +355,9 @@
 				{/each}
 
 				{#each paths as line}
-					<path d={line.d} fill="none" stroke={line.color} stroke-width="2" />
+					{#if line.d}
+						<path d={line.d} fill="none" stroke={line.color} stroke-width="2" />
+					{/if}
 				{/each}
 
 				<line
@@ -423,7 +395,7 @@
 						{/if}
 					{/each}
 					<text class="axis" x={width / 2} y={PADDING.top + 12} text-anchor="middle">
-						{formatTime(hoverTime)}
+						{formatTime(hoverTime, to - from)}
 					</text>
 				{/if}
 			{:else}
@@ -484,6 +456,45 @@
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
+	}
+
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		border: none;
+		background: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		color: inherit;
+	}
+
+	/* Only series the page can actually toggle look interactive; a series
+	   with no `sensor` to report has nothing for a click to do. */
+	button.legend-item {
+		cursor: pointer;
+		border-radius: 4px;
+		padding: 0.05rem 0.3rem;
+		margin: -0.05rem -0.3rem;
+	}
+
+	button.legend-item:hover {
+		background: #1f2937;
+	}
+
+	button.legend-item:focus-visible {
+		outline: 2px solid #4f9cf9;
+		outline-offset: 1px;
+	}
+
+	.legend li.disabled {
+		opacity: 0.45;
+		text-decoration: line-through;
+	}
+
+	.legend li.disabled .swatch {
+		background: #475569 !important;
 	}
 
 	.legend strong {
