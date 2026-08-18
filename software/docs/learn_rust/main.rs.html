@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learn Rust · main.rs — Home Environmental Sensor</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f8fa;
+    --surface-alt:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --muted:#57606a;
+    --accent:#0969da;
+    --accent-2:#116329;
+    --k:#cf222e;   /* keyword */
+    --ty:#6639ba;  /* type / struct / enum */
+    --st:#032f62;  /* string literal */
+    --cm:#6a737d;  /* comment */
+    --mc:#005cc5;  /* macro */
+    --at:#bc4c00;  /* attribute */
+    --fn:#116329;  /* function / method call */
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;}
+
+  header.top{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);
+    border-bottom:1px solid var(--border);
+    padding:26px 40px 20px;
+  }
+  .eyebrow{
+    display:inline-block; font-size:12px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-2); margin-bottom:8px;
+  }
+  h1{margin:0 0 6px; font-size:26px; letter-spacing:-0.01em;}
+  header.top p.sub{margin:0 0 16px; color:var(--muted); font-size:14.5px;}
+  .legend{display:flex; flex-wrap:wrap; gap:4px 18px;}
+  .chip{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted);}
+  .chip i{width:11px; height:11px; border-radius:3px; display:inline-block; flex:none;}
+
+  .wrap{width:100%; margin:0; padding:0 40px 90px;}
+
+  .card{
+    background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--radius);
+    padding:22px 26px; margin:28px 0;
+  }
+  .card h2{margin-top:0; font-size:19px;}
+  .card p{color:var(--text); font-size:15px;}
+  .card ul{margin:10px 0 0; padding-left:20px; font-size:14.5px; color:var(--text);}
+  .card li{margin-bottom:6px;}
+  .card code.inline{background:#eef1f4; border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:13px; color:var(--mc);}
+
+  .lines{margin-top:12px;}
+  .line{
+    display:flex; align-items:flex-start; gap:30px;
+    padding:20px 6px; border-radius:10px;
+    transition:background .15s ease;
+  }
+  .line:hover{background:rgba(9,105,218,0.05);}
+  .ln{
+    flex:0 0 30px; text-align:right; padding-top:15px;
+    color:var(--muted); font-size:12px; user-select:none;
+  }
+  .code{
+    flex:1 1 0; min-width:260px;
+    margin:0; padding:14px 0; white-space:pre-wrap; word-break:break-word;
+    font-size:13.8px; background:transparent;
+  }
+  .explain{flex:1.3 1 0; min-width:260px; padding-top:6px; font-size:14.5px;}
+  .explain p{margin:0 0 8px;}
+  .explain p:last-child{margin-bottom:0;}
+
+  details.expand{
+    margin-top:12px; border:1px solid var(--border); border-radius:8px;
+    background:#fbfcfd; overflow:hidden;
+  }
+  details.expand > summary{
+    cursor:pointer; list-style:none; padding:9px 14px; font-size:12.5px;
+    font-weight:700; color:var(--accent); display:flex; align-items:center;
+    gap:8px; user-select:none;
+  }
+  details.expand > summary::-webkit-details-marker{display:none;}
+  details.expand > summary::before{
+    content:"▸"; font-size:11px; display:inline-block;
+    transition:transform .15s ease;
+  }
+  details.expand[open] > summary::before{transform:rotate(90deg);}
+  details.expand[open] > summary{border-bottom:1px solid var(--border);}
+  .expand-body{padding:16px 18px;}
+  .expand-body p{margin:0 0 10px; font-size:13.8px;}
+  .expand-body p:last-child{margin-bottom:0;}
+  .expand-body h4{margin:14px 0 6px; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);}
+  .expand-body h4:first-child{margin-top:0;}
+  .expand-body pre{
+    background:#0d1117; color:#c9d1d9; border-radius:8px; padding:12px 14px;
+    overflow-x:auto; font-size:12.8px; margin:6px 0 14px; line-height:1.55;
+  }
+  .expand-body pre code{background:none; color:inherit; padding:0; border:none; white-space:pre;}
+
+  .tag{
+    display:inline-block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+    font-weight:700; color:#ffffff; background:var(--accent-2); padding:3px 9px;
+    border-radius:999px; margin-bottom:9px;
+  }
+  .tag.alt{background:var(--accent); color:#ffffff;}
+
+  .line.blank{opacity:.7; padding:8px 6px;}
+  .line.blank .ln{padding-top:2px;}
+  .line.blank .code{font-style:italic; color:var(--muted); padding:6px 0;}
+  .line.blank .explain{font-style:italic; color:var(--muted); padding-top:2px;}
+
+  .k{color:var(--k);}
+  .ty{color:var(--ty);}
+  .st{color:var(--st);}
+  .cm{color:var(--cm); font-style:italic;}
+  .mc{color:var(--mc);}
+  .at{color:var(--at);}
+  .fn{color:var(--fn);}
+  .nu{color:var(--ty);}
+
+  .glossary{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; margin-top:14px;}
+  .glossary .term{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px;}
+  .glossary .term h3{margin:0 0 8px; font-size:14.5px; color:var(--accent);}
+  .glossary .term p{margin:0; font-size:13.5px; color:var(--text);}
+
+  footer{text-align:center; color:var(--muted); font-size:13px; padding:30px 0 10px;}
+  footer a{color:var(--accent);}
+
+  @media (max-width:900px){
+    .line{flex-direction:column; gap:8px;}
+    .ln{flex:none; text-align:left; padding-top:0;}
+    .code{flex:none; width:100%; max-width:none;}
+    .explain{flex:none; width:100%; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="eyebrow">Learn Rust</span>
+  <h1>src/main.rs — Home Environmental Sensor firmware</h1>
+  <p class="sub">Left: the real source code. Right: a plain-language explanation of exactly what that line does, written for someone who has never used Rust before.</p>
+  <div class="legend">
+    <span class="chip"><i style="background:var(--k)"></i>keyword</span>
+    <span class="chip"><i style="background:var(--ty)"></i>type / struct / enum</span>
+    <span class="chip"><i style="background:var(--fn)"></i>function or method call</span>
+    <span class="chip"><i style="background:var(--st)"></i>text (string)</span>
+    <span class="chip"><i style="background:var(--mc)"></i>macro</span>
+    <span class="chip"><i style="background:var(--at)"></i>attribute</span>
+    <span class="chip"><i style="background:var(--cm)"></i>comment</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>What is this file?</h2>
+    <p>
+      <code class="inline">main.rs</code> is the starting point of this program. When the microcontroller
+      (a small chip called the XIAO ESP32‑S3) powers on, this is the very first piece of Rust code that
+      runs. This particular program has no operating system underneath it — it talks to the hardware
+      directly — so it looks a little different from a normal "desktop" Rust program. A few ideas that
+      are unique to this style of programming are explained the first time they appear, and every concept
+      used in the file is also collected in the <a href="#glossary" style="color:var(--accent);">glossary</a>
+      at the bottom of the page.
+    </p>
+    <p>A quick vocabulary check before we start:</p>
+    <ul>
+      <li><strong>Crate</strong>: a package of Rust code, similar to a "library". Names like
+        <code class="inline">embassy_executor</code> or <code class="inline">esp_hal</code> are crates
+        written by other people that this project depends on (listed in a file called
+        <code class="inline">Cargo.toml</code>).</li>
+      <li><strong>Function</strong>: a named, reusable block of code that performs a task. You "call" it
+        by writing its name followed by parentheses, e.g. <code class="inline">take()</code>.</li>
+      <li><strong>Variable</strong>: a name that refers to a value stored in memory, created with the
+        <code class="inline">let</code> keyword.</li>
+      <li><strong>Statement</strong>: one instruction. In Rust, most statements end with a semicolon
+        <code class="inline">;</code>, exactly like a full stop ends a sentence.</li>
+    </ul>
+  </div>
+
+  <div class="lines">
+
+    <div class="line" id="l1">
+      <div class="ln">1</div>
+      <pre class="code"><code><span class="at">#![no_std]</span></code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Attribute</span>
+        <p>This is an <strong>attribute</strong> — an instruction to the compiler that isn't part of the
+        program's normal logic, it just changes how the compiler treats the code. You can always
+        recognise one by the <code class="inline">#[ ]</code> or <code class="inline">#![ ]</code> brackets.</p>
+        <p>The <code class="inline">!</code> right after <code class="inline">#</code> means this attribute
+        applies to the <em>whole file</em> (and everything in it), rather than just the one line below it.</p>
+        <p><code class="inline">no_std</code> tells Rust: "don't use the Standard Library". Normally Rust
+        programs can use a large built-in toolbox called <code class="inline">std</code> that assumes you
+        have an operating system underneath you (for files, networking, threads, etc.). This program runs
+        directly on a small chip with no operating system, so that toolbox isn't available — only a much
+        smaller core set of features (called <code class="inline">core</code>) can be used instead.</p>
+        <details class="expand">
+          <summary>Learn more about attributes, in general</summary>
+          <div class="expand-body">
+            <p>An attribute is metadata attached to a piece of code that instructs the compiler to do something
+            extra with it. They show up constantly in ordinary (non-embedded) Rust too, for things like
+            automatically generating code, marking test functions, or silencing specific warnings.</p>
+            <h4>Common attributes you'll see in everyday Rust</h4>
+            <pre><code>#[derive(Debug, Clone)]      // auto-generate trait implementations
+struct Point { x: i32, y: i32 }
+
+#[test]                       // marks this function as a unit test
+fn it_adds_up() {
+    assert_eq!(2 + 2, 4);
+}
+
+#[allow(dead_code)]           // silences the "never used" warning
+fn unused_helper() {}
+
+#![allow(unused_imports)]     // inner attribute: applies to the whole file</code></pre>
+            <p><code class="inline">#[derive(Debug, Clone)]</code> is especially common: instead of you writing
+            the code to print a struct or duplicate it by hand, that attribute tells the compiler to generate
+            that code for you automatically, based on the struct's fields.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l2">
+      <div class="ln">2</div>
+      <pre class="code"><code><span class="at">#![no_main]</span></code></pre>
+      <div class="explain">
+        <p>Another whole-file attribute. Normally, Rust automatically generates some hidden startup code
+        that eventually calls your <code class="inline">main</code> function the way a desktop operating
+        system expects. On this chip there is no such operating system convention to follow, so
+        <code class="inline">no_main</code> tells the compiler "don't generate that hidden startup code — the
+        entry point will be provided a different way" (you'll see how, further down, at line 31‑32).</p>
+      </div>
+    </div>
+
+    <div class="line blank" id="l3">
+      <div class="ln">3</div>
+      <pre class="code"><code>&nbsp;</code></pre>
+      <div class="explain"><p>An empty line. Rust completely ignores blank lines — they exist purely to visually separate groups of related code, for the humans reading the file.</p></div>
+    </div>
+
+    <div class="line" id="l4">
+      <div class="ln">4</div>
+      <pre class="code"><code><span class="k">use</span> embassy_executor::<span class="ty">Spawner</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Import (use)</span>
+        <p>The <code class="inline">use</code> keyword <strong>imports</strong> a name so the rest of the
+        file can refer to it directly. Without this line, you would have to write the full path
+        <code class="inline">embassy_executor::Spawner</code> everywhere instead of just
+        <code class="inline">Spawner</code>.</p>
+        <p><code class="inline">Spawner</code> is a <strong>type</strong> (shown in blue) provided by the
+        <code class="inline">embassy_executor</code> crate. It's the tool this program later uses to start
+        background tasks (see lines 68‑70).</p>
+        <details class="expand">
+          <summary>Learn more about <code class="inline">use</code> and imports, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">use</code> only creates a shortcut to a path — it doesn't copy or include
+            any extra code. You can rename what you import, pull in several items at once, or re-export
+            something so other code that imports your module gets it too.</p>
+            <pre><code>use std::collections::HashMap;
+use std::io::{self, Read, Write};       // import several items from one module
+use std::fmt::Result as FmtResult;      // rename on import with `as`
+
+pub use crate::shapes::Circle;          // re-export: others can `use your_crate::Circle`</code></pre>
+            <p>Without any <code class="inline">use</code> line at all, you could still use something by writing
+            its entire path every time, e.g. <code class="inline">std::collections::HashMap::new()</code> —
+            <code class="inline">use</code> just saves you from repeating that.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l5">
+      <div class="ln">5</div>
+      <pre class="code"><code><span class="k">use</span> embassy_sync::mutex::<span class="ty">Mutex</span>;</code></pre>
+      <div class="explain">
+        <p>Imports the <code class="inline">Mutex</code> type from the <code class="inline">mutex</code>
+        module inside the <code class="inline">embassy_sync</code> crate. A <strong>module</strong> is
+        just a named folder/grouping of related code inside a crate — here, <code class="inline">mutex</code>
+        is the part of <code class="inline">embassy_sync</code> that deals with mutexes.</p>
+        <p>A <strong>mutex</strong> (short for "mutual exclusion") is a tool that lets several independent
+        parts of a program safely take turns using the same piece of data, one at a time, so they never
+        corrupt it by both changing it simultaneously. It's used later (line 66) to share the I2C bus
+        between multiple sensor tasks.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l6">
+      <div class="ln">6</div>
+      <pre class="code"><code><span class="k">use</span> esp_backtrace <span class="k">as</span> _;</code></pre>
+      <div class="explain">
+        <p>This imports the whole <code class="inline">esp_backtrace</code> crate, but renames it to
+        <code class="inline">_</code> (an underscore) using the <code class="inline">as</code> keyword.
+        The underscore is Rust's way of saying "give this a name, but I'm not going to refer to it
+        by name anywhere" — it silences the warning you'd otherwise get for importing something unused.</p>
+        <p>This crate is only included for a <em>side effect</em>: simply linking it into the program
+        installs a "panic handler" — the code that decides what happens if the program hits an
+        unrecoverable error (here: print debugging information and stop). The program never needs to
+        call it directly by name for that to work.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l7">
+      <div class="ln">7</div>
+      <pre class="code"><code><span class="k">use</span> esp_hal::{</code></pre>
+      <div class="explain">
+        <p>This begins a <strong>grouped import</strong>. When you need several names from the same
+        place, instead of writing seven separate <code class="inline">use</code> lines, you can open a
+        curly-brace <code class="inline">{ }</code> list and put them all inside it. Everything from
+        line 8 down to line 14 is really one single statement that only ends at the semicolon on line 14.</p>
+        <p><code class="inline">esp_hal</code> is the crate that provides direct control over the ESP32‑S3
+        chip's hardware (its pins, timers, clock, etc.) — "hal" stands for "hardware abstraction layer",
+        meaning it gives you friendly Rust types instead of raw hardware register numbers.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l8">
+      <div class="ln">8</div>
+      <pre class="code"><code>    clock::{<span class="ty">ClockControl</span>, <span class="ty">Clocks</span>},</code></pre>
+      <div class="explain">
+        <p>Part of the grouped import started above. Imports <code class="inline">ClockControl</code> and
+        <code class="inline">Clocks</code> from the chip's <code class="inline">clock</code> module. These
+        are used to configure how fast the chip's internal clock runs, which every other piece of timing
+        hardware depends on.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l9">
+      <div class="ln">9</div>
+      <pre class="code"><code>    delay::<span class="ty">Delay</span>,</code></pre>
+      <div class="explain"><p>Imports <code class="inline">Delay</code>, a small helper type used to pause execution for a fixed amount of time (a simple "wait" utility, used at line 52).</p></div>
+    </div>
+
+    <div class="line" id="l10">
+      <div class="ln">10</div>
+      <pre class="code"><code>    gpio::{<span class="ty">AnyPin</span>, <span class="ty">Io</span>, <span class="ty">Level</span>, <span class="ty">Output</span>},</code></pre>
+      <div class="explain">
+        <p>Imports four types related to <strong>GPIO</strong> (General Purpose Input/Output — the physical
+        pins on the chip that can be turned on/off or read): <code class="inline">Io</code> represents the
+        whole pin controller, <code class="inline">AnyPin</code> represents "some pin, we don't care which
+        exact one", <code class="inline">Output</code> represents a pin configured to send a signal out, and
+        <code class="inline">Level</code> represents a pin's electrical state (high or low voltage).</p>
+      </div>
+    </div>
+
+    <div class="line" id="l11">
+      <div class="ln">11</div>
+      <pre class="code"><code>    peripherals::<span class="ty">Peripherals</span>,</code></pre>
+      <div class="explain"><p>Imports <code class="inline">Peripherals</code>, a single struct that represents every piece of hardware built into the chip (its timers, its I2C controller, its GPIO pins, and so on), all bundled together. See line 33 for how it's obtained.</p></div>
+    </div>
+
+    <div class="line" id="l12">
+      <div class="ln">12</div>
+      <pre class="code"><code>    system::<span class="ty">SystemControl</span>,</code></pre>
+      <div class="explain"><p>Imports <code class="inline">SystemControl</code>, used to configure chip-wide system settings (like which internal circuits are powered on) before anything else can run.</p></div>
+    </div>
+
+    <div class="line" id="l13">
+      <div class="ln">13</div>
+      <pre class="code"><code>    timer::{timg::<span class="ty">TimerGroup</span>, <span class="ty">ErasedTimer</span>, <span class="ty">OneShotTimer</span>},</code></pre>
+      <div class="explain"><p>Imports three timer-related types. <code class="inline">TimerGroup</code> represents a bundle of hardware timers, <code class="inline">OneShotTimer</code> represents a timer that fires once, and <code class="inline">ErasedTimer</code> is a version of a timer whose exact underlying hardware type has been hidden/simplified, so different timers can be treated the same way in code.</p></div>
+    </div>
+
+    <div class="line" id="l14">
+      <div class="ln">14</div>
+      <pre class="code"><code>};</code></pre>
+      <div class="explain"><p>Closes the curly-brace list and ends the grouped <code class="inline">use</code> statement from line 7 with a semicolon.</p></div>
+    </div>
+
+    <div class="line" id="l15">
+      <div class="ln">15</div>
+      <pre class="code"><code><span class="k">use</span> esp_println::<span class="mc">println</span>;</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Macro</span>
+        <p>Imports <code class="inline">println</code> from the <code class="inline">esp_println</code>
+        crate. You'll see it used with a trailing <code class="inline">!</code> as
+        <code class="inline">println!(...)</code> — that trailing <code class="inline">!</code> marks it as
+        a <strong>macro</strong>, not an ordinary function.</p>
+        <p>A macro is code that generates more code at compile time (before the program even runs), which
+        is how <code class="inline">println!</code> is able to accept a flexible, printf-style format string
+        plus any number of extra values. This particular version prints text out over the chip's debug
+        serial connection, since there's no regular screen or terminal attached (the normal
+        <code class="inline">std</code> library's <code class="inline">println!</code> isn't available here,
+        because of <code class="inline">#![no_std]</code>).</p>
+        <details class="expand">
+          <summary>Learn more about macros, in general</summary>
+          <div class="expand-body">
+            <p>A macro is always recognisable by its trailing <code class="inline">!</code>. Unlike a regular
+            function, a macro runs at compile time and generates Rust code, which is how it can accept a
+            flexible, variable number of arguments and even different argument types in different places —
+            something an ordinary function's fixed signature can't do.</p>
+            <h4>A simple macro you can define yourself</h4>
+            <pre><code>macro_rules! square {
+    ($x:expr) => { $x * $x };
+}
+
+fn main() {
+    println!("{}", square!(5)); // this line expands to: 5 * 5
+    let v = vec![1, 2, 3];      // vec! is a standard-library macro too
+}</code></pre>
+            <p>Some other very common macros: <code class="inline">vec![...]</code> (build a growable list),
+            <code class="inline">format!(...)</code> (build a <code class="inline">String</code> instead of
+            printing it), and <code class="inline">assert_eq!(...)</code> (used heavily in tests).</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l16">
+      <div class="ln">16</div>
+      <pre class="code"><code><span class="k">use</span> static_cell::<span class="ty">StaticCell</span>;</code></pre>
+      <div class="explain"><p>Imports <code class="inline">StaticCell</code>, a helper type that lets you safely create a value once, at runtime, and store it in a fixed memory location that lasts for the entire program (see lines 25‑29 and the glossary entry for "Static variable").</p></div>
+    </div>
+
+    <div class="line blank" id="l17"><div class="ln">17</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l18">
+      <div class="ln">18</div>
+      <pre class="code"><code><span class="k">mod</span> drivers;</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Module</span>
+        <p>Declares that this project has a <strong>module</strong> named <code class="inline">drivers</code>.
+        A module is a named grouping of code used to keep a project organised into logical pieces, similar to
+        a folder. This line tells the compiler "go look for a file called
+        <code class="inline">drivers.rs</code> or a folder <code class="inline">drivers/</code> with a
+        <code class="inline">mod.rs</code> inside it, and treat its contents as part of this project under
+        the name <code class="inline">drivers</code>". In this project, that's the folder
+        <a href="#" style="color:var(--accent);">src/drivers/</a> containing the I2C bus and sensor drivers.</p>
+        <details class="expand">
+          <summary>Learn more about modules, in general</summary>
+          <div class="expand-body">
+            <p>Modules can be nested inside each other, forming a tree, and every item (function, struct, etc.)
+            is private to its module by default — you have to mark it <code class="inline">pub</code> to let
+            code outside the module use it.</p>
+            <pre><code>// src/main.rs
+mod shapes; // looks for src/shapes.rs (or src/shapes/mod.rs)
+
+fn main() {
+    let c = shapes::Circle::new(2.0);
+}
+
+// src/shapes.rs
+pub struct Circle { pub radius: f64 }
+
+impl Circle {
+    pub fn new(radius: f64) -> Self { Circle { radius } }
+}</code></pre>
+            <p>If <code class="inline">pub</code> were removed from <code class="inline">struct Circle</code>
+            or <code class="inline">new</code>, <code class="inline">main.rs</code> would fail to compile with a
+            "private" error — this is Rust's way of letting a module hide its internal details.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l19">
+      <div class="ln">19</div>
+      <pre class="code"><code><span class="k">mod</span> tasks;</code></pre>
+      <div class="explain"><p>Same idea as line 18, but for a module named <code class="inline">tasks</code> — the folder holding the background jobs this program runs (blinking an LED, reading each sensor).</p></div>
+    </div>
+
+    <div class="line" id="l20">
+      <div class="ln">20</div>
+      <pre class="code"><code><span class="k">mod</span> utils;</code></pre>
+      <div class="explain">
+        <p>Declares the top-level <code class="inline">utils</code> module. Like the <code class="inline">drivers</code> and <code class="inline">tasks</code> declarations above, this tells the compiler to include the code in <code class="inline">src/utils/</code> as part of this firmware crate.</p>
+        <p><code class="inline">main</code> does not call this module directly. It must still be declared here because <code class="inline">main.rs</code> is the crate root: the SCD41 and SPS30 task modules import <code class="inline">crate::utils::history::MeasurementHistory</code> from it. That fixed-capacity history retains recent sensor readings without allocating memory.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l21">
+      <div class="ln">21</div>
+      <pre class="code"><code><span class="k">use</span> drivers::i2c_bus::{<span class="fn">print_scan_result</span>, <span class="ty">I2cBus</span>, <span class="ty">SharedI2cBus</span>, I2C_SCL_PIN, I2C_SDA_PIN};</code></pre>
+      <div class="explain">
+        <p>Imports five items from <em>this project's own</em> <code class="inline">drivers</code> module
+        (specifically its <code class="inline">i2c_bus</code> sub-module): a function
+        (<code class="inline">print_scan_result</code>), two types (<code class="inline">I2cBus</code>,
+        <code class="inline">SharedI2cBus</code>), and two constants
+        (<code class="inline">I2C_SCL_PIN</code>, <code class="inline">I2C_SDA_PIN</code> — fixed numbers
+        naming which physical pins are used for the I2C data connection).</p>
+        <p>Note this works exactly like importing from an external crate on lines 4‑16 — your own modules are
+        imported the same way, just starting from their module name instead of a crate name.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l22">
+      <div class="ln">22</div>
+      <pre class="code"><code><span class="k">use</span> tasks::{blink_task, scd41_task, sps30_task};</code></pre>
+      <div class="explain"><p>Imports three <em>sub-modules</em> of <code class="inline">tasks</code> (not functions directly — notice they're used later as <code class="inline">blink_task::blink_task(...)</code>, i.e. module name, then function name inside it). Each one is a separate file: [blink_task.rs](../../src/tasks/blink_task.rs), [scd41_task.rs](../../src/tasks/scd41_task.rs), and [sps30_task.rs](../../src/tasks/sps30_task.rs).</p></div>
+    </div>
+
+    <div class="line blank" id="l23"><div class="ln">23</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l24">
+      <div class="ln">24</div>
+      <pre class="code"><code><span class="cm">/// Embassy needs one hardware timer to drive `embassy_time`.</span></code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Comment</span>
+        <p>A <strong>comment</strong> — text that is completely ignored by the compiler and exists only for
+        humans reading the code. Regular comments start with <code class="inline">//</code>. This one starts
+        with three slashes <code class="inline">///</code>, which makes it a <strong>documentation
+        comment</strong>: it specifically describes the item on the very next line (the
+        <code class="inline">static TIMERS</code> declaration below) and can be turned into generated
+        reference documentation by Rust's tooling.</p>
+        <details class="expand">
+          <summary>Learn more about comments, in general</summary>
+          <div class="expand-body">
+            <p>Rust has four comment styles. Regular comments are for humans only; doc comments are special —
+            they can contain runnable example code that <code class="inline">cargo test</code> actually
+            executes, keeping documentation and reality in sync.</p>
+            <pre><code>// a regular line comment
+
+/* a regular
+   block comment (can be nested in Rust) */
+
+//! Doc comment for the *enclosing* item (e.g. top of a file/module)
+
+/// Doc comment for the item directly below it.
+///
+/// # Examples
+/// ```
+/// assert_eq!(celsius_to_f(0.0), 32.0);
+/// ```
+fn celsius_to_f(c: f64) -> f64 { c * 9.0 / 5.0 + 32.0 }</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l25">
+      <div class="ln">25</div>
+      <pre class="code"><code><span class="k">static</span> TIMERS: <span class="ty">StaticCell</span>&lt;[<span class="ty">OneShotTimer</span>&lt;<span class="ty">ErasedTimer</span>&gt;; <span class="nu">1</span>]&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Static variable</span>
+        <span class="tag alt">New concept · Generics</span>
+        <p><code class="inline">static</code> creates a value that lives at one fixed place in memory for the
+        <em>entire</em> time the program runs, as opposed to a normal <code class="inline">let</code>
+        variable which only exists while its surrounding function is running. <code class="inline">TIMERS</code>
+        is the name of this static value.</p>
+        <p>After the colon <code class="inline">:</code> comes its type:
+        <code class="inline">StaticCell&lt;[OneShotTimer&lt;ErasedTimer&gt;; 1]&gt;</code>. The angle brackets
+        <code class="inline">&lt; &gt;</code> are <strong>generics</strong> — they mean "this type is a
+        container/wrapper around another type, and here is which one". So this reads as: "a
+        <code class="inline">StaticCell</code> that holds a
+        <code class="inline">[OneShotTimer&lt;ErasedTimer&gt;; 1]</code>". The square brackets
+        <code class="inline">[Type; 1]</code> mean a fixed-size array holding exactly 1 item of that type.</p>
+        <p>Finally, <code class="inline">= StaticCell::new();</code> creates an empty/uninitialised
+        <code class="inline">StaticCell</code> right now (at compile time), ready to be filled in with the
+        real value later while the program is running (that happens at line 40).</p>
+        <details class="expand">
+          <summary>Learn more about <code class="inline">static</code> variables, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">const</code> and <code class="inline">static</code> look similar but differ:
+            a <code class="inline">const</code> is copied/inlined everywhere it's used and has no fixed address;
+            a <code class="inline">static</code> lives at exactly one fixed memory address for the whole
+            program. A plain <code class="inline">static</code> must be immutable unless wrapped in something
+            designed for safe shared mutation, like an atomic type or (as in this file) a
+            <code class="inline">StaticCell</code>/<code class="inline">Mutex</code>.</p>
+            <pre><code>static GREETING: &str = "hello"; // fixed at compile time, never changes
+const MAX_USERS: u32 = 100;      // inlined wherever it's used
+
+use std::sync::atomic::{AtomicU32, Ordering};
+static COUNTER: AtomicU32 = AtomicU32::new(0); // safely mutable static
+
+fn increment() {
+    COUNTER.fetch_add(1, Ordering::SeqCst);
+}</code></pre>
+          </div>
+        </details>
+        <details class="expand">
+          <summary>Learn more about generics, in general</summary>
+          <div class="expand-body">
+            <p>Generics let one function, struct, or enum work with many different types instead of writing a
+            separate copy for each one. The compiler generates a specialised version for every concrete type
+            actually used (called "monomorphization"), so there's no extra cost while the program runs.</p>
+            <pre><code>fn largest&lt;T: PartialOrd + Copy&gt;(list: &[T]) -> T {
+    let mut largest = list[0];
+    for &item in list {
+        if item > largest { largest = item; }
+    }
+    largest
+}
+
+struct Wrapper&lt;T&gt; { value: T }
+
+let a = largest(&[3, 7, 2]);       // T becomes i32 here
+let b = largest(&[3.1, 7.5, 2.2]); // T becomes f64 here</code></pre>
+            <p><code class="inline">T: PartialOrd + Copy</code> is a "trait bound" — it restricts
+            <code class="inline">T</code> to only types that support comparison and copying, so the function
+            body is allowed to use <code class="inline">&gt;</code> on them.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l26">
+      <div class="ln">26</div>
+      <pre class="code"><code><span class="cm">/// The tasks need the clock configuration for the whole program run.</span></code></pre>
+      <div class="explain"><p>Documentation comment describing the <code class="inline">CLOCKS</code> static declared right below it.</p></div>
+    </div>
+
+    <div class="line" id="l27">
+      <div class="ln">27</div>
+      <pre class="code"><code><span class="k">static</span> CLOCKS: <span class="ty">StaticCell</span>&lt;<span class="ty">Clocks</span>&lt;<span class="k">'static</span>&gt;&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Lifetime</span>
+        <p>Same pattern as line 25: an empty <code class="inline">StaticCell</code> that will later hold a
+        <code class="inline">Clocks&lt;'static&gt;</code> value (filled in at line 35).</p>
+        <p>The new piece here is <code class="inline">'static</code> — a <strong>lifetime</strong>. A
+        reference (a value that points at data owned somewhere else, written <code class="inline">&amp;T</code>
+        — explained in full at line 62) is only allowed to be used for as long as the data it points to is
+        still alive. Since Rust has no garbage collector, the compiler needs some way to check this at compile
+        time instead of at runtime. A <strong>lifetime</strong> is simply a name for one such "how long is
+        this guaranteed to stay valid?" question, so the compiler can check whether everything lines up.
+        <code class="inline">'static</code> is one specific, named answer to that question: "valid for the
+        entire rest of the program — it will never be cleaned up early". You'll always recognise a lifetime
+        by its leading apostrophe, e.g. <code class="inline">'static</code>, <code class="inline">'a</code>.</p>
+        <details class="expand">
+          <summary>Learn more about lifetimes, in general</summary>
+          <div class="expand-body">
+            <h4>The problem lifetimes exist to prevent</h4>
+            <p>Imagine this function were allowed to compile:</p>
+            <pre><code>fn dangling() -> &String {
+    let s = String::from("hi"); // `s` is created inside this function
+    &s
+} // `s` is destroyed right here, the moment the function ends —
+  // so the reference we tried to return would point at memory
+  // that no longer holds anything. Rust refuses to compile this.</code></pre>
+            <p>This is called a <strong>dangling reference</strong>: a reference that outlives the data it
+            points to. In languages like C, this compiles fine and can crash your program, or silently read
+            garbage, at runtime. Rust's compiler instead checks, for every single reference in your code,
+            "can I prove the data behind this is still alive for as long as this reference might be used?" —
+            and simply refuses to compile the program if it can't prove that. A lifetime is the name it gives
+            to that "still alive for this long" guarantee while it's doing that check.</p>
+            <h4>Why you sometimes have to write one yourself</h4>
+            <p>Most of the time the compiler works this out silently and you never write a lifetime at all.
+            You only need to write one explicitly when a function's signature is ambiguous about which input a
+            returned reference is tied to — most commonly, when a function takes more than one reference as
+            input and returns a reference too:</p>
+            <pre><code>// Without a lifetime, this line alone doesn't say which of x or y
+// the returned reference is allowed to be tied to — so the compiler
+// requires you to spell it out:
+fn longest&lt;'a&gt;(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+let result;
+{
+    let a = String::from("hello");
+    let b = String::from("hi");
+    result = longest(&a, &b); // borrows from both `a` and `b`
+    println!("{result}");     // fine: `a` and `b` are still alive here
+}
+// using `result` down here would be a compile error: it might be
+// borrowed from `a` or `b`, and both have already been destroyed.</code></pre>
+            <p>Writing <code class="inline">&lt;'a&gt;</code> and reusing <code class="inline">'a</code> on
+            <code class="inline">x</code>, <code class="inline">y</code>, and the return type doesn't make
+            anything live longer. It's a promise you make to the compiler: "the reference I return will never
+            be valid for longer than the shorter-lived of <code class="inline">x</code> and
+            <code class="inline">y</code>". The compiler then checks every place that calls
+            <code class="inline">longest</code> against that promise.</p>
+            <h4>The <code class="inline">'static</code> special case</h4>
+            <p><code class="inline">'static</code> is the one named lifetime built into the language, meaning
+            "valid for the entire program, guaranteed to never be cleaned up early" — so it satisfies any
+            lifetime requirement, no matter how long. A plain string literal like
+            <code class="inline">"hello"</code> is always <code class="inline">'static</code>, for example,
+            because its text is baked directly into the compiled program and exists for as long as the
+            program runs. That's exactly why it's used in this file: the values stored in
+            <code class="inline">CLOCKS</code>, <code class="inline">TIMERS</code>, and <code class="inline">BUS</code>
+            need to be safely usable by every task for as long as the program runs, so their type says
+            <code class="inline">'static</code> up front instead of asking the compiler to work out some
+            shorter, more limited guarantee.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l28">
+      <div class="ln">28</div>
+      <pre class="code"><code><span class="cm">/// The I2C bus shared by the sensor tasks.</span></code></pre>
+      <div class="explain"><p>Documentation comment for the <code class="inline">BUS</code> static declared right below it.</p></div>
+    </div>
+
+    <div class="line" id="l29">
+      <div class="ln">29</div>
+      <pre class="code"><code><span class="k">static</span> BUS: <span class="ty">StaticCell</span>&lt;<span class="ty">SharedI2cBus</span>&gt; = <span class="ty">StaticCell</span>::<span class="fn">new</span>();</code></pre>
+      <div class="explain"><p>A third empty <code class="inline">StaticCell</code>, this time sized to eventually hold a <code class="inline">SharedI2cBus</code> value — the I2C communication bus that will be shared between sensor tasks (filled in at line 66).</p></div>
+    </div>
+
+    <div class="line blank" id="l30"><div class="ln">30</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l31">
+      <div class="ln">31</div>
+      <pre class="code"><code><span class="at">#[esp_hal_embassy::main]</span></code></pre>
+      <div class="explain">
+        <p>An attribute again (see line 1), but this one only applies to the single item directly below it
+        (the <code class="inline">async fn main</code> function), because it doesn't have the extra
+        <code class="inline">!</code>. This particular attribute is provided by the
+        <code class="inline">esp_hal_embassy</code> crate, and it does the low-level work that
+        <code class="inline">#![no_main]</code> (line 2) said would be handled elsewhere: it generates the
+        real hardware entry point, sets up the async task runner ("executor"), and then calls the function
+        below as the very first task.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l32">
+      <div class="ln">32</div>
+      <pre class="code"><code><span class="k">async</span> <span class="k">fn</span> <span class="fn">main</span>(spawner: <span class="ty">Spawner</span>) {</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · async function</span>
+        <p><code class="inline">fn main( ... ) { ... }</code> declares a function named
+        <code class="inline">main</code> — the program's entry point. Everything between this line's opening
+        curly brace <code class="inline">{</code> and the matching closing brace on line 71 is the body of
+        this function, run in order from top to bottom.</p>
+        <p><code class="inline">async</code> marks it as an <strong>asynchronous</strong> function. A normal
+        function that has to "wait" for something (like a sensor to respond, or a timer to elapse) would
+        freeze the entire processor while waiting. An <code class="inline">async</code> function is instead
+        able to pause itself at a waiting point and let other tasks use the processor in the meantime, then
+        resume later when the thing it was waiting for is ready. This is essential here because the program
+        runs several tasks side-by-side (blinking an LED, reading two different sensors) on a single small
+        chip.</p>
+        <p><code class="inline">(spawner: Spawner)</code> is the function's single parameter: a variable
+        named <code class="inline">spawner</code>, of type <code class="inline">Spawner</code> (imported on
+        line 4). It's handed to <code class="inline">main</code> automatically by the attribute on line 31,
+        and it's the tool used later (lines 68‑70) to start the background tasks.</p>
+        <details class="expand">
+          <summary>Learn more about <code class="inline">async</code> functions, in general</summary>
+          <div class="expand-body">
+            <p>Calling an <code class="inline">async fn</code> does not run its body immediately — it produces a
+            value called a <code class="inline">Future</code>, which is an inert description of work to be done
+            later. Nothing happens until that future is either <code class="inline">.await</code>ed inside
+            another async function, or handed to a runtime/executor (like <code class="inline">tokio</code>,
+            <code class="inline">async-std</code>, or <code class="inline">embassy</code> in this project) that
+            knows how to actually run it and switch between many futures while they wait.</p>
+            <pre><code>async fn fetch_temperature() -> f32 {
+    // pretend this pauses while waiting on real input/output
+    42.0
+}
+
+#[tokio::main] // a common general-purpose async runtime outside embedded code
+async fn main() {
+    let t = fetch_temperature().await; // pauses here until the value is ready
+    println!("{t}");
+}</code></pre>
+            <p>Forgetting the <code class="inline">.await</code> is a classic beginner mistake — the future is
+            created but never actually run, so nothing happens (the compiler warns about this).</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l33">
+      <div class="ln">33</div>
+      <pre class="code"><code>    <span class="k">let</span> peripherals = <span class="ty">Peripherals</span>::<span class="fn">take</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · let / variables</span>
+        <p><code class="inline">let</code> creates a new variable. Here, a variable named
+        <code class="inline">peripherals</code> is created and set equal to whatever is on the right of the
+        <code class="inline">=</code> sign. By default, variables created with <code class="inline">let</code>
+        are <strong>immutable</strong> — once set, their value cannot be changed again (see line 47 for the
+        opposite, mutable case).</p>
+        <p><code class="inline">Peripherals::take()</code> calls the <code class="inline">take</code>
+        <strong>associated function</strong> on the <code class="inline">Peripherals</code> type (an
+        associated function is a function that belongs to a type but isn't called on a specific value of it
+        — recognisable by the <code class="inline">::</code> double-colon instead of a dot). It hands over
+        exclusive access to every piece of hardware built into the chip, exactly once — calling it twice
+        would be an error, which guarantees no two parts of the program can ever fight over the same piece
+        of hardware.</p>
+        <details class="expand">
+          <summary>Learn more about <code class="inline">let</code> and variables, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">let</code> can also destructure a value into several variables at once,
+            and the type is usually left out because Rust infers it from the value on the right — you only
+            write the type explicitly when you want to be clear, or when there's genuinely no way to infer it.</p>
+            <pre><code>let age = 30;              // immutable, type inferred as i32
+let name: &str = "Ada";    // type written out explicitly
+let (a, b) = (1, 2);       // destructuring: a = 1, b = 2
+
+let age = age + 1; // allowed: this shadows the earlier `age` with a new one</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l34">
+      <div class="ln">34</div>
+      <pre class="code"><code>    <span class="k">let</span> system = <span class="ty">SystemControl</span>::<span class="fn">new</span>(peripherals.SYSTEM);</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Struct fields</span>
+        <p><code class="inline">peripherals.SYSTEM</code> uses the dot <code class="inline">.</code> to reach
+        into the <code class="inline">peripherals</code> value and pull out its <code class="inline">SYSTEM</code>
+        field — one specific piece of hardware (the system-control registers) out of the whole bundle taken
+        on line 33.</p>
+        <p><code class="inline">SystemControl::new(...)</code> calls the <code class="inline">new</code>
+        associated function to build a fresh <code class="inline">SystemControl</code> value out of that
+        piece of hardware, and it's stored in a new variable named <code class="inline">system</code>.
+        By convention in Rust, a function named <code class="inline">new</code> is simply "the standard way
+        to construct this type" — it's not a special keyword, just a naming convention everyone follows.</p>
+        <details class="expand">
+          <summary>Learn more about structs, fields, and constructors, in general</summary>
+          <div class="expand-body">
+            <p>A struct groups related values into one named type; dot notation reaches into a specific value's
+            fields. An "associated function" (called with <code class="inline">Type::name(...)</code>, no dot)
+            is different from a "method" (called with <code class="inline">value.name(...)</code>, takes
+            <code class="inline">self</code> as its first parameter).</p>
+            <pre><code>struct Rectangle { width: u32, height: u32 }
+
+impl Rectangle {
+    fn new(width: u32, height: u32) -> Self { // associated function, no `self`
+        Rectangle { width, height }
+    }
+    fn area(&self) -> u32 { // method, takes &self
+        self.width * self.height
+    }
+}
+
+let r = Rectangle::new(10, 5); // called with `::`, it's a constructor
+let a = r.area();              // called with `.`, it's a method on `r`</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l35">
+      <div class="ln">35</div>
+      <pre class="code"><code>    <span class="k">let</span> clocks = CLOCKS.<span class="fn">init</span>(<span class="ty">ClockControl</span>::<span class="fn">max</span>(system.clock_control).<span class="fn">freeze</span>());</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Method chaining</span>
+        <p>This line does several things, evaluated from the inside out:</p>
+        <p>1) <code class="inline">system.clock_control</code> reads a field out of the
+        <code class="inline">system</code> value from line 34.</p>
+        <p>2) <code class="inline">ClockControl::max(...)</code> calls an associated function that starts
+        building a clock configuration set to the fastest available speed.</p>
+        <p>3) <code class="inline">.freeze()</code> is a <strong>method call</strong> — a function called
+        with dot-syntax directly on a value (here, on the result of step 2). It locks in that
+        configuration and produces the final, ready-to-use <code class="inline">Clocks</code> value. Chaining
+        method calls with dots like this (<code class="inline">a().b().c()</code>) is a very common Rust
+        style, read left to right as "do this, then do this to the result, then do this to that result".</p>
+        <p>4) <code class="inline">CLOCKS.init(...)</code> takes that finished <code class="inline">Clocks</code>
+        value and stores it inside the <code class="inline">CLOCKS</code> static from line 27 — this is the
+        moment that "empty box" actually gets filled in, for the one and only time. It hands back a
+        reference to the value that is now guaranteed to live for the rest of the program, which is saved
+        into the new variable <code class="inline">clocks</code>.</p>
+        <details class="expand">
+          <summary>Learn more about method chaining, in general</summary>
+          <div class="expand-body">
+            <p>This style is sometimes called the "builder pattern": each method takes the value produced by the
+            previous one and returns a new (or the same, transformed) value, so a whole sequence of operations
+            can be read left to right as one flowing sentence instead of deeply nested function calls.</p>
+            <pre><code>let msg = String::from("  Hello, World!  ")
+    .trim()            // -> &str, removes leading/trailing whitespace
+    .to_lowercase()     // -> String, all lowercase
+    .replace("hello", "hi");
+
+println!("{msg}"); // prints: hi, world!</code></pre>
+            <p>Compare that to the nested, harder-to-read equivalent:
+            <code class="inline">String::from(...).replace(...).to_lowercase()...</code> written inside-out —
+            chaining with dots avoids that by reading top-to-bottom, one step at a time.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line blank" id="l36"><div class="ln">36</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l37">
+      <div class="ln">37</div>
+      <pre class="code"><code>    <span class="cm">// Drive `embassy_time` from TIMG0's first timer.</span></code></pre>
+      <div class="explain"><p>A regular (non-documentation) comment, using <code class="inline">//</code>, explaining the purpose of the next few lines to a human reader. Ignored entirely by the compiler.</p></div>
+    </div>
+
+    <div class="line" id="l38">
+      <div class="ln">38</div>
+      <pre class="code"><code>    <span class="k">let</span> timg0 = <span class="ty">TimerGroup</span>::<span class="fn">new</span>(peripherals.TIMG0, clocks);</code></pre>
+      <div class="explain"><p>Builds a <code class="inline">TimerGroup</code> from one of the chip's hardware timer blocks (<code class="inline">peripherals.TIMG0</code>, "Timer Group 0") plus the clock configuration from line 35 (timers need to know the clock speed to correctly measure real time). The result is stored in a variable named <code class="inline">timg0</code>.</p></div>
+    </div>
+
+    <div class="line" id="l39">
+      <div class="ln">39</div>
+      <pre class="code"><code>    <span class="k">let</span> timer0: <span class="ty">ErasedTimer</span> = timg0.timer0.<span class="fn">into</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Type conversion</span>
+        <p><code class="inline">timg0.timer0</code> reads the first individual timer out of the timer group.
+        The <code class="inline">: ErasedTimer</code> after the variable name is an explicit
+        <strong>type annotation</strong> — normally Rust can figure out a variable's type automatically, but
+        writing it explicitly here tells the compiler exactly which type to convert into.</p>
+        <p><code class="inline">.into()</code> is a conversion method: it turns a value of one type into a
+        different (but compatible) type. Here it converts the specific hardware timer type into the more
+        general <code class="inline">ErasedTimer</code> type, so that other code (like the
+        <code class="inline">embassy</code> task runner) doesn't need to care exactly which hardware timer
+        is behind it.</p>
+        <details class="expand">
+          <summary>Learn more about type conversion, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">.into()</code> relies on the standard library's <code class="inline">From</code>
+            /<code class="inline">Into</code> traits: if someone has written "you can build a
+            <code class="inline">B</code> <code class="inline">From</code> an <code class="inline">A</code>",
+            then every <code class="inline">A</code> automatically gets a matching
+            <code class="inline">.into()</code> to become a <code class="inline">B</code>. This is different
+            from <code class="inline">as</code>, which does a raw, low-level cast (e.g. between number types)
+            and can silently lose information.</p>
+            <pre><code>struct Celsius(f64);
+struct Fahrenheit(f64);
+
+impl From&lt;Celsius&gt; for Fahrenheit {
+    fn from(c: Celsius) -> Self {
+        Fahrenheit(c.0 * 9.0 / 5.0 + 32.0)
+    }
+}
+
+let c = Celsius(100.0);
+let f: Fahrenheit = c.into(); // uses the From implementation above
+
+let n: u8 = 300i32 as u8; // "as" truncates: n ends up being 44 (300 % 256)</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l40">
+      <div class="ln">40</div>
+      <pre class="code"><code>    <span class="k">let</span> timers = TIMERS.<span class="fn">init</span>([<span class="ty">OneShotTimer</span>::<span class="fn">new</span>(timer0)]);</code></pre>
+      <div class="explain"><p><code class="inline">[OneShotTimer::new(timer0)]</code> builds a one-item array literal (square brackets around a comma-separated list of values) containing a fresh <code class="inline">OneShotTimer</code> built from <code class="inline">timer0</code>. That array is then stored into the <code class="inline">TIMERS</code> static from line 25 via <code class="inline">.init(...)</code>, the same pattern used for <code class="inline">CLOCKS</code> on line 35. The result is saved as <code class="inline">timers</code>.</p></div>
+    </div>
+
+    <div class="line" id="l41">
+      <div class="ln">41</div>
+      <pre class="code"><code>    esp_hal_embassy::<span class="fn">init</span>(clocks, timers);</code></pre>
+      <div class="explain">
+        <p>Calls the free-standing <code class="inline">init</code> function from the
+        <code class="inline">esp_hal_embassy</code> crate directly (no variable is created with
+        <code class="inline">let</code>, because this call's result isn't needed afterwards). It hands over
+        the clock configuration and the timer prepared above so that the async task runner introduced at
+        line 31 knows how to measure delays and timeouts correctly.</p>
+      </div>
+    </div>
+
+    <div class="line blank" id="l42"><div class="ln">42</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l43">
+      <div class="ln">43</div>
+      <pre class="code"><code>    <span class="k">let</span> io = <span class="ty">Io</span>::<span class="fn">new</span>(peripherals.GPIO, peripherals.IO_MUX);</code></pre>
+      <div class="explain"><p>Builds the pin controller (<code class="inline">Io</code>) from two more fields of <code class="inline">peripherals</code>: the GPIO hardware itself and the "IO mux" (the internal switchboard that decides which physical pin is connected to which internal function). Stored as <code class="inline">io</code>.</p></div>
+    </div>
+
+    <div class="line" id="l44">
+      <div class="ln">44</div>
+      <pre class="code"><code>    <span class="cm">// Board-specific wiring belongs here; the blink task only needs an output.</span></code></pre>
+      <div class="explain"><p>A comment explaining the design choice on the next line: which physical pin the LED is wired to is decided right here in <code class="inline">main</code>, while the reusable blink task itself (in another file) doesn't need to know or care which exact pin it is.</p></div>
+    </div>
+
+    <div class="line" id="l45">
+      <div class="ln">45</div>
+      <pre class="code"><code>    <span class="k">let</span> led = <span class="ty">Output</span>::<span class="fn">new</span>(<span class="ty">AnyPin</span>::<span class="fn">new</span>(io.pins.gpio21), <span class="ty">Level</span>::Low);</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Enum</span>
+        <p><code class="inline">io.pins.gpio21</code> selects physical pin number 21.
+        <code class="inline">AnyPin::new(...)</code> wraps it into a generic "some pin" value. That is then
+        passed into <code class="inline">Output::new(...)</code> together with
+        <code class="inline">Level::Low</code>, producing a pin configured as an output (able to switch a
+        connected LED on and off), starting in the "low" (off) state. The finished value is stored as
+        <code class="inline">led</code>.</p>
+        <p><code class="inline">Level::Low</code> uses an <strong>enum</strong> (short for "enumeration") —
+        a type that can only ever be one of a fixed, named set of options. <code class="inline">Level</code>
+        has exactly two possible values: <code class="inline">Level::Low</code> and
+        <code class="inline">Level::High</code>, representing the two voltage states a digital pin can be in.
+        Enums are a way to make "it must be one of these specific choices, nothing else" checked by the
+        compiler itself.</p>
+        <details class="expand">
+          <summary>Learn more about enums, in general</summary>
+          <div class="expand-body">
+            <p>Unlike plain named constants, Rust enum variants can each carry their own data, and
+            <code class="inline">match</code> is the main tool for handling every possible variant (the
+            compiler even warns you if you forget one). In fact, the <code class="inline">Result</code> and
+            <code class="inline">Option</code> types used later in this file are themselves just ordinary
+            enums from the standard library.</p>
+            <pre><code>enum Direction { North, South, East, West }
+
+enum Shape {
+    Circle(f64),          // this variant carries one value (the radius)
+    Rectangle(f64, f64),  // this variant carries two values (width, height)
+}
+
+fn area(s: Shape) -> f64 {
+    match s {
+        Shape::Circle(r) => std::f64::consts::PI * r * r,
+        Shape::Rectangle(w, h) => w * h,
+    }
+}</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line blank" id="l46"><div class="ln">46</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l47">
+      <div class="ln">47</div>
+      <pre class="code"><code>    <span class="k">let</span> <span class="k">mut</span> bus = <span class="ty">I2cBus</span>::<span class="fn">new</span>(</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Mutability (mut)</span>
+        <p>Creates a variable named <code class="inline">bus</code>, but this time with the extra
+        <code class="inline">mut</code> keyword (short for "mutable"). Remember from line 33 that
+        <code class="inline">let</code> variables are unchangeable by default; adding
+        <code class="inline">mut</code> is how you explicitly opt in to allowing the value to be modified
+        later (it's changed at line 61, when scanning the bus).</p>
+        <p>The opening parenthesis <code class="inline">(</code> at the end starts a call to
+        <code class="inline">I2cBus::new(...)</code>, but instead of fitting all of its inputs
+        ("arguments") on one line, they're spread across the next several lines (48‑53) for readability —
+        Rust doesn't care about line breaks inside parentheses, so this is purely a style choice.</p>
+        <details class="expand">
+          <summary>Learn more about mutability, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">mut</code> also appears on references, as <code class="inline">&mut T</code>
+            ("an exclusive, writable borrow"). Rust's compiler enforces a strict rule: for any given value,
+            you may have either one <code class="inline">&mut</code> reference, or any number of plain
+            <code class="inline">&</code> (read-only) references — never both at the same time. This single
+            rule is what prevents data races at compile time, without needing a garbage collector or manual
+            locks in ordinary single-threaded code.</p>
+            <pre><code>let mut count = 0;
+count += 1; // OK, `count` was declared mutable
+
+fn increment(n: &mut i32) {
+    *n += 1;
+}
+
+let mut x = 5;
+increment(&mut x);</code></pre>
+            <p>About that <code class="inline">*n += 1;</code> line specifically: inside <code class="inline">increment</code>,
+            the parameter <code class="inline">n</code> is not the number itself — its type is
+            <code class="inline">&mut i32</code>, a reference, meaning <code class="inline">n</code> only holds
+            the location where some <code class="inline">i32</code> is stored elsewhere (in this case, back
+            in <code class="inline">x</code>). If you wrote plain <code class="inline">n += 1</code>, you would
+            be trying to add 1 to that location/address, which is not a number and makes no sense. Writing
+            <code class="inline">*n</code> instead means "don't use the reference itself — follow it to the
+            actual <code class="inline">i32</code> value it points to, and use that." This "follow the reference
+            to reach the real value" step is what Rust calls <strong>dereferencing</strong>, and
+            <code class="inline">*</code> is the operator that does it. So <code class="inline">*n += 1;</code>
+            reads as: "go to the actual number that <code class="inline">n</code> points to, and add 1 to it" —
+            which is why, after <code class="inline">increment(&mut x)</code> runs, <code class="inline">x</code>
+            itself has genuinely changed to <code class="inline">6</code>, even though <code class="inline">increment</code>
+            never mentioned <code class="inline">x</code> by name.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l48">
+      <div class="ln">48</div>
+      <pre class="code"><code>        peripherals.I2C0,</code></pre>
+      <div class="explain"><p>First argument to <code class="inline">I2cBus::new</code>: the chip's dedicated I2C hardware controller (I2C is a common two-wire protocol used to talk to small sensor chips).</p></div>
+    </div>
+
+    <div class="line" id="l49">
+      <div class="ln">49</div>
+      <pre class="code"><code>        io.pins.gpio5,</code></pre>
+      <div class="explain"><p>Second argument: physical pin 5, wired up as the I2C data line (SDA).</p></div>
+    </div>
+
+    <div class="line" id="l50">
+      <div class="ln">50</div>
+      <pre class="code"><code>        io.pins.gpio6,</code></pre>
+      <div class="explain"><p>Third argument: physical pin 6, wired up as the I2C clock line (SCL).</p></div>
+    </div>
+
+    <div class="line" id="l51">
+      <div class="ln">51</div>
+      <pre class="code"><code>        clocks,</code></pre>
+      <div class="explain"><p>Fourth argument: the clock configuration from line 35, so the I2C controller knows the chip's real timing to correctly space out its signal pulses.</p></div>
+    </div>
+
+    <div class="line" id="l52">
+      <div class="ln">52</div>
+      <pre class="code"><code>        <span class="ty">Delay</span>::<span class="fn">new</span>(clocks),</code></pre>
+      <div class="explain"><p>Fifth and last argument: a fresh <code class="inline">Delay</code> helper (imported on line 9), built from the clock configuration, giving the I2C bus a way to pause for short, precise amounts of time while communicating with sensors.</p></div>
+    </div>
+
+    <div class="line" id="l53">
+      <div class="ln">53</div>
+      <pre class="code"><code>    );</code></pre>
+      <div class="explain"><p>Closes the parentheses that were opened on line 47 and ends the statement with a semicolon. All five lines above (48‑52) together are simply the list of inputs to this one function call.</p></div>
+    </div>
+
+    <div class="line blank" id="l54"><div class="ln">54</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l55">
+      <div class="ln">55</div>
+      <pre class="code"><code>    <span class="mc">println!</span>(<span class="st">"XIAO ESP32-S3 Embassy firmware started; blinking GPIO21"</span>);</code></pre>
+      <div class="explain"><p>Calls the <code class="inline">println!</code> macro imported on line 15 with one plain piece of text (a <strong>string literal</strong>, shown in light blue and always wrapped in double quotes). This sends that exact text out over the debug serial connection, followed by a new line — useful for confirming, while testing, that the firmware actually started.</p></div>
+    </div>
+
+    <div class="line" id="l56">
+      <div class="ln">56</div>
+      <pre class="code"><code>    <span class="mc">println!</span>(</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · String formatting</span>
+        <p>Another call to <code class="inline">println!</code>, but this time its arguments are spread over
+        three lines (56‑59), the same multi-line style used for the function call on lines 47‑53.</p>
+        <details class="expand">
+          <summary>Learn more about string formatting, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">{}</code> prints a value using its "Display" representation, while
+            <code class="inline">{:?}</code> prints its "Debug" representation (very useful while developing,
+            works even on structs and enums that don't have a nice human-facing format). Newer Rust also lets
+            you put the variable name directly inside the braces. The same placeholder syntax works with
+            <code class="inline">println!</code>, <code class="inline">format!</code> (builds a
+            <code class="inline">String</code> instead of printing), and <code class="inline">panic!</code>.</p>
+            <pre><code>let name = "Ada";
+let score = 3.14159;
+println!("{name} scored {score:.2}");           // Ada scored 3.14
+println!("{0} then {1}, again {0}", "a", "b");   // a then b, again a
+
+#[derive(Debug)]
+struct Point { x: i32, y: i32 }
+println!("{:?}", Point { x: 1, y: 2 }); // Point { x: 1, y: 2 }</code></pre>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line" id="l57">
+      <div class="ln">57</div>
+      <pre class="code"><code>        <span class="st">"Scanning I2C0 at 100 kHz (SDA GPIO{}, SCL GPIO{})...",</span></code></pre>
+      <div class="explain"><p>The format string — the text to print — containing two placeholder slots written as empty curly braces <code class="inline">{}</code>. Each placeholder will be replaced, in order, by one of the extra values passed after it.</p></div>
+    </div>
+
+    <div class="line" id="l58">
+      <div class="ln">58</div>
+      <pre class="code"><code>        I2C_SDA_PIN, I2C_SCL_PIN</code></pre>
+      <div class="explain"><p>The two values that fill in the <code class="inline">{}</code> placeholders from line 57, in order: the first <code class="inline">{}</code> becomes <code class="inline">I2C_SDA_PIN</code>'s value, the second becomes <code class="inline">I2C_SCL_PIN</code>'s value (both constants imported on line 21). The printed line ends up reading, for example, "Scanning I2C0 at 100 kHz (SDA GPIO5, SCL GPIO6)...".</p></div>
+    </div>
+
+    <div class="line" id="l59">
+      <div class="ln">59</div>
+      <pre class="code"><code>    );</code></pre>
+      <div class="explain"><p>Closes the parentheses opened on line 56 and ends this <code class="inline">println!</code> call.</p></div>
+    </div>
+
+    <div class="line blank" id="l60"><div class="ln">60</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l61">
+      <div class="ln">61</div>
+      <pre class="code"><code>    <span class="k">let</span> devices = bus.<span class="fn">scan</span>();</code></pre>
+      <div class="explain"><p>Calls the <code class="inline">.scan()</code> method directly on the <code class="inline">bus</code> variable created on line 47 (this is exactly why it needed to be marked <code class="inline">mut</code> — scanning talks to the physical hardware and updates internal state). It checks every possible I2C address and returns the list of devices that responded, stored as <code class="inline">devices</code>.</p></div>
+    </div>
+
+    <div class="line" id="l62">
+      <div class="ln">62</div>
+      <pre class="code"><code>    <span class="fn">print_scan_result</span>(&amp;devices);</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Borrowing (&amp;)</span>
+        <p>Calls the <code class="inline">print_scan_result</code> function imported on line 21, passing it
+        <code class="inline">&amp;devices</code> rather than plain <code class="inline">devices</code>.</p>
+        <p>The <code class="inline">&amp;</code> symbol means <strong>borrowing</strong> — one of Rust's
+        central ideas. Every value has exactly one "owner" responsible for it; normally, handing a value to a
+        function gives that function ownership of it, and the original variable can no longer be used
+        afterwards. Writing <code class="inline">&amp;devices</code> instead lends the function temporary,
+        read-only access to look at the data without taking it away — so
+        <code class="inline">devices</code> is still perfectly usable by the rest of <code class="inline">main</code>
+        after this line, if it needed to be.</p>
+        <details class="expand">
+          <summary>Learn more about borrowing and ownership, in general</summary>
+          <div class="expand-body">
+            <p>There are two kinds of borrow: a shared borrow <code class="inline">&T</code> (read-only — any
+            number of these can exist at once) and an exclusive borrow <code class="inline">&mut T</code>
+            (read-write — only one may exist, and no shared borrows may exist alongside it). The compiler's
+            "borrow checker" verifies these rules for every piece of code before it's even allowed to run,
+            which is how Rust avoids both data races and dangling references without a garbage collector.</p>
+            <pre><code>fn print_len(s: &String) { // borrows the String, does not take ownership
+    println!("{}", s.len());
+}
+
+let text = String::from("hello");
+print_len(&text);
+println!("{text}"); // still usable here: ownership was never moved away</code></pre>
+            <p>Without the <code class="inline">&</code>, writing <code class="inline">print_len(text)</code>
+            would move ownership of <code class="inline">text</code> into the function, and the line
+            <code class="inline">println!("{text}")</code> afterwards would fail to compile.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line blank" id="l63"><div class="ln">63</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l64">
+      <div class="ln">64</div>
+      <pre class="code"><code>    <span class="cm">// Hand the bus to the sensor tasks; each one locks it for a whole</span></code></pre>
+      <div class="explain"><p>The first half of a two-line comment explaining the next statement (line 66): it's about to make the I2C bus safely shareable between multiple background tasks.</p></div>
+    </div>
+
+    <div class="line" id="l65">
+      <div class="ln">65</div>
+      <pre class="code"><code>    <span class="cm">// transaction, so their transfers can never interleave.</span></code></pre>
+      <div class="explain"><p>Second half of the same comment: because access will be protected by a mutex (see line 5), a task using the bus finishes its entire conversation with a sensor before any other task can start using it, so their messages never get mixed together on the wire.</p></div>
+    </div>
+
+    <div class="line" id="l66">
+      <div class="ln">66</div>
+      <pre class="code"><code>    <span class="k">let</span> bus: &amp;<span class="k">'static</span> <span class="ty">SharedI2cBus</span> = BUS.<span class="fn">init</span>(<span class="ty">Mutex</span>::<span class="fn">new</span>(bus));</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Reusing a variable name</span>
+        <p><code class="inline">Mutex::new(bus)</code> wraps the existing <code class="inline">bus</code>
+        value (from line 47) inside a <code class="inline">Mutex</code> (imported on line 5), turning it into
+        something that can be safely shared and used by more than one task, one at a time.</p>
+        <p><code class="inline">BUS.init(...)</code> stores that wrapped value into the <code class="inline">BUS</code>
+        static from line 29 — the same one-time "fill in the empty box" pattern as lines 35 and 40 — and
+        hands back a reference guaranteed to last for the rest of the program, annotated here explicitly as
+        <code class="inline">&amp;'static SharedI2cBus</code> (a borrowed reference, marked with the
+        <code class="inline">'static</code> lifetime from line 27).</p>
+        <p>That result is then saved into a brand new variable that happens to also be named
+        <code class="inline">bus</code> — reusing the exact same name as the original variable from line 47,
+        instead of picking a different name for it. This does not change or destroy the original
+        <code class="inline">bus</code> from line 47 in any way; that value still exists, unmodified. It simply
+        becomes impossible to reach from this point onward, because the name <code class="inline">bus</code>
+        now points at this new, wrapped value instead. (Rust's official name for reusing a variable name like
+        this, for a brand new and separate variable, is "shadowing" — but the plain idea is just: the old name
+        now points somewhere else.) This new, shareable version is what actually gets handed to the sensor
+        tasks below.</p>
+        <details class="expand">
+          <summary>Learn more about reusing a variable name, in general</summary>
+          <div class="expand-body">
+            <p>Reusing a variable name like this creates a completely new, independent variable — it does not
+            change the previous one in any way, it only makes the previous one impossible to refer to by that
+            name from that point onward. This is different from <code class="inline">mut</code>:
+            a <code class="inline">mut</code> variable is the exact same variable being changed in place, and
+            it must keep the exact same type the whole time. Reusing a name instead creates a brand new
+            variable every time, and that new variable is even allowed to have a completely different type
+            than the previous one did. This is commonly used to transform a value step by step.</p>
+            <pre><code>let value = "  42  ";
+let value = value.trim();                // still a &str, now trimmed
+let value: i32 = value.parse().unwrap(); // now a brand new variable, an i32</code></pre>
+            <p>If <code class="inline">value</code> had instead been declared <code class="inline">mut</code>,
+            you would <em>not</em> be able to change it from a <code class="inline">&str</code> into an
+            <code class="inline">i32</code> — changing a <code class="inline">mut</code> variable in place
+            always keeps the same type; only reusing the name for a new variable can change the type.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="line blank" id="l67"><div class="ln">67</div><pre class="code"><code>&nbsp;</code></pre><div class="explain"><p>Blank line, for spacing.</p></div></div>
+
+    <div class="line" id="l68">
+      <div class="ln">68</div>
+      <pre class="code"><code>    spawner.<span class="fn">spawn</span>(blink_task::<span class="fn">blink_task</span>(led)).<span class="fn">ok</span>();</code></pre>
+      <div class="explain">
+        <span class="tag">New concept · Result &amp; .ok()</span>
+        <details class="expand">
+          <summary>Learn more about <code class="inline">Result</code> and <code class="inline">Option</code>, in general</summary>
+          <div class="expand-body">
+            <p><code class="inline">Result&lt;T, E&gt;</code> is an enum with two variants:
+            <code class="inline">Ok(T)</code> (success, carrying a value) or <code class="inline">Err(E)</code>
+            (failure, carrying an error). Common ways to handle one: <code class="inline">match</code> it
+            explicitly, use the <code class="inline">?</code> operator to pass the error up to the caller, call
+            <code class="inline">.unwrap()</code>/<code class="inline">.expect()</code> to crash immediately if
+            it's an error, or call <code class="inline">.ok()</code> to convert it into an
+            <code class="inline">Option&lt;T&gt;</code> and throw the error away.
+            <code class="inline">Option&lt;T&gt;</code> is the closely related enum for "a value that might
+            simply be absent": <code class="inline">Some(T)</code> or <code class="inline">None</code>.</p>
+            <pre><code>fn parse_age(input: &str) -> Result&lt;u8, std::num::ParseIntError&gt; {
+    input.parse::&lt;u8&gt;()
+}
+
+match parse_age("30") {
+    Ok(age) => println!("Age: {age}"),
+    Err(e) => println!("Invalid: {e}"),
+}
+
+let maybe_age: Option&lt;u8&gt; = parse_age("oops").ok(); // None, the error is discarded</code></pre>
+            <p>The key idea both types share: the compiler forces you to at least acknowledge that something
+            might be missing or might have failed — you can't accidentally use a value that was never there.</p>
+          </div>
+        </details>
+        <p><code class="inline">blink_task::blink_task(led)</code> calls the <code class="inline">blink_task</code>
+        function inside the <code class="inline">blink_task</code> module (imported on line 22), handing it
+        the <code class="inline">led</code> pin from line 45. Because that function is itself
+        <code class="inline">async</code>, calling it doesn't run it immediately — it produces a
+        description of a background job waiting to be run.</p>
+        <p><code class="inline">spawner.spawn(...)</code> takes that job and actually schedules it to start
+        running as an independent background task, using the <code class="inline">spawner</code> parameter
+        from line 32. From this point on, the blink task runs concurrently with the rest of
+        <code class="inline">main</code> and the other tasks below.</p>
+        <p><code class="inline">.spawn(...)</code> reports back whether scheduling succeeded, as a
+        <code class="inline">Result</code> value — Rust's standard way of representing "either this
+        succeeded, or here is what went wrong", which forces code to at least acknowledge that failure is
+        possible instead of silently ignoring it. <code class="inline">.ok()</code> is called on that result
+        to explicitly say "if this failed, discard the error and do nothing about it" — a deliberate,
+        visible choice to ignore the extremely rare failure case (running out of task slots), rather than
+        leaving it unhandled by accident.</p>
+      </div>
+    </div>
+
+    <div class="line" id="l69">
+      <div class="ln">69</div>
+      <pre class="code"><code>    spawner.<span class="fn">spawn</span>(sps30_task::<span class="fn">measure_task</span>(bus)).<span class="fn">ok</span>();</code></pre>
+      <div class="explain"><p>Same pattern as line 68: starts the <code class="inline">measure_task</code> function from the <code class="inline">sps30_task</code> module as a second, independent background task, handing it the shared, mutex-protected <code class="inline">bus</code> from line 66 so it can talk to the SPS30 particulate-matter sensor over I2C.</p></div>
+    </div>
+
+    <div class="line" id="l70">
+      <div class="ln">70</div>
+      <pre class="code"><code>    spawner.<span class="fn">spawn</span>(scd41_task::<span class="fn">measure_task</span>(bus)).<span class="fn">ok</span>();</code></pre>
+      <div class="explain"><p>Starts a third background task, <code class="inline">measure_task</code> from the <code class="inline">scd41_task</code> module, also given the same shared <code class="inline">bus</code>, this time to talk to the SCD41 CO₂/temperature/humidity sensor. Because <code class="inline">bus</code> is protected by the <code class="inline">Mutex</code> from line 66, this task and the one on line 69 can safely take turns using the same two physical wires without ever corrupting each other's data.</p></div>
+    </div>
+
+    <div class="line" id="l71">
+      <div class="ln">71</div>
+      <pre class="code"><code>}</code></pre>
+      <div class="explain"><p>The closing curly brace that matches the opening one on line 32 — this marks the end of the <code class="inline">main</code> function's body. Once execution reaches here, <code class="inline">main</code> itself is finished; however, the program keeps running, because the three tasks spawned on lines 68‑70 (plus the async executor set up on line 31) continue running forever in the background — this is normal for embedded firmware, which never "exits" the way a desktop program does.</p></div>
+    </div>
+
+  </div>
+
+  <div class="card" id="glossary">
+    <h2>Glossary — every concept used in this file</h2>
+    <p>A single place to look up any term from the explanations above.</p>
+    <div class="glossary">
+      <div class="term"><h3>Crate</h3><p>A package of Rust code — roughly the same idea as a library. Some crates are written by other people and listed as dependencies (e.g. <code class="inline">esp_hal</code>); a project's own code is also organised as one crate.</p></div>
+      <div class="term"><h3>Module (<code class="inline">mod</code>)</h3><p>A named grouping of related code inside a crate, similar to a folder, used to keep a project organised.</p></div>
+      <div class="term"><h3>Import (<code class="inline">use</code>)</h3><p>Brings a name into scope so it can be written directly (e.g. <code class="inline">Spawner</code>) instead of by its full path (<code class="inline">embassy_executor::Spawner</code>) every time.</p></div>
+      <div class="term"><h3>Variable (<code class="inline">let</code>)</h3><p>A name bound to a value. Immutable (unchangeable) by default; add <code class="inline">mut</code> to allow it to change later.</p></div>
+      <div class="term"><h3>Mutability (<code class="inline">mut</code>)</h3><p>An explicit opt-in that allows a variable's value to be changed after it is created. Without it, a variable can only ever be set once.</p></div>
+      <div class="term"><h3>Shadowing</h3><p>Declaring a new variable that reuses an existing name. The old value isn't changed — it simply becomes unreachable, because the name now points at the new value instead.</p></div>
+      <div class="term"><h3>Function &amp; associated function</h3><p>A reusable named block of code. An "associated function" belongs to a type and is called with <code class="inline">Type::function()</code>, most often used as a constructor (conventionally named <code class="inline">new</code>).</p></div>
+      <div class="term"><h3>Method call</h3><p>A function called directly on a value using dot syntax, e.g. <code class="inline">value.method()</code>. Calls can be chained: <code class="inline">value.a().b()</code> means "do <code class="inline">a()</code>, then do <code class="inline">b()</code> to the result".</p></div>
+      <div class="term"><h3>Struct &amp; fields</h3><p>A custom data type that groups several named values together. Individual values inside it are reached with a dot, e.g. <code class="inline">peripherals.SYSTEM</code>.</p></div>
+      <div class="term"><h3>Enum</h3><p>A type that can only ever be one of a fixed, named set of values, e.g. <code class="inline">Level::Low</code> or <code class="inline">Level::High</code>.</p></div>
+      <div class="term"><h3>Generics (<code class="inline">&lt;T&gt;</code>)</h3><p>Angle brackets after a type name showing what it's a container/wrapper for, e.g. <code class="inline">StaticCell&lt;Clocks&gt;</code> is "a <code class="inline">StaticCell</code> holding a <code class="inline">Clocks</code> value".</p></div>
+      <div class="term"><h3>Lifetime (<code class="inline">'static</code>, <code class="inline">'a</code>)</h3><p>An annotation, always starting with an apostrophe, describing how long a borrowed reference is guaranteed to stay valid. <code class="inline">'static</code> means "for the entire remaining life of the program".</p></div>
+      <div class="term"><h3>Borrowing (<code class="inline">&amp;</code>)</h3><p>Temporary, read-only (or with <code class="inline">&amp;mut</code>, temporary read/write) access to a value without taking ownership of it away from its original variable.</p></div>
+      <div class="term"><h3>Ownership</h3><p>Rust's rule that every value has exactly one variable responsible for it at a time. Handing a value to a function normally transfers that responsibility, unless it is borrowed with <code class="inline">&amp;</code> instead.</p></div>
+      <div class="term"><h3>Static variable (<code class="inline">static</code>)</h3><p>A value stored at one fixed memory location for the whole program run, rather than being created and destroyed inside a single function call.</p></div>
+      <div class="term"><h3>Attribute (<code class="inline">#[...]</code> / <code class="inline">#![...]</code>)</h3><p>An instruction to the compiler that changes how it treats a piece of code, rather than being part of the program's own logic. The <code class="inline">!</code> form applies to the whole file; the plain form applies only to the next item.</p></div>
+      <div class="term"><h3>Macro (<code class="inline">name!(...)</code>)</h3><p>Code that generates other code at compile time. Always recognisable by a trailing <code class="inline">!</code>, e.g. <code class="inline">println!(...)</code>.</p></div>
+      <div class="term"><h3>Comment (<code class="inline">//</code>, <code class="inline">///</code>)</h3><p>Text ignored by the compiler, written for human readers. Triple-slash comments specifically document the item on the next line.</p></div>
+      <div class="term"><h3><code class="inline">async</code> function &amp; task</h3><p>A function that is allowed to pause itself while waiting for something, letting other work happen on the same processor in the meantime. Passing one to <code class="inline">spawner.spawn(...)</code> starts it running as an independent background task.</p></div>
+      <div class="term"><h3>Mutex</h3><p>A tool that lets multiple tasks safely take turns accessing the same shared data, one at a time, so it's never read or changed by two tasks simultaneously.</p></div>
+      <div class="term"><h3>Result &amp; <code class="inline">.ok()</code></h3><p><code class="inline">Result</code> represents "either this succeeded, or here is what went wrong", forcing failure to be acknowledged rather than ignored by accident. Calling <code class="inline">.ok()</code> is an explicit, visible choice to discard a possible error.</p></div>
+      <div class="term"><h3>String formatting (<code class="inline">{}</code>)</h3><p>Empty curly braces inside a text string used with <code class="inline">println!</code> act as placeholders, filled in order by the extra values listed after the string.</p></div>
+    </div>
+  </div>
+
+  <footer>
+    Home Environmental Sensor · Rust tutorial series · file 1 of N — <span class="mono">src/main.rs</span> (72 lines)
+  </footer>
+
+</div>
+</body>
+</html>
