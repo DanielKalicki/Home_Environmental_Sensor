@@ -9,5 +9,6 @@ pub mod bmp581;
 pub mod bsec;
 pub mod i2c_bus;
 pub mod mlx90640;
+pub mod opt4048;
 pub mod scd41;
 pub mod sps30;

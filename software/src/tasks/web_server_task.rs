@@ -34,6 +34,7 @@ use esp_wifi::wifi::{
 use heapless::String;
 
 use crate::drivers::as7343::{Channel as As7343Channel, SPECTRAL_CHANNELS};
+use crate::drivers::opt4048::Channel as Opt4048Channel;
 use crate::tasks::mlx90640_task::IMAGE_INTERVAL_MS;
 use crate::utils::shared_state;
 
@@ -71,6 +72,16 @@ const CLOSE_TIMEOUT_MS: u64 = 2000;
 /// single response, so a client fetches it as a handful of pages of this size
 /// and then only asks for the readings taken since its last request.
 const MAX_PAGE_READINGS: usize = 2000;
+
+/// Size of the buffer the whole `/api/status` body is built in.
+///
+/// The body carries one entry per sensor, and an entry is about 160 characters
+/// once its two sequence numbers have grown to their full width, so the six
+/// entries and the surrounding object need a little under 1 kB. The margin
+/// above that is deliberate: `write!` into a `String` fails on overflow and
+/// the failure is discarded, which would leave the client parsing truncated
+/// JSON. Adding a seventh sensor means raising this.
+const STATUS_BODY_CAPACITY: usize = 2048;
 
 /// Receive buffer for one client connection.
 static mut RX_BUFFER: [u8; 1536] = [0; 1536];
@@ -305,13 +316,14 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let bme690 = shared_state::bme690_status().await;
     let as7343 = shared_state::as7343_status().await;
     let bmp581 = shared_state::bmp581_status().await;
+    let opt4048 = shared_state::opt4048_status().await;
 
     // One sensor entry runs to a little over a hundred characters and the
     // sequence numbers in it grow for as long as the board stays up, so the
-    // buffer is sized well clear of the five entries it has to hold: `write!`
+    // buffer is sized well clear of the six entries it has to hold: `write!`
     // into a `String` fails on overflow and would leave the client parsing
     // truncated JSON.
-    let mut body: String<1024> = String::new();
+    let mut body: String<STATUS_BODY_CAPACITY> = String::new();
     let _ = write!(
         body,
         "{{\"uptime_ms\":{},\"window_ms\":{},\"sensors\":{{",
@@ -327,6 +339,8 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let _ = write_sensor_status(&mut body, "as7343", &as7343);
     let _ = body.push(',');
     let _ = write_sensor_status(&mut body, "bmp581", &bmp581);
+    let _ = body.push(',');
+    let _ = write_sensor_status(&mut body, "opt4048", &opt4048);
     let _ = body.push_str("}}");
 
     send_response(socket, &body).await;
@@ -334,7 +348,7 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
 
 /// Write one `"name":{...}` member of the `sensors` object.
 fn write_sensor_status(
-    body: &mut String<1024>,
+    body: &mut String<STATUS_BODY_CAPACITY>,
     name: &str,
     status: &shared_state::HistoryStatus,
 ) -> core::fmt::Result {
@@ -348,7 +362,7 @@ fn write_sensor_status(
 /// Send one page of readings for a single sensor.
 ///
 /// `query` selects the sensor and the page:
-/// `sensor=scd41|sps30|bme690|as7343|bmp581`, `from=` the first sequence number
+/// `sensor=scd41|sps30|bme690|as7343|bmp581|opt4048`, `from=` the first sequence number
 /// wanted, `limit=` how many readings at most. A `from` that names an already
 /// overwritten reading is moved up to the oldest reading still retained, and
 /// the page reports the `from` it actually used, so a client that has fallen
@@ -371,6 +385,7 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
         "bme690" => shared_state::bme690_status().await,
         "as7343" => shared_state::as7343_status().await,
         "bmp581" => shared_state::bmp581_status().await,
+        "opt4048" => shared_state::opt4048_status().await,
         _ => {
             let _ = socket
                 .write_all(
@@ -555,6 +570,66 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                         sample.taken_at.as_millis(),
                         m.pressure_pascals(),
                         m.temperature_celsius()
+                    );
+                }
+                None => {
+                    let _ = write!(chunk, "{}null", separator);
+                }
+            }
+        } else if sensor == "opt4048" {
+            match shared_state::opt4048_reading(sequence).await {
+                Some(sample) => {
+                    let m = sample.value;
+                    // The four linear ADC codes are sent as measured. They are
+                    // what everything else here is derived from, so a client
+                    // that wants a different colour space, or a corrected set
+                    // of coefficients, can work from them directly.
+                    let _ = write!(
+                        chunk,
+                        "{}{{\"taken_at_ms\":{},\"adc_x\":{},\"adc_y\":{},\"adc_z\":{},\"adc_wideband\":{},\"lux\":{}",
+                        separator,
+                        sample.taken_at.as_millis(),
+                        m.adc_code(Opt4048Channel::X),
+                        m.adc_code(Opt4048Channel::Y),
+                        m.adc_code(Opt4048Channel::Z),
+                        m.adc_code(Opt4048Channel::Wideband),
+                        m.lux()
+                    );
+                    // In darkness the tristimulus values sum to zero, and the
+                    // colour of light that is not there has no meaning; the
+                    // colour fields are `null` for those readings rather than
+                    // some arbitrary substitute a chart would then plot.
+                    match m.chromaticity() {
+                        Some(chromaticity) => {
+                            let _ = write!(
+                                chunk,
+                                ",\"cie_x\":{},\"cie_y\":{}",
+                                chromaticity.x, chromaticity.y
+                            );
+                        }
+                        None => {
+                            let _ = chunk.push_str(",\"cie_x\":null,\"cie_y\":null");
+                        }
+                    }
+                    // The correlated colour temperature is additionally absent
+                    // for light too far off the black-body locus for the
+                    // approximation behind it to mean anything.
+                    match m.correlated_color_temperature_kelvin() {
+                        Some(cct) => {
+                            let _ = write!(chunk, ",\"cct_kelvin\":{}", cct);
+                        }
+                        None => {
+                            let _ = chunk.push_str(",\"cct_kelvin\":null");
+                        }
+                    }
+                    // The exponent the device chose for this measurement, which
+                    // under automatic ranging is its own report of how bright
+                    // the scene was.
+                    let _ = write!(
+                        chunk,
+                        ",\"exponent\":{},\"overload\":{}}}",
+                        m.channel(Opt4048Channel::Y).exponent,
+                        m.overload
                     );
                 }
                 None => {

@@ -213,7 +213,10 @@ impl FlashStore {
 /// The label of a partition entry, without the padding that follows it.
 fn entry_label(entry: &[u8; PARTITION_ENTRY_SIZE]) -> &[u8] {
     let label = &entry[PARTITION_LABEL_FIELD..][..PARTITION_LABEL_LENGTH];
-    let end = label.iter().position(|&byte| byte == 0).unwrap_or(label.len());
+    let end = label
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(label.len());
     &label[..end]
 }
 

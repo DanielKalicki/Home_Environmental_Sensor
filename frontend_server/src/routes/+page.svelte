@@ -11,6 +11,7 @@
 	import { onMount } from 'svelte';
 
 	import LineChart from '$lib/components/LineChart.svelte';
+	import ColorChart from '$lib/components/ColorChart.svelte';
 	import SpectrumChart from '$lib/components/SpectrumChart.svelte';
 	import ThermalImage from '$lib/components/ThermalImage.svelte';
 	import { CHARTS, SENSOR_LABELS, SENSORS, seriesValue } from '$lib/sensors.js';
@@ -327,6 +328,21 @@
 			<p class="value">{formatNumber(latest.sps30?.latest?.pm10, 1)} <span>µg/m³</span></p>
 			<p class="age">SPS30 · {formatAge(latest.sps30?.latest?.t)}</p>
 		</article>
+		<article>
+			<h2>Illuminance</h2>
+			<p class="value">{formatNumber(latest.opt4048?.latest?.lux, 1)} <span>lux</span></p>
+			<p class="age">OPT4048 · {formatAge(latest.opt4048?.latest?.t)}</p>
+		</article>
+		<article>
+			<h2>Colour temperature</h2>
+			<p class="value">
+				{formatNumber(latest.opt4048?.latest?.cct_kelvin, 0)} <span>K</span>
+			</p>
+			<!-- The device sends no colour temperature for light too far off the
+			     black-body curve for one to mean anything, and none at all in the
+			     dark; the dash the card then shows is the honest answer. -->
+			<p class="age">OPT4048 · {formatAge(latest.opt4048?.latest?.t)}</p>
+		</article>
 		<article class:unqualified={!latest.bme690?.latest?.iaq_accuracy}>
 			<h2>Air quality index</h2>
 			<p class="value">{formatNumber(latest.bme690?.latest?.iaq, 0)}</p>
@@ -394,6 +410,13 @@
 				to={history?.to ?? Date.now()}
 			/>
 		</div>
+
+		<ColorChart
+			readings={history?.sensors?.opt4048 ?? []}
+			latest={latest.opt4048?.latest ?? null}
+			from={history?.from ?? Date.now() - selectedRange.ms}
+			to={history?.to ?? Date.now()}
+		/>
 
 		<ThermalImage image={thermal} now={thermalNow} />
 	</section>

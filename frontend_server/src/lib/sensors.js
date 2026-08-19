@@ -7,7 +7,7 @@
  */
 
 /** Sensors, in the order the dashboard shows them. */
-export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581'];
+export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581', 'opt4048'];
 
 /** Human-readable name of each sensor and what it measures. */
 export const SENSOR_LABELS = {
@@ -15,7 +15,8 @@ export const SENSOR_LABELS = {
 	sps30: 'SPS30 — particulate matter',
 	bme690: 'BME690 — temperature, humidity, pressure, gas',
 	as7343: 'AS7343 — visible-light spectrum',
-	bmp581: 'BMP581 — pressure, temperature'
+	bmp581: 'BMP581 — pressure, temperature',
+	opt4048: 'OPT4048 — illuminance and colour'
 };
 
 /**
@@ -41,6 +42,26 @@ export const SPECTRAL_FIELDS = [
 	'analog_saturation',
 	'digital_saturation'
 ];
+
+/**
+ * The OPT4048 fields the chromaticity chart draws, on top of the ones its
+ * charts already ask for.
+ *
+ * `cie_x` and `cie_y` are where the measured light falls on the CIE 1931
+ * chromaticity diagram, which is the colour of the light with its brightness
+ * divided out; the brightness is `lux`, and the two together are the whole of
+ * what the sensor reports about the light. `overload` marks the readings whose
+ * channels were cut off at the top of the converter's range, whose colour is
+ * therefore not a measurement.
+ *
+ * A word on what happens to these over a long range: the history endpoint
+ * averages readings into buckets, and the mean of several chromaticities is
+ * not exactly the chromaticity of their combined light, which would need the
+ * tristimulus values averaged and renormalised instead. Over a bucket of light
+ * that did not change much the two are close, and over one that changed a lot
+ * neither is a description of any single moment, so the plain mean is used.
+ */
+export const COLOUR_FIELDS = ['cie_x', 'cie_y', 'overload'];
 
 /**
  * The charts on the dashboard.
@@ -161,6 +182,23 @@ export const CHARTS = [
 		title: 'Unfiltered light',
 		unit: 'counts',
 		series: [{ sensor: 'as7343', field: 'visible', label: 'Visible photodiode', color: '#fbbf24' }]
+	},
+	{
+		id: 'illuminance',
+		title: 'Illuminance',
+		unit: 'lux',
+		decimals: 2,
+		series: [{ sensor: 'opt4048', field: 'lux', label: 'OPT4048', color: '#facc15' }]
+	},
+	{
+		// The colour temperature of light too far off the black-body curve for
+		// the approximation to mean anything arrives as `null`, and a null is
+		// left out of the line rather than drawn as a zero.
+		id: 'colour-temperature',
+		title: 'Correlated colour temperature',
+		unit: 'K',
+		decimals: 0,
+		series: [{ sensor: 'opt4048', field: 'cct_kelvin', label: 'OPT4048', color: '#fb923c' }]
 	}
 ];
 
@@ -169,11 +207,13 @@ export const CHARTS = [
  *
  * The history endpoint sends only these, so a request for a week of readings
  * does not also carry the fields nothing on the page draws. The AS7343's
- * spectral channels are added on top of what `CHARTS` lists, because the
- * spectrum chart draws all twelve of them itself rather than as a series.
+ * spectral channels and the OPT4048's colour coordinates are added on top of
+ * what `CHARTS` lists, because the spectrum chart and the chromaticity chart
+ * draw them themselves rather than as a series.
  */
 export function chartedFields(sensor) {
-	const fields = new Set(sensor === 'as7343' ? SPECTRAL_FIELDS : []);
+	const extra = { as7343: SPECTRAL_FIELDS, opt4048: COLOUR_FIELDS }[sensor] ?? [];
+	const fields = new Set(extra);
 	for (const chart of CHARTS) {
 		for (const series of chart.series) {
 			if (series.sensor === sensor) {
