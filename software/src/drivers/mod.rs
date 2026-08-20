@@ -11,4 +11,5 @@ pub mod i2c_bus;
 pub mod mlx90640;
 pub mod opt4048;
 pub mod scd41;
+pub mod sht41;
 pub mod sps30;

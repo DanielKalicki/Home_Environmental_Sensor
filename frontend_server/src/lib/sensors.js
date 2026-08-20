@@ -7,7 +7,7 @@
  */
 
 /** Sensors, in the order the dashboard shows them. */
-export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581', 'opt4048'];
+export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581', 'opt4048', 'sht41'];
 
 /** Human-readable name of each sensor and what it measures. */
 export const SENSOR_LABELS = {
@@ -16,7 +16,8 @@ export const SENSOR_LABELS = {
 	bme690: 'BME690 — temperature, humidity, pressure, gas',
 	as7343: 'AS7343 — visible-light spectrum',
 	bmp581: 'BMP581 — pressure, temperature',
-	opt4048: 'OPT4048 — illuminance and colour'
+	opt4048: 'OPT4048 — illuminance and colour',
+	sht41: 'SHT41 — temperature, humidity'
 };
 
 /**
@@ -28,7 +29,7 @@ export const SPECTRAL_WAVELENGTHS_NM = [405, 425, 450, 475, 515, 550, 555, 600, 
 /**
  * The AS7343 fields the spectrum chart draws over time.
  *
- * The twelve channel counts, the gain they were measured at, and the two
+ * The twelve channel counts, the gain they were measured at, and the twonalyse 
  * saturation flags. The gain is needed because the device changes it as the
  * light changes: two readings taken at different gains are not comparable
  * until each is divided by its own, so a chart that spans a gain change has to
@@ -64,6 +65,39 @@ export const SPECTRAL_FIELDS = [
 export const COLOUR_FIELDS = ['cie_x', 'cie_y', 'overload'];
 
 /**
+ * Values a field can plausibly take, for the fields where a stored reading
+ * outside the range is known to be an artefact rather than a measurement.
+ *
+ * Only `cct_kelvin` needs this. Its colour temperature comes from a cubic
+ * fitted along the black-body curve, and light far off that curve — which is
+ * what the few counts of noise a dark room produces look like — sends the
+ * cubic running away, to hundreds of millions of kelvin or to negative
+ * numbers. The device no longer reports those, but readings recorded before it
+ * stopped are still on disk, and one of them in a bucket is enough to drag the
+ * bucket's mean and the chart's axis with it. Dropping them on the way out
+ * keeps that history readable without rewriting the stored files.
+ *
+ * A field not listed here is not range-checked.
+ */
+export const FIELD_LIMITS = {
+	cct_kelvin: { min: 1000, max: 25000 }
+};
+
+/**
+ * Whether one value of `field` is a measurement rather than a known artefact.
+ *
+ * @param {string} field
+ * @param {number} value
+ */
+export function withinFieldLimits(field, value) {
+	const limits = FIELD_LIMITS[field];
+	if (!limits) {
+		return true;
+	}
+	return value >= limits.min && value <= limits.max;
+}
+
+/**
  * The charts on the dashboard.
  *
  * A chart draws one or more series; a series names the sensor it comes from
@@ -94,7 +128,8 @@ export const CHARTS = [
 		series: [
 			{ sensor: 'scd41', field: 'temperature_celsius', label: 'SCD41', color: '#f97b4f' },
 			{ sensor: 'bme690', field: 'temperature_celsius', label: 'BME690', color: '#f9c74f' },
-			{ sensor: 'bmp581', field: 'temperature_celsius', label: 'BMP581', color: '#f472b6' }
+			{ sensor: 'bmp581', field: 'temperature_celsius', label: 'BMP581', color: '#f472b6' },
+			{ sensor: 'sht41', field: 'temperature_celsius', label: 'SHT41', color: '#34d399' }
 		]
 	},
 	{
@@ -104,7 +139,8 @@ export const CHARTS = [
 		decimals: 2,
 		series: [
 			{ sensor: 'scd41', field: 'humidity_percent', label: 'SCD41', color: '#4fd1c5' },
-			{ sensor: 'bme690', field: 'humidity_percent', label: 'BME690', color: '#4f9cf9' }
+			{ sensor: 'bme690', field: 'humidity_percent', label: 'BME690', color: '#4f9cf9' },
+			{ sensor: 'sht41', field: 'humidity_percent', label: 'SHT41', color: '#c084fc' }
 		]
 	},
 	{

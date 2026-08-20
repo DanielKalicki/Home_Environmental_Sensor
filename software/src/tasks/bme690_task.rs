@@ -61,6 +61,17 @@ const CYCLES_PER_PUBLISHED_READING: u64 = 2;
 /// is measured, which is every [`CYCLE_INTERVAL_MS`].
 pub const MEASUREMENT_INTERVAL_MS: u64 = CYCLE_INTERVAL_MS * CYCLES_PER_PUBLISHED_READING;
 
+/// How many published readings are dropped after start-up.
+///
+/// The gas-sensing film is heated from cold, so its resistance is still
+/// drifting over the first cycles and every value BSEC derives from it drifts
+/// with it. Counted in published readings, not in cycles, so it is independent
+/// of [`CYCLES_PER_PUBLISHED_READING`]. Discarded readings are still processed
+/// by BSEC, which needs the stream to learn from, and still printed; they are
+/// only kept out of the published history, so the settling cannot distort the
+/// charts. Set to 0 to publish every reading.
+const DISCARDED_WARMUP_READINGS: u32 = 4;
+
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
 
@@ -273,14 +284,14 @@ fn build_inputs(
 ///
 /// `core` has no floating-point formatting, so every value with a fractional
 /// part is scaled to an integer pair first.
-fn report(outputs: &Outputs) {
+fn report(outputs: &Outputs, settling: bool) {
     let temperature_centi = (outputs.temperature_celsius * 100.0) as i32;
     let humidity_centi = (outputs.relative_humidity_percent * 100.0) as i32;
     let iaq_deci = (outputs.iaq * 10.0) as i32;
 
     println!(
         "BME690: {}{}.{:02} C, {} Pa, {}.{:02} %RH, {} ohm | IAQ {}.{} (accuracy {}), \
-         CO2eq {} ppm, TVOC {} ppb, gas {} %{}{}",
+         CO2eq {} ppm, TVOC {} ppb, gas {} %{}{}{}",
         if temperature_centi < 0 { "-" } else { "" },
         (temperature_centi / 100).abs(),
         (temperature_centi % 100).unsigned_abs(),
@@ -303,6 +314,11 @@ fn report(outputs: &Outputs) {
             ""
         } else {
             ", stabilising"
+        },
+        if settling {
+            " (warm-up, discarded)"
+        } else {
+            ""
         },
     );
 }
@@ -436,6 +452,10 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     let mut outputs = Outputs::default();
     // Counts the cycles still to be skipped before the next reading is stored.
     let mut cycles_until_publish = 0u64;
+    // Counts down the published readings still to be dropped while the heated
+    // film settles. Not restarted after a bus error: BSEC keeps running across
+    // one, so the film is not heated from cold again.
+    let mut warmup_remaining = DISCARDED_WARMUP_READINGS;
     // When the learned state was last written to the flash, and the accuracy it
     // stood at then. Both are needed: the timer bounds how much learning a
     // power cut can cost, and the accuracy captures a hard-won improvement
@@ -493,13 +513,23 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                     // output only once it has recomputed it.
                     Ok(0) => {}
                     Ok(_) => {
+                        // Only readings that would be retained count against
+                        // the warm-up; the cycles in between are never stored
+                        // anyway. Every cycle still reaches BSEC above, which
+                        // needs the whole stream to learn from.
+                        let mut settling = false;
                         if cycles_until_publish == 0 {
-                            shared_state::publish_bme690(outputs).await;
+                            settling = warmup_remaining > 0;
+                            if settling {
+                                warmup_remaining -= 1;
+                            } else {
+                                shared_state::publish_bme690(outputs).await;
+                            }
                             cycles_until_publish = CYCLES_PER_PUBLISHED_READING - 1;
                         } else {
                             cycles_until_publish -= 1;
                         }
-                        report(&outputs);
+                        report(&outputs, settling);
                         fresh_outputs = true;
                     }
                     Err(error) => println!("BSEC: processing failed: {:?}", error),

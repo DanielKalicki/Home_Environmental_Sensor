@@ -49,6 +49,17 @@ pub const MEASUREMENT_INTERVAL_MS: u64 = 10_000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
 
+/// How many readings are dropped after the device is configured.
+///
+/// With [`Range::Auto`] the device picks the exponent for a measurement from
+/// the one before it, so the first measurement after configuration is taken on
+/// whatever range the reset left behind and can come back clipped or coarsely
+/// quantised. Discarded readings are still read and printed, they are only
+/// kept out of the published history, so the settling cannot distort the
+/// charts. The count restarts after every re-initialisation, including the one
+/// following a bus error. Set to 0 to publish every reading.
+const DISCARDED_WARMUP_READINGS: u32 = 1;
+
 /// Confirm the device's identity and apply the configuration.
 ///
 /// The shared bus is held for the whole sequence. Returns `false` if any step
@@ -107,28 +118,37 @@ async fn read_once(bus: &SharedI2cBus) -> Result<Measurement, Error> {
 }
 
 /// Print the derived values of one measurement, and the raw counts behind them.
-fn print_measurement(measurement: &Measurement) {
+fn print_measurement(measurement: &Measurement, settling: bool) {
+    let suffix = if settling {
+        " (warm-up, discarded)"
+    } else {
+        ""
+    };
+
     match measurement.chromaticity() {
         Some(chromaticity) => match measurement.correlated_color_temperature_kelvin() {
             Some(cct) => println!(
-                "OPT4048 light: {} lux, CIE x: {}, y: {}, CCT: {} K",
+                "OPT4048 light: {} lux, CIE x: {}, y: {}, CCT: {} K{}",
                 measurement.lux(),
                 chromaticity.x,
                 chromaticity.y,
-                cct
+                cct,
+                suffix
             ),
             None => println!(
-                "OPT4048 light: {} lux, CIE x: {}, y: {}, CCT: undefined",
+                "OPT4048 light: {} lux, CIE x: {}, y: {}, CCT: undefined{}",
                 measurement.lux(),
                 chromaticity.x,
-                chromaticity.y
+                chromaticity.y,
+                suffix
             ),
         },
         // In darkness the tristimulus values sum to zero and the colour
         // coordinates have no meaning, but the illuminance still does.
         None => println!(
-            "OPT4048 light: {} lux, colour undefined (too dark)",
-            measurement.lux()
+            "OPT4048 light: {} lux, colour undefined (too dark){}",
+            measurement.lux(),
+            suffix
         ),
     }
 
@@ -157,6 +177,9 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming its configuration survived.
     let mut needs_init = true;
+    // Counts down the readings still to be dropped, restarted every time the
+    // sensor is initialised.
+    let mut warmup_remaining = DISCARDED_WARMUP_READINGS;
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
@@ -165,6 +188,7 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                 Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
                 continue;
             }
+            warmup_remaining = DISCARDED_WARMUP_READINGS;
         }
         let reinitialized = needs_init;
 
@@ -172,9 +196,16 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
             Ok(measurement) => {
                 needs_init = false;
 
-                shared_state::publish_opt4048(measurement).await;
+                // Reported either way, but withheld from the history until the
+                // sensor has settled.
+                let settling = warmup_remaining > 0;
+                if settling {
+                    warmup_remaining -= 1;
+                } else {
+                    shared_state::publish_opt4048(measurement).await;
+                }
 
-                print_measurement(&measurement);
+                print_measurement(&measurement, settling);
 
                 // Begin a fresh fixed schedule after recovery; this read-out
                 // becomes the first deadline of the new schedule.

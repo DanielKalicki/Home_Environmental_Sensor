@@ -39,6 +39,17 @@ pub const MEASUREMENT_INTERVAL_MS: u64 = 10_000;
 /// Idle time before retrying after a bus or sensor error.
 const ERROR_RETRY_DELAY_MS: u64 = 1000;
 
+/// How many readings are dropped after the sensor is configured.
+///
+/// The first forced measurements after a reset are taken while the die is
+/// still settling from the reset itself, and the temperature they report also
+/// feeds the pressure compensation, so both channels start off skewed.
+/// Discarded readings are still read and printed, they are only kept out of
+/// the published history, so the settling cannot distort the charts. The count
+/// restarts after every re-initialisation, including the one following a bus
+/// error. Set to 0 to publish every reading.
+const DISCARDED_WARMUP_READINGS: u32 = 2;
+
 /// Reset the sensor, confirm its identity and apply the configuration.
 ///
 /// The shared bus is held for the whole sequence. Returns `false` if any step
@@ -96,6 +107,9 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
     // Set on every bus error so the next cycle re-runs the sensor's init
     // sequence instead of assuming its configuration survived.
     let mut needs_init = true;
+    // Counts down the readings still to be dropped, restarted every time the
+    // sensor is initialised.
+    let mut warmup_remaining = DISCARDED_WARMUP_READINGS;
     let mut ticker = Ticker::every(Duration::from_millis(MEASUREMENT_INTERVAL_MS));
 
     loop {
@@ -104,6 +118,7 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
                 Timer::after_millis(ERROR_RETRY_DELAY_MS).await;
                 continue;
             }
+            warmup_remaining = DISCARDED_WARMUP_READINGS;
         }
         let reinitialized = needs_init;
 
@@ -111,12 +126,20 @@ pub async fn measure_task(bus: &'static SharedI2cBus) {
             Ok(measurement) => {
                 needs_init = false;
 
-                shared_state::publish_bmp581(measurement).await;
+                // Reported either way, but withheld from the history until the
+                // sensor has settled.
+                let settling = warmup_remaining > 0;
+                if settling {
+                    warmup_remaining -= 1;
+                } else {
+                    shared_state::publish_bmp581(measurement).await;
+                }
 
                 println!(
-                    "BMP581 pressure: {} hPa, temperature: {} C",
+                    "BMP581 pressure: {} hPa, temperature: {} C{}",
                     measurement.pressure_hectopascals(),
-                    measurement.temperature_celsius()
+                    measurement.temperature_celsius(),
+                    if settling { " (warm-up, discarded)" } else { "" }
                 );
 
                 // Begin a fresh fixed schedule after recovery; this read-out

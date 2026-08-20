@@ -47,8 +47,10 @@ use esp_hal::{
     Blocking,
 };
 
-/// 7-bit address used when `ADDR` is tied to GND. This is the factory default.
-pub const DEFAULT_ADDRESS: u8 = 0x44;
+/// 7-bit address used when `ADDR` is tied to VDD.
+pub const DEFAULT_ADDRESS: u8 = 0x45;
+/// 7-bit address used when `ADDR` is tied to GND.
+pub const ADDRESS_GND: u8 = 0x44;
 /// 7-bit address used when `ADDR` is tied to VDD.
 pub const ADDRESS_VDD: u8 = 0x45;
 /// 7-bit address used when `ADDR` is tied to SDA.
@@ -182,6 +184,19 @@ const CIE_MATRIX: [[f32; 3]; 3] = [
     [4.07467441e-5, 1.98958202e-4, -1.58848115e-5],
     [9.28619404e-5, -1.69739553e-5, 6.74021520e-4],
 ];
+
+/// Range of colour temperatures McCamy's approximation is reported over.
+///
+/// The cubic was fitted along the black-body curve and says nothing about
+/// light that is nowhere near it. Fed a chromaticity far off the curve it
+/// still returns a number, but one produced by the cubic term running away
+/// rather than by the fit: a few ADC counts of noise in a dark room land near
+/// the corner of the diagram and come out as tens of thousands of kelvin,
+/// negative, or in the hundreds of millions. No real light source is outside
+/// this window, so a result outside it is a sign the input was not the kind
+/// of light the approximation applies to, and is reported as no reading.
+const CCT_MIN_KELVIN: f32 = 1000.0;
+const CCT_MAX_KELVIN: f32 = 25_000.0;
 
 /// Full-scale light level (`RANGE` field of `REG_CONTROL`).
 ///
@@ -493,20 +508,31 @@ impl Measurement {
     ///
     /// Uses McCamy's cubic approximation about the epicentre (0.3320, 0.1858),
     /// which is what the datasheet specifies. It is only meaningful for light
-    /// that is reasonably close to the Planckian locus; saturated colours
-    /// still produce a number, but not a physically useful one.
+    /// that is reasonably close to the Planckian locus.
     ///
-    /// Returns `None` when the chromaticity is undefined, or when the light
-    /// sits on the `y = 0.1858` line where the approximation divides by zero.
+    /// Returns `None` when the chromaticity is undefined, when it lies on or
+    /// below the `y = 0.1858` line the approximation is centred on, and when
+    /// the result falls outside `CCT_MIN_KELVIN..=CCT_MAX_KELVIN`. All three
+    /// mean the same thing: the light is too far off the black-body curve for
+    /// the fit to describe it, which in practice is what a dark room looks
+    /// like, and no number is better than a wrong one. The whole black-body
+    /// curve lies above `y = 0.1858`, so a chromaticity below it is already
+    /// outside the fit even where the cubic happens to return a plausible
+    /// number.
     pub fn correlated_color_temperature_kelvin(&self) -> Option<f32> {
         let chromaticity = self.chromaticity()?;
         let denominator = 0.1858 - chromaticity.y;
-        if denominator == 0.0 {
+        if denominator >= 0.0 {
             return None;
         }
 
         let n = (chromaticity.x - 0.3320) / denominator;
-        Some(437.0 * n * n * n + 3601.0 * n * n + 6861.0 * n + 5517.0)
+        let kelvin = 437.0 * n * n * n + 3601.0 * n * n + 6861.0 * n + 5517.0;
+        if !(CCT_MIN_KELVIN..=CCT_MAX_KELVIN).contains(&kelvin) {
+            return None;
+        }
+
+        Some(kelvin)
     }
 }
 

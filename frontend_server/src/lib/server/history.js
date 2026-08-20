@@ -5,7 +5,7 @@
  * this, so what the page is first rendered with and what it later fetches for
  * itself are produced by exactly the same code.
  */
-import { SENSORS, chartedFields } from '$lib/sensors.js';
+import { SENSORS, chartedFields, withinFieldLimits } from '$lib/sensors.js';
 
 import { readRange } from './store.js';
 
@@ -97,7 +97,11 @@ function project(reading, fields) {
 			// A flag is sent as a number here as well as when averaged, so a
 			// caller never has to handle the same field arriving as two types
 			// depending on whether the range happened to be downsampled.
-			point[field] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+			const number = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+			if (typeof number === 'number' && !withinFieldLimits(field, number)) {
+				continue;
+			}
+			point[field] = number;
 		}
 	}
 	return point;
@@ -123,7 +127,11 @@ function average(bucket, fields) {
 					total[i] += value[i];
 				}
 				count += 1;
-			} else if (typeof value === 'number' && Number.isFinite(value)) {
+			} else if (
+				typeof value === 'number' &&
+				Number.isFinite(value) &&
+				withinFieldLimits(field, value)
+			) {
 				total = (total ?? 0) + value;
 				count += 1;
 			}

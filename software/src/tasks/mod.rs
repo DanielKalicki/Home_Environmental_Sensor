@@ -7,5 +7,6 @@ pub mod bmp581_task;
 pub mod mlx90640_task;
 pub mod opt4048_task;
 pub mod scd41_task;
+pub mod sht41_task;
 pub mod sps30_task;
 pub mod web_server_task;
