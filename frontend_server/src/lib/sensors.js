@@ -7,7 +7,16 @@
  */
 
 /** Sensors, in the order the dashboard shows them. */
-export const SENSORS = ['scd41', 'sps30', 'bme690', 'as7343', 'bmp581', 'opt4048', 'sht41'];
+export const SENSORS = [
+	'scd41',
+	'sps30',
+	'bme690',
+	'as7343',
+	'bmp581',
+	'opt4048',
+	'sht41',
+	'bmm350'
+];
 
 /** Human-readable name of each sensor and what it measures. */
 export const SENSOR_LABELS = {
@@ -17,7 +26,8 @@ export const SENSOR_LABELS = {
 	as7343: 'AS7343 — visible-light spectrum',
 	bmp581: 'BMP581 — pressure, temperature',
 	opt4048: 'OPT4048 — illuminance and colour',
-	sht41: 'SHT41 — temperature, humidity'
+	sht41: 'SHT41 — temperature, humidity',
+	bmm350: 'BMM350 — magnetic field'
 };
 
 /**
@@ -235,6 +245,25 @@ export const CHARTS = [
 		unit: 'K',
 		decimals: 0,
 		series: [{ sensor: 'opt4048', field: 'cct_kelvin', label: 'OPT4048', color: '#fb923c' }]
+	},
+	{
+		// The three lines are the field along the sensor's own X, Y and Z axes,
+		// which are fixed to the board and point wherever the board is pointed;
+		// they are not north, east and down. How the field divides between them
+		// therefore says as much about how the board is lying as about the field.
+		// Indoors the earth's roughly 50 µT is bent by the building's steel and by
+		// anything with a motor or a magnet in it, so what these lines are worth
+		// watching for is a change: a door opening, a fan starting, something
+		// ferrous moving past. An absolute bearing cannot be read off them.
+		id: 'magnetic-field',
+		title: 'Magnetic field',
+		unit: 'µT',
+		decimals: 2,
+		series: [
+			{ sensor: 'bmm350', field: 'x_microtesla', label: 'X axis', color: '#f87171' },
+			{ sensor: 'bmm350', field: 'y_microtesla', label: 'Y axis', color: '#4ade80' },
+			{ sensor: 'bmm350', field: 'z_microtesla', label: 'Z axis', color: '#60a5fa' }
+		]
 	}
 ];
 

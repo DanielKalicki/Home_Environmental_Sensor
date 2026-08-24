@@ -3,6 +3,7 @@
 pub mod as7343_task;
 pub mod bme690_task;
 pub mod blink_task;
+pub mod bmm350_task;
 pub mod bmp581_task;
 pub mod mlx90640_task;
 pub mod opt4048_task;

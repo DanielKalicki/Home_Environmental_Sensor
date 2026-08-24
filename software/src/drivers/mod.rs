@@ -5,6 +5,7 @@
 
 pub mod as7343;
 pub mod bme690;
+pub mod bmm350;
 pub mod bmp581;
 pub mod bsec;
 pub mod i2c_bus;

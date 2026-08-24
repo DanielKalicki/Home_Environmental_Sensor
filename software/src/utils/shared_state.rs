@@ -9,7 +9,7 @@
 //! reader turns those uptimes into wall-clock times of its own.
 //!
 //! A full day of readings is far too much for the internal RAM the Wi-Fi
-//! driver and the network stack also need, so all seven ring buffers are
+//! driver and the network stack also need, so all eight ring buffers are
 //! placed in the external PSRAM by [`init`]. Until that call succeeds the
 //! histories are absent: readings are then dropped rather than stored, and the
 //! web server reports an empty history.
@@ -24,6 +24,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_time::Instant;
 
 use crate::drivers::as7343::Measurement as As7343Measurement;
+use crate::drivers::bmm350::Measurement as Bmm350Measurement;
 use crate::drivers::bmp581::Measurement as Bmp581Measurement;
 use crate::drivers::bsec::Outputs as Bme690Measurement;
 use crate::drivers::mlx90640::{COLUMNS, PIXEL_COUNT, ROWS};
@@ -33,6 +34,7 @@ use crate::drivers::sht41::Measurement as Sht41Measurement;
 use crate::drivers::sps30::Measurement as Sps30Measurement;
 use crate::tasks::as7343_task::MEASUREMENT_INTERVAL_MS as AS7343_INTERVAL_MS;
 use crate::tasks::bme690_task::MEASUREMENT_INTERVAL_MS as BME690_INTERVAL_MS;
+use crate::tasks::bmm350_task::MEASUREMENT_INTERVAL_MS as BMM350_INTERVAL_MS;
 use crate::tasks::bmp581_task::MEASUREMENT_INTERVAL_MS as BMP581_INTERVAL_MS;
 use crate::tasks::opt4048_task::MEASUREMENT_INTERVAL_MS as OPT4048_INTERVAL_MS;
 use crate::tasks::scd41_task::MEASUREMENT_INTERVAL_MS as SCD41_INTERVAL_MS;
@@ -58,6 +60,8 @@ pub const BMP581_CAPACITY: usize = (HISTORY_WINDOW_MS / BMP581_INTERVAL_MS) as u
 pub const OPT4048_CAPACITY: usize = (HISTORY_WINDOW_MS / OPT4048_INTERVAL_MS) as usize;
 /// Number of SHT41 readings retained, enough to fill [`HISTORY_WINDOW_MS`].
 pub const SHT41_CAPACITY: usize = (HISTORY_WINDOW_MS / SHT41_INTERVAL_MS) as usize;
+/// Number of BMM350 readings retained, enough to fill [`HISTORY_WINDOW_MS`].
+pub const BMM350_CAPACITY: usize = (HISTORY_WINDOW_MS / BMM350_INTERVAL_MS) as usize;
 
 /// One reading together with the time it was taken.
 #[derive(Clone, Copy)]
@@ -100,7 +104,7 @@ impl HistoryStatus {
     }
 }
 
-/// Retained readings of all seven sensors.
+/// Retained readings of all eight sensors.
 ///
 /// Every field is `None` until [`init`] has placed the ring buffers in PSRAM.
 struct SensorState {
@@ -111,6 +115,7 @@ struct SensorState {
     bmp581: Option<MeasurementHistory<Sample<Bmp581Measurement>>>,
     opt4048: Option<MeasurementHistory<Sample<Opt4048Measurement>>>,
     sht41: Option<MeasurementHistory<Sample<Sht41Measurement>>>,
+    bmm350: Option<MeasurementHistory<Sample<Bmm350Measurement>>>,
 }
 
 /// Process-wide storage for the retained readings.
@@ -122,6 +127,7 @@ static STATE: Mutex<CriticalSectionRawMutex, SensorState> = Mutex::new(SensorSta
     bmp581: None,
     opt4048: None,
     sht41: None,
+    bmm350: None,
 });
 
 /// Reserve every ring buffer in PSRAM.
@@ -139,6 +145,7 @@ pub async fn init(psram: &mut Psram) -> Option<usize> {
     let bmp581 = psram.alloc_slice::<Option<Sample<Bmp581Measurement>>>(BMP581_CAPACITY, None)?;
     let opt4048 = psram.alloc_slice::<Option<Sample<Opt4048Measurement>>>(OPT4048_CAPACITY, None)?;
     let sht41 = psram.alloc_slice::<Option<Sample<Sht41Measurement>>>(SHT41_CAPACITY, None)?;
+    let bmm350 = psram.alloc_slice::<Option<Sample<Bmm350Measurement>>>(BMM350_CAPACITY, None)?;
 
     let mut state = STATE.lock().await;
     state.scd41 = Some(MeasurementHistory::new(scd41));
@@ -148,6 +155,7 @@ pub async fn init(psram: &mut Psram) -> Option<usize> {
     state.bmp581 = Some(MeasurementHistory::new(bmp581));
     state.opt4048 = Some(MeasurementHistory::new(opt4048));
     state.sht41 = Some(MeasurementHistory::new(sht41));
+    state.bmm350 = Some(MeasurementHistory::new(bmm350));
 
     Some(before - psram.free_bytes())
 }
@@ -215,6 +223,16 @@ pub async fn publish_opt4048(measurement: Opt4048Measurement) {
 /// Append an SHT41 reading, discarding the oldest one when full.
 pub async fn publish_sht41(measurement: Sht41Measurement) {
     if let Some(history) = STATE.lock().await.sht41.as_mut() {
+        history.push(Sample {
+            value: measurement,
+            taken_at: Instant::now(),
+        });
+    }
+}
+
+/// Append a BMM350 reading, discarding the oldest one when full.
+pub async fn publish_bmm350(measurement: Bmm350Measurement) {
+    if let Some(history) = STATE.lock().await.bmm350.as_mut() {
         history.push(Sample {
             value: measurement,
             taken_at: Instant::now(),
@@ -320,6 +338,20 @@ pub async fn sht41_status() -> HistoryStatus {
     }
 }
 
+/// State of the retained BMM350 history.
+pub async fn bmm350_status() -> HistoryStatus {
+    match STATE.lock().await.bmm350.as_ref() {
+        Some(history) => HistoryStatus {
+            interval_ms: BMM350_INTERVAL_MS,
+            capacity: history.capacity(),
+            len: history.len(),
+            first_sequence: history.first_sequence(),
+            next_sequence: history.next_sequence(),
+        },
+        None => HistoryStatus::absent(BMM350_INTERVAL_MS),
+    }
+}
+
 /// Return the SCD41 reading with the given sequence number, if still retained.
 ///
 /// One reading is copied per call, so the mutex is never held across the
@@ -363,6 +395,12 @@ pub async fn opt4048_reading(sequence: u64) -> Option<Sample<Opt4048Measurement>
 pub async fn sht41_reading(sequence: u64) -> Option<Sample<Sht41Measurement>> {
     let state = STATE.lock().await;
     state.sht41.as_ref()?.get(sequence)
+}
+
+/// Return the BMM350 reading with the given sequence number, if still retained.
+pub async fn bmm350_reading(sequence: u64) -> Option<Sample<Bmm350Measurement>> {
+    let state = STATE.lock().await;
+    state.bmm350.as_ref()?.get(sequence)
 }
 
 /// Columns in a thermal image.

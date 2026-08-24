@@ -76,12 +76,12 @@ const MAX_PAGE_READINGS: usize = 2000;
 /// Size of the buffer the whole `/api/status` body is built in.
 ///
 /// The body carries one entry per sensor, and an entry is about 160 characters
-/// once its two sequence numbers have grown to their full width, so the seven
-/// entries and the surrounding object need a little over 1 kB. The margin
+/// once its two sequence numbers have grown to their full width, so the eight
+/// entries and the surrounding object need a little under 1.5 kB. The margin
 /// above that is deliberate: `write!` into a `String` fails on overflow and
 /// the failure is discarded, which would leave the client parsing truncated
-/// JSON. Adding an eighth sensor means checking this again.
-const STATUS_BODY_CAPACITY: usize = 2048;
+/// JSON. Adding a ninth sensor means checking this again.
+const STATUS_BODY_CAPACITY: usize = 2560;
 
 /// Receive buffer for one client connection.
 static mut RX_BUFFER: [u8; 1536] = [0; 1536];
@@ -318,10 +318,11 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let bmp581 = shared_state::bmp581_status().await;
     let opt4048 = shared_state::opt4048_status().await;
     let sht41 = shared_state::sht41_status().await;
+    let bmm350 = shared_state::bmm350_status().await;
 
     // One sensor entry runs to a little over a hundred characters and the
     // sequence numbers in it grow for as long as the board stays up, so the
-    // buffer is sized well clear of the seven entries it has to hold: `write!`
+    // buffer is sized well clear of the eight entries it has to hold: `write!`
     // into a `String` fails on overflow and would leave the client parsing
     // truncated JSON.
     let mut body: String<STATUS_BODY_CAPACITY> = String::new();
@@ -344,6 +345,8 @@ async fn send_status(socket: &mut TcpSocket<'_>) {
     let _ = write_sensor_status(&mut body, "opt4048", &opt4048);
     let _ = body.push(',');
     let _ = write_sensor_status(&mut body, "sht41", &sht41);
+    let _ = body.push(',');
+    let _ = write_sensor_status(&mut body, "bmm350", &bmm350);
     let _ = body.push_str("}}");
 
     send_response(socket, &body).await;
@@ -365,7 +368,7 @@ fn write_sensor_status(
 /// Send one page of readings for a single sensor.
 ///
 /// `query` selects the sensor and the page:
-/// `sensor=scd41|sps30|bme690|as7343|bmp581|opt4048|sht41`, `from=` the first sequence number
+/// `sensor=scd41|sps30|bme690|as7343|bmp581|opt4048|sht41|bmm350`, `from=` the first sequence number
 /// wanted, `limit=` how many readings at most. A `from` that names an already
 /// overwritten reading is moved up to the oldest reading still retained, and
 /// the page reports the `from` it actually used, so a client that has fallen
@@ -390,6 +393,7 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
         "bmp581" => shared_state::bmp581_status().await,
         "opt4048" => shared_state::opt4048_status().await,
         "sht41" => shared_state::sht41_status().await,
+        "bmm350" => shared_state::bmm350_status().await,
         _ => {
             let _ = socket
                 .write_all(
@@ -654,6 +658,32 @@ async fn send_readings(socket: &mut TcpSocket<'_>, query: &str) {
                         sample.taken_at.as_millis(),
                         m.temperature_celsius(),
                         m.humidity_percent()
+                    );
+                }
+                None => {
+                    let _ = write!(chunk, "{}null", separator);
+                }
+            }
+        } else if sensor == "bmm350" {
+            match shared_state::bmm350_reading(sequence).await {
+                Some(sample) => {
+                    let m = sample.value;
+                    // The three axes are the magnetic flux density along the
+                    // sensor's own X, Y and Z, in microtesla, already put
+                    // through the chip's compensation coefficients. The
+                    // temperature is the sensor's own die, which those
+                    // coefficients are referenced against; it runs warmer than
+                    // the room, so it is named apart from the temperatures the
+                    // other sensors report to keep it off their chart.
+                    let _ = write!(
+                        chunk,
+                        "{}{{\"taken_at_ms\":{},\"x_microtesla\":{},\"y_microtesla\":{},\"z_microtesla\":{},\"die_temperature_celsius\":{}}}",
+                        separator,
+                        sample.taken_at.as_millis(),
+                        m.x_microtesla,
+                        m.y_microtesla,
+                        m.z_microtesla,
+                        m.temperature_celsius
                     );
                 }
                 None => {

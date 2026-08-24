@@ -225,6 +225,22 @@
 		return ['unreliable', 'calibrating', 'calibrated', 'high accuracy'][accuracy] ?? 'unknown';
 	}
 
+	/**
+	 * Strength of the measured magnetic field, in microtesla.
+	 *
+	 * The BMM350 reports the field along its own three axes, and how much of it
+	 * falls on each one depends on which way the board is lying. Their combined
+	 * length does not, so that is the single number worth putting on a card; the
+	 * chart below shows the three axes themselves.
+	 */
+	function fieldStrength(reading) {
+		const axes = [reading?.x_microtesla, reading?.y_microtesla, reading?.z_microtesla];
+		if (!axes.every((axis) => typeof axis === 'number' && Number.isFinite(axis))) {
+			return null;
+		}
+		return Math.hypot(...axes);
+	}
+
 	onMount(() => {
 		try {
 			const saved = JSON.parse(localStorage.getItem(DISABLED_SENSORS_KEY) ?? '[]');
@@ -356,6 +372,13 @@
 				{formatNumber(latest.bme690?.latest?.tvoc_equivalent_ppb, 2)} <span>ppb</span>
 			</p>
 			<p class="age">BME690 · estimated from the gas signal</p>
+		</article>
+		<article>
+			<h2>Magnetic field</h2>
+			<p class="value">
+				{formatNumber(fieldStrength(latest.bmm350?.latest), 1)} <span>µT</span>
+			</p>
+			<p class="age">BMM350 · {formatAge(latest.bmm350?.latest?.t)}</p>
 		</article>
 	</section>
 
