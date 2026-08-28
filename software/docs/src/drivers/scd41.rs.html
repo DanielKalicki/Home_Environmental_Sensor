@@ -142,14 +142,17 @@
     <a href="#s-delays">Execution times</a>
     <a href="#s-crcconst">Checksum settings</a>
     <a href="#s-error">Error</a>
+    <a href="#s-variant">SensorVariant</a>
     <a href="#s-measurement">Measurement</a>
     <a href="#s-crc8">crc8</a>
     <a href="#s-struct">Scd41</a>
     <a href="#s-new">new / with_address</a>
     <a href="#s-sendcommand">send_command</a>
+    <a href="#s-readword">read_word</a>
     <a href="#s-readwords">read_three_words</a>
     <a href="#s-mode">Mode commands</a>
     <a href="#s-serial">serial_number</a>
+    <a href="#s-config">Configuration read-outs</a>
     <a href="#s-read">read_measurement</a>
     <a href="#s-single">Single-shot commands</a>
     <a href="#failure">Failure behaviour</a>
@@ -179,6 +182,10 @@
           published.</li>
       <li><strong>Unit conversion.</strong> Temperature and humidity arrive as plain 16-bit numbers with no
           units. The formulas that turn them into degrees Celsius and percent live here.</li>
+      <li><strong>The settings read-outs.</strong> The sensor keeps several configuration values in its own
+          memory — the temperature offset, the altitude, the assumed air pressure, and four values controlling
+          its automatic self-calibration. This file can read all of them back and convert them into ordinary
+          units, so the start-up log can state how the attached sensor is configured.</li>
     </ol>
 
     <h3>What this file does not do</h3>
@@ -187,8 +194,10 @@
           <code class="inline">src/tasks/scd41_task.rs</code>.</li>
       <li>It does not obtain or release the shared bus. It is handed a ready-to-use I2C block and uses it.</li>
       <li>It does not store readings or retry after a failure. It reports the failure and returns.</li>
-      <li>It does not implement the sensor's continuous measurement mode, its calibration commands, or its
-          settings storage. Only the on-demand flow the firmware actually uses is present.</li>
+      <li>It does not implement the sensor's continuous measurement mode, its forced calibration command, or any
+          command that <em>changes</em> a setting. The settings commands present here are read-only: every
+          configuration value is reported, none is written. Only the on-demand flow the firmware actually uses is
+          present.</li>
     </ul>
 
     <h3>Constraints that shaped the implementation</h3>
@@ -239,6 +248,22 @@
        in ppm, ready to     raw, needs        raw, needs
        use                  conversion        conversion</code></pre>
 
+    <h4>The three bytes returned by a settings command</h4>
+<pre class="block"><code>byte   0     1     2
+     +-----+-----+-----+
+     | VAL | VAL | CRC |
+     | MSB | LSB |     |
+     +-----+-----+-----+
+       \_____ word 0 _____/
+       one setting, meaning
+       depends on the command
+       that was sent</code></pre>
+    <p>
+      Every command that reports a setting — the sensor variant, the temperature offset, the altitude, the
+      pressure and the four self-calibration values — answers with a single word in this shape. The check byte
+      is computed the same way and covers the same two data bytes; only the number of groups differs.
+    </p>
+
     <h4>Checksum parameters used by Sensirion</h4>
     <table>
       <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
@@ -265,6 +290,17 @@
       <tr><td>Temperature</td><td><code>-45 + 175 &times; raw / 65535</code></td><td>−45 °C at raw 0, +130 °C at raw 65535</td></tr>
       <tr><td>Relative humidity</td><td><code>100 &times; raw / 65535</code></td><td>0 % at raw 0, 100 % at raw 65535</td></tr>
     </table>
+    <p>The settings words are converted as well, each in its own way:</p>
+    <table>
+      <tr><th>Setting</th><th>What the word holds</th><th>Conversion applied here</th></tr>
+      <tr><td>Sensor variant</td><td>A type number in the top four bits; the rest is reserved</td><td>The top four bits are extracted and named: 0 is an SCD40, 1 an SCD41, 5 an SCD43.</td></tr>
+      <tr><td>Temperature offset</td><td>The same scale as a temperature reading, but without the −45 shift</td><td><code>175 &times; raw / 65535</code>, giving degrees Celsius</td></tr>
+      <tr><td>Sensor altitude</td><td>Metres above sea level</td><td>None; the word is already the number of metres.</td></tr>
+      <tr><td>Ambient pressure</td><td>Hectopascals</td><td><code>raw &times; 100</code>, giving pascals</td></tr>
+      <tr><td>Self-calibration enabled</td><td>1 when active, 0 when off</td><td>Compared against zero, giving a yes-or-no answer</td></tr>
+      <tr><td>Self-calibration target</td><td>Parts per million</td><td>None</td></tr>
+      <tr><td>Self-calibration periods</td><td>Hours, always a multiple of four</td><td>None</td></tr>
+    </table>
     <div class="note">The raw words are kept exactly as the sensor sent them and are stored that way. Conversion
       happens only where a human-readable number is required: the serial console line, and the moment a reading is
       written into the web server's reply.</div>
@@ -290,6 +326,12 @@
       <tr><td><code>Scd41::new</code></td><td><code>src/tasks/scd41_task.rs</code></td><td>Binds the driver to a bus for the duration of one exchange.</td></tr>
       <tr><td><code>stop_periodic_measurement</code></td><td>the task, during start-up and after every error</td><td>Places the sensor in the idle state that on-demand commands require.</td></tr>
       <tr><td><code>serial_number</code></td><td>the task, during start-up</td><td>Confirms the sensor is present and answering correctly.</td></tr>
+      <tr><td><code>sensor_variant</code></td><td>the task, during start-up</td><td>Confirms which member of the SCD4x family is fitted, so an SCD40 (which reports carbon dioxide with a different specification) cannot be mistaken for an SCD41.</td></tr>
+      <tr><td><code>temperature_offset_celsius</code>, <code>sensor_altitude_meters</code>, <code>ambient_pressure_pascals</code></td><td>the task, during start-up</td>
+          <td>Report the three compensation settings the sensor applies to its own readings, in degrees Celsius, metres and pascals.</td></tr>
+      <tr><td><code>automatic_self_calibration_enabled</code>, <code>automatic_self_calibration_target_ppm</code>, <code>automatic_self_calibration_initial_period_hours</code>, <code>automatic_self_calibration_standard_period_hours</code></td><td>the task, during start-up</td>
+          <td>Report whether the sensor recalibrates itself, the carbon dioxide value it assumes for fresh air, and how often it does so.</td></tr>
+      <tr><td><code>SensorVariant</code></td><td>the task</td><td>The decoded sensor type: <code>Scd40</code>, <code>Scd41</code>, <code>Scd43</code> or <code>Unknown</code>.</td></tr>
       <tr><td><code>start_single_shot</code></td><td>the task, every ten seconds</td><td>Begins one conversion and returns immediately.</td></tr>
       <tr><td><code>read_measurement</code></td><td>the task, five seconds later</td><td>Collects the finished conversion.</td></tr>
       <tr><td><code>SINGLE_SHOT_MEASUREMENT_DELAY_MS</code></td><td>the task</td><td>The five-second wait between those two calls, so the number is stated once.</td></tr>
@@ -332,6 +374,18 @@ sequenceDiagram
   D->>S: write 0x3682, wait 1 ms, read 9 bytes
   S-->>D: three words with check bytes
   D-->>T: 48-bit serial number
+  T->>D: sensor_variant()
+  D->>S: write 0x202F, wait 1 ms, read 3 bytes
+  S-->>D: one word with a check byte
+  D-->>T: Scd40, Scd41, Scd43 or Unknown
+  T->>D: temperature_offset_celsius(), sensor_altitude_meters(), ambient_pressure_pascals()
+  D->>S: write 0x2318, 0x2322, 0xE000 in turn, each followed by a 3-byte read
+  S-->>D: one word each
+  D-->>T: degrees Celsius, metres, pascals
+  T->>D: the four automatic self-calibration read-outs
+  D->>S: write 0x2313, 0x233F, 0x2340, 0x234B in turn, each followed by a 3-byte read
+  S-->>D: one word each
+  D-->>T: on or off, target in ppm, two periods in hours
   T->>B: release the lock
 
   Note over T: Every ten seconds
@@ -459,7 +513,7 @@ flowchart TD
   </div>
 
   <!-- ================= COMMANDS ================= -->
-  <h2 class="section" id="s-commands">Command codes <span class="range">lines 23–29</span></h2>
+  <h2 class="section" id="s-commands">Command codes <span class="range">lines 23–37</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="k">const</span> <span class="ty">CMD_STOP_PERIODIC_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0x3F86</span>;
@@ -468,11 +522,20 @@ flowchart TD
 <span class="k">const</span> <span class="ty">CMD_MEASURE_SINGLE_SHOT</span>: <span class="ty">u16</span> = <span class="nu">0x219D</span>;
 <span class="k">const</span> <span class="ty">CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</span>: <span class="ty">u16</span> = <span class="nu">0x2196</span>;
 <span class="k">const</span> <span class="ty">CMD_READ_MEASUREMENT</span>: <span class="ty">u16</span> = <span class="nu">0xEC05</span>;
-<span class="k">const</span> <span class="ty">CMD_GET_SERIAL_NUMBER</span>: <span class="ty">u16</span> = <span class="nu">0x3682</span>;</code></pre>
+<span class="k">const</span> <span class="ty">CMD_GET_SERIAL_NUMBER</span>: <span class="ty">u16</span> = <span class="nu">0x3682</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_SENSOR_VARIANT</span>: <span class="ty">u16</span> = <span class="nu">0x202F</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_TEMPERATURE_OFFSET</span>: <span class="ty">u16</span> = <span class="nu">0x2318</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_SENSOR_ALTITUDE</span>: <span class="ty">u16</span> = <span class="nu">0x2322</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_AMBIENT_PRESSURE</span>: <span class="ty">u16</span> = <span class="nu">0xE000</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_ENABLED</span>: <span class="ty">u16</span> = <span class="nu">0x2313</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_TARGET</span>: <span class="ty">u16</span> = <span class="nu">0x233F</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_INITIAL_PERIOD</span>: <span class="ty">u16</span> = <span class="nu">0x2340</span>;
+<span class="k">const</span> <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_STANDARD_PERIOD</span>: <span class="ty">u16</span> = <span class="nu">0x234B</span>;</code></pre>
       <div class="explain">
         <span class="tag">Datasheet values</span>
-        <p>The seven operations this driver can request. Each number is taken directly from the SCD4x datasheet
-           and is meaningless outside it.</p>
+        <p>The fifteen operations this driver can request. Each number is taken directly from the SCD4x datasheet
+           and is meaningless outside it. The first seven act on the sensor or return a reading; the remaining
+           eight only report values the sensor already holds.</p>
         <table>
           <tr><th>Constant</th><th>Code</th><th>Effect on the sensor</th></tr>
           <tr><td><code>CMD_STOP_PERIODIC_MEASUREMENT</code></td><td>0x3F86</td>
@@ -484,16 +547,28 @@ flowchart TD
           <tr><td><code>CMD_MEASURE_SINGLE_SHOT_RHT_ONLY</code></td><td>0x2196</td><td>Measures temperature and humidity only, which is far quicker because no gas measurement is performed.</td></tr>
           <tr><td><code>CMD_READ_MEASUREMENT</code></td><td>0xEC05</td><td>Returns the result of the most recent conversion.</td></tr>
           <tr><td><code>CMD_GET_SERIAL_NUMBER</code></td><td>0x3682</td><td>Returns the sensor's unique 48-bit identifier.</td></tr>
+          <tr><td><code>CMD_GET_SENSOR_VARIANT</code></td><td>0x202F</td><td>Returns which member of the SCD4x family this part is.</td></tr>
+          <tr><td><code>CMD_GET_TEMPERATURE_OFFSET</code></td><td>0x2318</td><td>Returns the offset the sensor subtracts from its own temperature and humidity readings to compensate for heat produced by the board it is mounted on.</td></tr>
+          <tr><td><code>CMD_GET_SENSOR_ALTITUDE</code></td><td>0x2322</td><td>Returns the height above sea level the sensor has been told it is at, which it uses to correct the carbon dioxide reading.</td></tr>
+          <tr><td><code>CMD_GET_AMBIENT_PRESSURE</code></td><td>0xE000</td><td>Returns the air pressure the sensor is using for the same correction. Setting a pressure overrides the altitude.</td></tr>
+          <tr><td><code>CMD_GET_AUTOMATIC_SELF_CALIBRATION_ENABLED</code></td><td>0x2313</td><td>Returns whether the sensor recalibrates itself from the lowest readings it has seen.</td></tr>
+          <tr><td><code>CMD_GET_AUTOMATIC_SELF_CALIBRATION_TARGET</code></td><td>0x233F</td><td>Returns the carbon dioxide value, in parts per million, that this recalibration assumes fresh air to have.</td></tr>
+          <tr><td><code>CMD_GET_AUTOMATIC_SELF_CALIBRATION_INITIAL_PERIOD</code></td><td>0x2340</td><td>Returns how many hours of operation pass before the first recalibration.</td></tr>
+          <tr><td><code>CMD_GET_AUTOMATIC_SELF_CALIBRATION_STANDARD_PERIOD</code></td><td>0x234B</td><td>Returns how many hours of operation pass between recalibrations after the first.</td></tr>
         </table>
         <p>Naming them, rather than writing the numbers where they are used, means a reader can check each one
            against the datasheet in a single place, and a transposed digit is visible here rather than hidden in
            the middle of a function.</p>
+        <div class="note">Every one of the eight settings commands has a matching <code class="inline">set_</code>
+          command in the datasheet, and none of them is present here. The firmware reports the sensor's
+          configuration but never alters it, so a value printed at start-up is the one stored in the sensor
+          itself.</div>
       </div>
     </div>
   </div>
 
   <!-- ================= DELAYS ================= -->
-  <h2 class="section" id="s-delays">Execution times <span class="range">lines 31–42</span></h2>
+  <h2 class="section" id="s-delays">Execution times <span class="range">lines 39–50</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="cm">/// Execution time of `stop_periodic_measurement`, per the datasheet.</span>
@@ -521,6 +596,9 @@ flowchart TD
           <tr><td>Temperature and humidity only</td><td>50 ms</td><td>No gas measurement is performed.</td></tr>
           <tr><td>Short commands</td><td>1 ms</td><td>Only fetching values the sensor already holds.</td></tr>
         </table>
+        <p>The one-millisecond figure covers every command that reports something: the measurement, the serial
+           number, the variant and all seven settings read-outs. They share one constant because the datasheet
+           gives them all the same execution time.</p>
         <p><code class="inline">SINGLE_SHOT_MEASUREMENT_DELAY_MS</code> is the only one marked
            <code class="inline">pub</code>. The task waits out those five seconds itself, between its two calls
            into this driver, so it needs the number; the others are consumed entirely inside this file.</p>
@@ -531,7 +609,7 @@ flowchart TD
   </div>
 
   <!-- ================= CRC CONSTANTS ================= -->
-  <h2 class="section" id="s-crcconst">Checksum settings <span class="range">lines 44–45</span></h2>
+  <h2 class="section" id="s-crcconst">Checksum settings <span class="range">lines 52–53</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="k">const</span> <span class="ty">CRC8_POLYNOMIAL</span>: <span class="ty">u8</span> = <span class="nu">0x31</span>;
@@ -550,7 +628,7 @@ flowchart TD
   </div>
 
   <!-- ================= ERROR ================= -->
-  <h2 class="section" id="s-error">The error type <span class="range">lines 47–60</span></h2>
+  <h2 class="section" id="s-error">The error type <span class="range">lines 55–68</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="cm">/// Errors reported by the driver.</span>
@@ -588,8 +666,71 @@ flowchart TD
     </div>
   </div>
 
+  <!-- ================= SENSOR VARIANT ================= -->
+  <h2 class="section" id="s-variant">The sensor type <span class="range">lines 70–95</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Sensor type reported by `get_sensor_variant` (0x202F).
+///
+/// The variant is encoded in bits 15..12 of the returned word.</span>
+<span class="at">#[derive(Debug, Clone, Copy, PartialEq, Eq)]</span>
+<span class="k">pub enum</span> <span class="ty">SensorVariant</span> {
+    <span class="cm">/// Bits 15..12 == 0b0000.</span>
+    Scd40,
+    <span class="cm">/// Bits 15..12 == 0b0001.</span>
+    Scd41,
+    <span class="cm">/// Bits 15..12 == 0b0101.</span>
+    Scd43,
+    <span class="cm">/// Any other encoding, carrying the raw 4-bit field.</span>
+    Unknown(<span class="ty">u8</span>),
+}</code></pre>
+      <div class="explain">
+        <span class="tag ext">External interface · printed by the task at start-up</span>
+        <p>The SCD40, SCD41 and SCD43 are three members of one family. They share the same address, the same
+           commands and the same wiring, and cannot be told apart by looking at the bus. They differ in what they
+           promise: the SCD41 supports the on-demand measurement this firmware depends on and specifies its
+           carbon dioxide reading over a wider range than the SCD40.</p>
+        <p>Naming the four possibilities, rather than passing the raw number around, means the start-up line reads
+           <code class="inline">variant: Scd41</code> and a comparison against the expected type is one
+           equality test.</p>
+        <p><code class="inline">Unknown(u8)</code> keeps the four bits that were actually received. A future part
+           in the same family, or a bus fault that corrupts the value in a way the check byte happens not to
+           catch, is therefore reported with the number responsible instead of being silently reduced to "not an
+           SCD41".</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">impl</span> <span class="ty">SensorVariant</span> {
+    <span class="cm">/// Decode the raw word returned by `get_sensor_variant`.</span>
+    <span class="k">fn</span> <span class="fn">from_raw</span>(raw: <span class="ty">u16</span>) -&gt; <span class="ty">Self</span> {
+        <span class="k">match</span> (raw &gt;&gt; <span class="nu">12</span>) <span class="k">as</span> <span class="ty">u8</span> &amp; <span class="nu">0x0F</span> {
+            <span class="nu">0b0000</span> =&gt; <span class="ty">SensorVariant</span>::Scd40,
+            <span class="nu">0b0001</span> =&gt; <span class="ty">SensorVariant</span>::Scd41,
+            <span class="nu">0b0101</span> =&gt; <span class="ty">SensorVariant</span>::Scd43,
+            other =&gt; <span class="ty">SensorVariant</span>::Unknown(other),
+        }
+    }
+}</code></pre>
+      <div class="explain">
+        <span class="tag">Datasheet values</span>
+        <p>Turns the one word the sensor sends into one of the four names.</p>
+        <p><code class="inline">raw &gt;&gt; 12</code> moves the top four bits down to the bottom, discarding the
+           twelve reserved bits below them. <code class="inline">&amp; 0x0F</code> then keeps only those four
+           bits. The two steps together extract the type number and nothing else, so reserved bits that a future
+           sensor may use cannot affect the result.</p>
+        <p>The three known patterns are written in binary rather than as decimal numbers, because that is the form
+           the datasheet uses; comparing the code against it requires no arithmetic.</p>
+        <p>The final arm catches everything else and keeps the value. A <code class="inline">match</code> in Rust
+           must cover every possibility, so a fourth pattern appearing on the wire cannot fall through unhandled.</p>
+        <p>The function is private: it is meaningful only for a word produced by
+           <code class="inline">0x202F</code>, so only the read-out that sends that command can call it.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MEASUREMENT ================= -->
-  <h2 class="section" id="s-measurement">The reading and its unit conversions <span class="range">lines 62–84</span></h2>
+  <h2 class="section" id="s-measurement">The reading and its unit conversions <span class="range">lines 97–119</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="cm">/// One complete single-shot result.</span>
@@ -649,7 +790,7 @@ flowchart TD
   </div>
 
   <!-- ================= CRC8 ================= -->
-  <h2 class="section" id="s-crc8">The checksum computation <span class="range">lines 86–102</span></h2>
+  <h2 class="section" id="s-crc8">The checksum computation <span class="range">lines 121–137</span></h2>
 
   <figure class="diagram">
     <pre class="mermaid">
@@ -713,7 +854,7 @@ flowchart TD
   </div>
 
   <!-- ================= STRUCT ================= -->
-  <h2 class="section" id="s-struct">The driver value <span class="range">lines 104–111</span></h2>
+  <h2 class="section" id="s-struct">The driver value <span class="range">lines 139–146</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="cm">/// SCD41 attached to an esp-hal I2C bus.
@@ -745,7 +886,7 @@ flowchart TD
   </div>
 
   <!-- ================= NEW ================= -->
-  <h2 class="section" id="s-new">Binding the driver to a bus <span class="range">lines 113–126</span></h2>
+  <h2 class="section" id="s-new">Binding the driver to a bus <span class="range">lines 148–160</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code><span class="k">impl</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt; <span class="ty">Scd41</span>&lt;<span class="st">'a</span>, <span class="st">'d</span>, T&gt;
@@ -776,7 +917,7 @@ flowchart TD
   </div>
 
   <!-- ================= SEND COMMAND ================= -->
-  <h2 class="section" id="s-sendcommand">Sending one command <span class="range">lines 127–132</span></h2>
+  <h2 class="section" id="s-sendcommand">Sending one command <span class="range">lines 162–167</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Send a bare 16-bit command and wait for its execution time.</span>
@@ -804,8 +945,51 @@ flowchart TD
     </div>
   </div>
 
+  <!-- ================= READ ONE WORD ================= -->
+  <h2 class="section" id="s-readword">Reading one checked word <span class="range">lines 169–184</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Send a command and read one CRC-checked word back.
+    ///
+    /// The SCD4x requires the write and the read to be separate transactions,
+    /// so this is deliberately not a repeated-start `write_read`.</span>
+    <span class="k">async fn</span> <span class="fn">read_word</span>(&amp;<span class="k">mut</span> <span class="k">self</span>, command: <span class="ty">u16</span>, execution_delay_ms: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u16</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">send_command</span>(command, execution_delay_ms).<span class="k">await</span>?;
+
+        <span class="k">let mut</span> buffer = [<span class="nu">0u8</span>; <span class="nu">3</span>];
+        <span class="k">self</span>.i2c.<span class="fn">read</span>(<span class="k">self</span>.address, &amp;<span class="k">mut</span> buffer)?;
+
+        <span class="k">if</span> <span class="fn">crc8</span>(&amp;buffer[..<span class="nu">2</span>]) != buffer[<span class="nu">2</span>] {
+            <span class="k">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::Crc);
+        }
+
+        <span class="ty">Ok</span>(<span class="ty">u16</span>::<span class="fn">from_be_bytes</span>([buffer[<span class="nu">0</span>], buffer[<span class="nu">1</span>]]))
+    }</code></pre>
+      <div class="explain">
+        <span class="tag alt">Internal building block</span>
+        <p>The single-word counterpart of <code class="inline">read_three_words</code>. Every settings read-out in
+           this file goes through it: the sensor variant, the temperature offset, the altitude, the pressure and
+           the four self-calibration values — eight callers, one exchange each, differing only in the command
+           code they pass in.</p>
+        <p>The steps are the same as for three words, with the counts reduced to one: send the command and wait
+           its execution time, read exactly three bytes, recompute the check byte from the first two, compare it
+           with the third, and combine the two data bytes into a 16-bit number, most significant byte first.</p>
+        <p><strong>The verification is not optional here either.</strong> A mismatch returns
+           <code class="inline">Error::Crc</code> and no value at all. A settings word that arrived corrupted
+           would otherwise be printed as fact at start-up, which is exactly the kind of quiet wrong answer the
+           check byte exists to prevent.</p>
+        <p>The comment repeats the protocol requirement recorded on the three-word function, because this function
+           is read on its own as often as that one: the command and its answer must be two separate exchanges,
+           never a combined write-then-read.</p>
+        <p>Returning a plain number rather than an interpreted value is deliberate. What the word means — metres,
+           hectopascals, hours, a yes-or-no answer, a type number in the top four bits — is decided by the
+           read-out that called it, each of which applies its own conversion.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= READ THREE WORDS ================= -->
-  <h2 class="section" id="s-readwords">Reading three checked words <span class="range">lines 134–156</span></h2>
+  <h2 class="section" id="s-readwords">Reading three checked words <span class="range">lines 186–208</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Send a command and read three CRC-checked words back.
@@ -823,8 +1007,9 @@ flowchart TD
         <span class="k">self</span>.i2c.<span class="fn">read</span>(<span class="k">self</span>.address, &amp;<span class="k">mut</span> buffer)?;</code></pre>
       <div class="explain">
         <span class="tag alt">Internal building block</span>
-        <p>Both commands that return data — the serial number and the measurement — use this function. Only the
-           command code differs.</p>
+        <p>Both commands that return three words at once — the serial number and the measurement — use this
+           function. Only the command code differs. Everything else the sensor reports is a single word and goes
+           through <code class="inline">read_word</code> instead.</p>
         <p><strong>The comment records a protocol requirement, not a preference.</strong> The usual efficient
            approach is a combined write-then-read, which keeps hold of the bus between the two halves using a
            repeated START. The SCD4x does not accept that; the command must be a finished exchange, ending in a
@@ -868,7 +1053,7 @@ flowchart TD
   </div>
 
   <!-- ================= MODE COMMANDS ================= -->
-  <h2 class="section" id="s-mode">Mode commands <span class="range">lines 158–185</span></h2>
+  <h2 class="section" id="s-mode">Mode commands <span class="range">lines 210–236</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Bring the sensor into idle mode so that single-shot commands are accepted.
@@ -942,7 +1127,7 @@ flowchart TD
   </div>
 
   <!-- ================= SERIAL ================= -->
-  <h2 class="section" id="s-serial">The serial number <span class="range">lines 186–192</span></h2>
+  <h2 class="section" id="s-serial">The serial number <span class="range">lines 238–244</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Read the 48-bit unique serial number; useful as a presence check.</span>
@@ -968,8 +1153,229 @@ flowchart TD
     </div>
   </div>
 
+  <!-- ================= CONFIGURATION ================= -->
+  <h2 class="section" id="s-config">The configuration read-outs <span class="range">lines 246–334</span></h2>
+
+  <figure class="diagram">
+    <pre class="mermaid">
+flowchart TD
+  A["A settings read-out is called"] --> B["read_word(command, 1 ms)"]
+  B --> C{"Did the exchange succeed<br/>and the check byte match?"}
+  C -- no --> E["Return the error;<br/>no value is produced"]
+  C -- yes --> D["One 16-bit word"]
+  D --> V["Variant: keep bits 15..12,<br/>name the four known patterns"]
+  D --> T["Temperature offset:<br/>175 × raw / 65535 → °C"]
+  D --> AL["Altitude: the word is metres"]
+  D --> P["Pressure: raw × 100 → Pa"]
+  D --> AE["Self-calibration on/off:<br/>compare against zero"]
+  D --> AT["Target: the word is ppm"]
+  D --> AP["Periods: the word is hours"]
+  </pre>
+    <figcaption>All eight read-outs share one exchange and one verification; they differ only in the command code sent and the meaning given to the word that comes back.</figcaption>
+  </figure>
+
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read which SCD4x variant is attached. The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">sensor_variant</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">SensorVariant</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> raw = <span class="k">self</span>
+            .<span class="fn">read_word</span>(<span class="ty">CMD_GET_SENSOR_VARIANT</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>?;
+        <span class="ty">Ok</span>(<span class="ty">SensorVariant</span>::<span class="fn">from_raw</span>(raw))
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Asks the sensor which member of the family it is, and hands the word to the decoder described above.</p>
+        <p>This complements the serial number rather than repeating it. The serial number proves that
+           <em>something</em> is answering correctly at address <code class="inline">0x62</code>; the variant
+           states <em>what</em> is answering. A board fitted with an SCD40 by mistake passes the serial-number
+           check without complaint and then reports carbon dioxide outside the range it is specified for. That
+           substitution is visible here and nowhere else.</p>
+        <p>The comment records the precondition: the sensor must be idle. That is guaranteed by the order the task
+           uses, which sends <code class="inline">stop_periodic_measurement</code> before any read-out.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the configured temperature offset in degrees Celsius.
+    ///
+    /// The raw word is converted with `175 * raw / 2^16`. The offset is only
+    /// applied to the reported temperature and humidity, not to CO2.
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">temperature_offset_celsius</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">f32</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> raw = <span class="k">self</span>
+            .<span class="fn">read_word</span>(<span class="ty">CMD_GET_TEMPERATURE_OFFSET</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>?;
+        <span class="ty">Ok</span>(<span class="nu">175.0</span> * (raw <span class="k">as</span> <span class="ty">f32</span>) / <span class="nu">65535.0</span>)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reports how much the sensor subtracts from its own temperature reading before reporting it.</p>
+        <p><strong>Why an offset exists at all.</strong> The sensor sits on a board that produces heat: the
+           processor, the radio and the sensor's own gas measurement all warm the air immediately around it, so
+           the temperature it measures is higher than the room's. The offset is the correction for that
+           self-heating, and it depends on the board, not on the sensor. The factory value is 4 °C.</p>
+        <p><strong>The conversion is the temperature formula without the shift.</strong> A temperature reading
+           uses <code class="inline">-45 + 175 × raw / 65535</code>; an offset is a difference between two
+           temperatures, so the −45 does not apply and only the scale factor remains. Writing the shift in here
+           would report a 4 °C offset as −41 °C.</p>
+        <p><strong>The second sentence of the comment is the one that matters when reading the data.</strong> The
+           offset changes the temperature and humidity the sensor reports; it does not change the carbon dioxide
+           value. A wrong offset therefore produces temperatures that are consistently too high or too low while
+           the carbon dioxide readings remain correct.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the configured sensor altitude in metres above sea level.
+    ///
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">sensor_altitude_meters</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u16</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">read_word</span>(<span class="ty">CMD_GET_SENSOR_ALTITUDE</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reports the height above sea level the sensor has been told it is operating at. The factory value is
+           0 m.</p>
+        <p><strong>Why the sensor needs this.</strong> It measures carbon dioxide by how much infrared light the
+           air absorbs, and that depends on how many molecules the light passes through — which depends on the
+           air pressure. Air pressure falls with height, so a sensor told the wrong altitude reports the wrong
+           concentration. The datasheet gives roughly 3 % of error for every 100 m.</p>
+        <p>No conversion is applied. The word is already the number of metres, so the function is a direct
+           forwarding of <code class="inline">read_word</code> with no arithmetic and no reshaping — which is
+           why it has no <code class="inline">Ok(...)</code> line: the result of the inner call is already exactly
+           what this function returns.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the ambient pressure used for CO2 compensation, in pascals.
+    ///
+    /// The sensor stores the pressure in hectopascals, so the returned value
+    /// is the raw word multiplied by 100.</span>
+    <span class="k">pub async fn</span> <span class="fn">ambient_pressure_pascals</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u32</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> raw = <span class="k">self</span>
+            .<span class="fn">read_word</span>(<span class="ty">CMD_GET_AMBIENT_PRESSURE</span>, <span class="ty">SHORT_COMMAND_DELAY_MS</span>)
+            .<span class="k">await</span>?;
+        <span class="ty">Ok</span>(raw <span class="k">as</span> <span class="ty">u32</span> * <span class="nu">100</span>)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reports the air pressure the sensor is using for the same correction as the altitude. Ordinary sea-level
+           pressure is 101325 Pa, which the sensor stores as 1013.</p>
+        <p><strong>Pressure and altitude are two ways of stating the same correction.</strong> Setting a pressure
+           takes precedence over the stored altitude, because a measured pressure is more accurate than one
+           estimated from height. This firmware sets neither, so the sensor uses whatever it holds.</p>
+        <p><strong>The multiplication is why the result is a 32-bit number.</strong> The sensor's own unit is the
+           hectopascal, one hundred pascals. Ordinary pressures multiplied by 100 exceed the 65535 a 16-bit number
+           can hold, so the value is widened before the multiplication rather than after it. Multiplying first
+           would overflow and produce a small wrong number instead of a large correct one.</p>
+        <p>Pascals were chosen over hectopascals for the returned value because it is the unit that needs no
+           further explanation at the point it is printed.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read whether automatic self-calibration (ASC) is enabled.
+    ///
+    /// The sensor returns 1 when ASC is active and 0 when it is off.
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">automatic_self_calibration_enabled</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">bool</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">let</span> raw = <span class="k">self</span>
+            .<span class="fn">read_word</span>(
+                <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_ENABLED</span>,
+                <span class="ty">SHORT_COMMAND_DELAY_MS</span>,
+            )
+            .<span class="k">await</span>?;
+        <span class="ty">Ok</span>(raw != <span class="nu">0</span>)
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reports whether the sensor corrects its own drift over time. It is enabled at the factory.</p>
+        <p><strong>What automatic self-calibration does.</strong> The sensor remembers the lowest carbon dioxide
+           concentration it has seen over a long period and assumes that this minimum was fresh outdoor air. It
+           then adjusts itself so that this minimum reads as the target value. The assumption holds for a room
+           that is aired regularly and fails for one that never is; in a permanently occupied space with no
+           ventilation, self-calibration will gradually shift every reading downwards.</p>
+        <p>Knowing whether it is on is therefore necessary to interpret a long series of readings, which is why
+           the value is printed at start-up.</p>
+        <p><code class="inline">raw != 0</code> converts the word into a yes-or-no answer. The datasheet defines
+           only 1 and 0, and treating anything non-zero as enabled matches how the sensor itself behaves.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the CO2 concentration in ppm that ASC assumes for fresh air.
+    ///
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">automatic_self_calibration_target_ppm</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u16</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">read_word</span>(
+            <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_TARGET</span>,
+            <span class="ty">SHORT_COMMAND_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>Reports the value the self-calibration treats as fresh air. The factory value is 400 ppm.</p>
+        <p>This number is the anchor the whole correction is built on: whatever minimum the sensor observes is
+           forced to equal it. If the target does not match the actual outdoor concentration where the device is
+           used, every reading is shifted by the difference. Printing it makes that offset visible rather than
+           hidden inside the sensor.</p>
+        <p>The word is already in parts per million, so no conversion is applied.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="cm">/// Read the ASC initial period in hours.
+    ///
+    /// This is the operating time after a reset before the first automatic
+    /// self-calibration is applied; it is always a multiple of 4 hours.
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">automatic_self_calibration_initial_period_hours</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u16</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">read_word</span>(
+            <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_INITIAL_PERIOD</span>,
+            <span class="ty">SHORT_COMMAND_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>
+    }
+
+    <span class="cm">/// Read the ASC standard period in hours.
+    ///
+    /// This is the operating time between two automatic self-calibrations
+    /// after the initial period; it is always a multiple of 4 hours.
+    /// The sensor must be idle.</span>
+    <span class="k">pub async fn</span> <span class="fn">automatic_self_calibration_standard_period_hours</span>(&amp;<span class="k">mut</span> <span class="k">self</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">u16</span>, <span class="ty">Error</span>&gt; {
+        <span class="k">self</span>.<span class="fn">read_word</span>(
+            <span class="ty">CMD_GET_AUTOMATIC_SELF_CALIBRATION_STANDARD_PERIOD</span>,
+            <span class="ty">SHORT_COMMAND_DELAY_MS</span>,
+        )
+        .<span class="k">await</span>
+    }</code></pre>
+      <div class="explain">
+        <span class="tag ext">Called by the task at start-up</span>
+        <p>The two timings of the self-calibration, both in hours of operation. The factory values are 44 hours
+           for the first correction and 156 hours between the ones that follow.</p>
+        <table>
+          <tr><th>Period</th><th>Meaning</th><th>Factory value</th></tr>
+          <tr><td>Initial</td><td>Operating time after a reset before the first correction is applied</td><td>44 h</td></tr>
+          <tr><td>Standard</td><td>Operating time between corrections after the first</td><td>156 h</td></tr>
+        </table>
+        <p><strong>These are hours the sensor has been running, not hours on a clock.</strong> A device that is
+           switched off overnight accumulates the time more slowly than one left running, so the first correction
+           may arrive days after installation.</p>
+        <p>Both are always multiples of four, because the sensor works in blocks of four hours internally. A value
+           that is not a multiple of four indicates a corrupted word rather than an unusual setting.</p>
+        <p>The two functions are written identically and differ only in the command code. They are shown together
+           for that reason: there is nothing to distinguish them beyond which of the two periods is being asked
+           for.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= READ MEASUREMENT ================= -->
-  <h2 class="section" id="s-read">Collecting a finished conversion <span class="range">lines 194–205</span></h2>
+  <h2 class="section" id="s-read">Collecting a finished conversion <span class="range">lines 336–347</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Read the result of a conversion that has already completed.</span>
@@ -1003,7 +1409,7 @@ flowchart TD
   </div>
 
   <!-- ================= SINGLE SHOT ================= -->
-  <h2 class="section" id="s-single">The single-shot commands <span class="range">lines 207–237</span></h2>
+  <h2 class="section" id="s-single">The single-shot commands <span class="range">lines 349–381</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Start an on-demand CO2 + RH/T conversion without waiting for its result.
@@ -1102,6 +1508,12 @@ flowchart TD
           <td>Resolved by <code>stop_periodic_measurement</code>, which the task sends before anything else.</td></tr>
       <tr><td>The sensor is asleep</td><td><code>wake_up</code> reports failure even when it succeeded</td>
           <td>Not encountered: this firmware never puts the sensor to sleep.</td></tr>
+      <tr><td>A settings read-out fails, or its check byte does not match</td><td><code>Error::Bus</code> or <code>Error::Crc</code></td>
+          <td>The start-up sequence stops at the first failing read-out and is retried a second later. No
+              measurement is started until every check has passed once.</td></tr>
+      <tr><td>The attached part is an SCD40 or SCD43 rather than an SCD41</td><td>A valid <code>SensorVariant</code>, reported as success</td>
+          <td>The task prints a warning and continues. This is a fitting mistake, not a fault, and the sensor still
+              answers every command used here.</td></tr>
     </table>
     <div class="note">The task's response to every error is the same: print it, wait one second, and repeat the
       initialisation. Because the driver holds no state, that recovery is complete — there is nothing left over
@@ -1125,6 +1537,12 @@ flowchart TD
       <tr><td>Repeated START</td><td>Joining a write and a read into one exchange. Not permitted by this sensor.</td></tr>
       <tr><td>Yield</td><td>Suspending the current task so others may run, instead of occupying the processor while waiting.</td></tr>
       <tr><td>RH/T</td><td>Relative humidity and temperature, the two quantities measured without the gas sensor.</td></tr>
+      <tr><td>Sensor variant</td><td>Which member of the SCD4x family a part is: SCD40, SCD41 or SCD43. They are indistinguishable on the bus except by asking.</td></tr>
+      <tr><td>Temperature offset</td><td>The amount the sensor subtracts from its own temperature reading to compensate for heat produced by the board around it. Affects temperature and humidity, never carbon dioxide.</td></tr>
+      <tr><td>Ambient pressure</td><td>The air pressure the sensor assumes when converting absorbed light into a concentration. Stated in hectopascals by the sensor, in pascals by this driver.</td></tr>
+      <tr><td>Hectopascal</td><td>One hundred pascals. Ordinary sea-level air pressure is 1013 hPa, or 101325 Pa.</td></tr>
+      <tr><td>ASC</td><td>Automatic self-calibration. The sensor assumes the lowest concentration it has seen over many hours was fresh air, and adjusts itself so that this minimum reads as the target value.</td></tr>
+      <tr><td>Operating time</td><td>Hours during which the sensor has actually been powered and measuring. The self-calibration periods are counted in these, not in elapsed clock time.</td></tr>
     </table>
   </div>
 
