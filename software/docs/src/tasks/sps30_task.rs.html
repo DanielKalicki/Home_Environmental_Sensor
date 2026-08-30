@@ -4,14 +4,14 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sps30_task.rs — Home Environmental Sensor</title>
 <style>
-:root{--bg:#ffffff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--muted:#57606a;--accent:#0969da;--accent-2:#116329;--warn:#9a6700;--k:#cf222e;--ty:#6639ba;--st:#032f62;--cm:#6a737d;--mc:#005cc5;--at:#bc4c00;--fn:#116329;--radius:12px}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6}code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace}header.top{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);border-bottom:1px solid var(--border);padding:22px 40px 16px}.eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2);margin-bottom:6px}h1{margin:0 0 6px;font-size:25px;letter-spacing:-.01em}header.top p.sub{margin:0 0 12px;color:var(--muted);font-size:14.5px;max-width:1100px}nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px}nav.toc a{font-size:12.5px;color:var(--accent);text-decoration:none}nav.toc a:hover{text-decoration:underline}.wrap{width:100%;margin:0;padding:0 40px 90px}.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px;margin:28px 0}.card h2{margin-top:0;font-size:19px}.card h3{font-size:15px;margin:20px 0 6px}.card p{font-size:15px}.card ul,.card ol{margin:10px 0 0;padding-left:20px;font-size:14.5px}.card li{margin-bottom:6px}code.inline{background:#eef1f4;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:13px;color:var(--mc)}h2.section{margin:46px 0 0;padding:10px 0 8px;font-size:20px;border-bottom:2px solid var(--border)}h2.section .range{font-size:12.5px;color:var(--muted);font-weight:500;margin-left:10px}.lines{margin-top:8px}.line{display:flex;align-items:flex-start;gap:30px;padding:18px 6px;border-radius:10px;border-top:1px solid #eaeef2}.line:hover{background:rgba(9,105,218,.04)}.code{flex:1 1 0;min-width:280px;margin:0;padding:10px 0;white-space:pre;overflow-x:auto;font-size:13.2px;background:transparent}.explain{flex:1.15 1 0;min-width:280px;padding-top:4px;font-size:14.5px}.explain p{margin:0 0 9px}.explain p:last-child{margin-bottom:0}.explain ul{margin:0 0 9px;padding-left:20px}.explain li{margin-bottom:4px}.tag{display:inline-block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#fff;background:var(--accent-2);padding:3px 9px;border-radius:999px;margin-bottom:8px}.tag.alt{background:var(--accent)}.tag.ext{background:var(--warn)}.note{border-left:3px solid var(--accent);background:#f2f7fd;padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 0;font-size:13.8px}.note.warn{border-left-color:var(--warn);background:#fdf7ec}table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13.6px}th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top}th{background:#eef1f4}td code{font-size:12.6px}.diagram{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;overflow-x:auto}.diagram figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}.k{color:var(--k)}.ty{color:var(--ty)}.st{color:var(--st)}.cm{color:var(--cm);font-style:italic}.mc{color:var(--mc)}.at{color:var(--at)}.fn{color:var(--fn)}.nu{color:var(--ty)}footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 0 10px}@media(max-width:1000px){.line{flex-direction:column;gap:8px}.code{flex:none;width:100%}.explain{flex:none;width:100%;padding-top:0}}
+:root{--bg:#ffffff;--surface:#f6f8fa;--border:#d0d7de;--text:#1f2328;--muted:#57606a;--accent:#0969da;--accent-2:#116329;--warn:#9a6700;--k:#cf222e;--ty:#6639ba;--st:#032f62;--cm:#6a737d;--mc:#005cc5;--at:#bc4c00;--fn:#116329;--radius:12px}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.6}code,pre,.mono{font-family:"Cascadia Code","Fira Code",ui-monospace,SFMono-Regular,Consolas,Menlo,monospace}header.top{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#ffffff 0%,#f6f8fa 55%,#ffffff 100%);border-bottom:1px solid var(--border);padding:22px 40px 16px}.eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-2);margin-bottom:6px}h1{margin:0 0 6px;font-size:25px;letter-spacing:-.01em}header.top p.sub{margin:0 0 12px;color:var(--muted);font-size:14.5px;max-width:1100px}nav.toc{display:flex;flex-wrap:wrap;gap:6px 16px}nav.toc a{font-size:12.5px;color:var(--accent);text-decoration:none}nav.toc a:hover{text-decoration:underline}.wrap{width:100%;margin:0;padding:0 40px 90px}.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px;margin:28px 0}.card h2{margin-top:0;font-size:19px}.card h3{font-size:15px;margin:20px 0 6px}.card p{font-size:15px}.card ul,.card ol{margin:10px 0 0;padding-left:20px;font-size:14.5px}.card li{margin-bottom:6px}code.inline{background:#eef1f4;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:13px;color:var(--mc)}h2.section{margin:46px 0 0;padding:10px 0 8px;font-size:20px;border-bottom:2px solid var(--border)}h2.section .range{font-size:12.5px;color:var(--muted);font-weight:500;margin-left:10px}.lines{margin-top:8px}.line{display:flex;align-items:flex-start;gap:30px;padding:18px 6px;border-radius:10px;border-top:1px solid #eaeef2}.line:hover{background:rgba(9,105,218,.04)}.code{flex:1 1 0;min-width:280px;margin:0;padding:10px 0;white-space:pre;overflow-x:auto;font-size:13.2px;background:transparent}.explain{flex:1.15 1 0;min-width:280px;padding-top:4px;font-size:14.5px}.explain p{margin:0 0 9px}.explain p:last-child{margin-bottom:0}.explain ul{margin:0 0 9px;padding-left:20px}.explain li{margin-bottom:4px}.tag{display:inline-block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:#fff;background:var(--accent-2);padding:3px 9px;border-radius:999px;margin-bottom:8px}.tag.alt{background:var(--accent)}.tag.ext{background:var(--warn)}pre.block{background:#0d1117;color:#c9d1d9;border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12.8px;line-height:1.55}.note{border-left:3px solid var(--accent);background:#f2f7fd;padding:10px 14px;border-radius:0 8px 8px 0;margin:10px 0 0;font-size:13.8px}.note.warn{border-left-color:var(--warn);background:#fdf7ec}table{border-collapse:collapse;width:100%;margin-top:12px;font-size:13.6px}th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top}th{background:#eef1f4}td code{font-size:12.6px}.diagram{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px;overflow-x:auto}.diagram figcaption{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}.k{color:var(--k)}.ty{color:var(--ty)}.st{color:var(--st)}.cm{color:var(--cm);font-style:italic}.mc{color:var(--mc)}.at{color:var(--at)}.fn{color:var(--fn)}.nu{color:var(--ty)}footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 0 10px}@media(max-width:1000px){.line{flex-direction:column;gap:8px}.code{flex:none;width:100%}.explain{flex:none;width:100%;padding-top:0}}
 </style>
 </head>
 <body>
-<header class="top"><span class="eyebrow">Firmware documentation</span><h1>src/tasks/sps30_task.rs — periodic particulate-matter measurement</h1><p class="sub">This task starts the SPS30 particle sensor’s continuous measurement mode, waits for a fresh sample, reads and validates ten values every five seconds, saves successful results in external-memory history, and safely reinitialises after an error.</p><nav class="toc"><a href="#overview">Overview</a><a href="#interfaces">Dependencies</a><a href="#flow">Flow diagrams</a><a href="#imports">Imports</a><a href="#timing">Timing</a><a href="#ready">read_when_ready</a><a href="#initialise">Initialisation</a><a href="#result">Result handling</a><a href="#driver">SPS30 driver</a><a href="#storage">History storage</a><a href="#failure">Failure behaviour</a><a href="#glossary">Glossary</a></nav></header>
+<header class="top"><span class="eyebrow">Firmware documentation</span><h1>src/tasks/sps30_task.rs — periodic particulate-matter measurement</h1><p class="sub">This task starts the SPS30 particle sensor’s continuous measurement mode, polls for a fresh sample, then reads and validates ten values every five seconds. It shares I²C0 with the eight other sensor tasks and releases the bus between polls, discards the first six readings while the fan and laser settle, saves every later result in external-memory history, and safely reinitialises after an error.</p><nav class="toc"><a href="#overview">Overview</a><a href="#interfaces">Dependencies</a><a href="#flow">Flow diagrams</a><a href="#moduledoc">Module description</a><a href="#imports">Imports</a><a href="#timing">Timing</a><a href="#initialise">initialize</a><a href="#readonce">read_once</a><a href="#task">measure_task</a><a href="#driver">SPS30 driver</a><a href="#storage">History storage</a><a href="#failure">Failure behaviour</a><a href="#glossary">Glossary</a></nav></header>
 <main class="wrap">
-<section class="card" id="overview"><h2>What this file does</h2><p>The Sensirion SPS30 measures airborne particulate matter continuously after it receives a start command. This task starts that mode after boot or recovery, then takes one reading every five seconds. Before each reading, it asks the sensor up to thirty times whether fresh data is ready. Each poll is separated by 100 ms and releases the shared I²C bus while waiting.</p><p>A complete sensor result contains ten floating-point values: four mass concentrations, five particle-number concentrations, and a typical particle size. The task prints all ten values to the USB serial console. It stores the complete result in history, although the web server publishes only the four mass concentrations and the typical particle size.</p><div class="note">The SPS30 produces new values about once per second, while this task samples every five seconds. The task does not try to retrieve the values produced between its scheduled reads; it records the most recently available result at each read.</div></section>
-<section class="card" id="interfaces"><h2>Every component this task depends on</h2><table><tr><th>Component</th><th>Input → operation → output</th></tr><tr><td><code>SharedI2cBus</code></td><td>Owns I²C0, SDA GPIO5, and SCL GPIO6. A mutex gives one sensor task exclusive access. Before every transfer, <code>acquire()</code> restores the bus to idle and builds a new 100 kHz blocking I²C controller.</td></tr><tr><td><code>Sps30</code></td><td>Borrows that controller, sends SPS30 commands, waits for command execution, reads CRC-checked sensor words, and converts the returned big-endian IEEE-754 bit patterns into ten <code>f32</code> values.</td></tr><tr><td><code>Timer</code> and <code>Ticker</code></td><td>Timer waits 100 ms between readiness polls and one second after errors. Ticker maintains fixed five-second read deadlines. These waits yield processor time.</td></tr><tr><td><code>shared_state::publish_sps30()</code></td><td>Receives a successful measurement, adds an uptime timestamp, and appends it to an external-PSRAM ring buffer if startup reserved that buffer.</td></tr><tr><td><code>println!</code></td><td>Writes measurements and errors to USB serial output only.</td></tr></table><p>Startup code creates the bus, reserves history, and starts this task once. This task does not configure GPIO pins, map PSRAM, or create a network service.</p></section>
+<section class="card" id="overview"><h2>What this file does</h2><p>The Sensirion SPS30 measures airborne particulate matter continuously after it receives a start command. This task starts that mode after boot or recovery, then takes one reading every five seconds. Before each reading, it asks the sensor up to thirty times whether fresh data is ready. Each poll is separated by 100 ms and releases the shared I²C bus while waiting.</p><p>A complete sensor result contains ten floating-point values: four mass concentrations, five particle-number concentrations, and a typical particle size. The task prints all ten values to the USB serial console. It stores the complete result in history, although the web server publishes only the four mass concentrations and the typical particle size.</p><div class="note">The SPS30 produces new values about once per second, while this task samples every five seconds. The task does not try to retrieve the values produced between its scheduled reads; it records the most recently available result at each read.</div><div class="note"><code>DISCARDED_WARMUP_READINGS</code> is 6. The first six readings after every initialisation — at boot and after each recovery, so roughly the first thirty seconds — are printed with a <code>(warm-up, discarded)</code> marker and kept out of the history, because the fan and laser need tens of seconds of continuous operation before the optical measurement settles.</div><div class="note">An exhausted readiness-poll window is deliberately <strong>not</strong> an error: the task reads the sensor’s latest values anyway. Only a failed transfer or a bad CRC enters recovery.</div></section>
+<section class="card" id="interfaces"><h2>Every component this task depends on</h2><table><tr><th>Component</th><th>Input → operation → output</th></tr><tr><td><code>SharedI2cBus</code></td><td>Owns I²C0, SDA GPIO5, and SCL GPIO6. A mutex gives one sensor task exclusive access. Before every transfer, <code>acquire()</code> restores the bus to idle and builds a new 100 kHz blocking I²C controller.</td></tr><tr><td><code>Sps30</code></td><td>Borrows that controller, sends SPS30 commands, waits for command execution, reads CRC-checked sensor words, and converts the returned big-endian IEEE-754 bit patterns into ten <code>f32</code> values.</td></tr><tr><td><code>Timer</code> and <code>Ticker</code></td><td>Timer waits 100 ms between readiness polls and one second after errors. Ticker maintains fixed five-second read deadlines. These waits yield processor time.</td></tr><tr><td><code>shared_state::publish_sps30()</code></td><td>Receives a settled measurement, adds an uptime timestamp, and appends it to an external-PSRAM ring buffer if startup reserved that buffer. Warm-up readings never reach it.</td></tr><tr><td><code>println!</code></td><td>Writes measurements and errors to USB serial output only.</td></tr></table><p>Startup code creates the bus, reserves history, and starts this task once, alongside the eight other sensor tasks that share the same bus. This task does not configure GPIO pins, map PSRAM, or create a network service.</p></section>
 <section class="card" id="flow"><h2>Data flow and periodic read process</h2><figure class="diagram"><pre class="mermaid">
 flowchart LR
   S[SPS30 at I²C address 0x69] -->|10 measured values| D[Sps30 driver]
@@ -19,81 +19,623 @@ flowchart LR
   T -->|full Measurement| H[SPS30 history in PSRAM]
   T -->|all 10 values and diagnostics| U[USB serial console]
   H -->|mass values and particle size| W[Web server]
-  C[SCD41 task] <-->|exclusive transfer lock| B[Shared I²C0 mutex]
+  C[Eight other sensor tasks] <-->|exclusive transfer lock| B[Shared I²C0 mutex]
   T <-->|exclusive transfer lock| B
   B --> D
-</pre><figcaption>The two sensor tasks share I²C0, but only one task can use it at a time. The task does not hold the lock between data-ready polls.</figcaption></figure><figure class="diagram"><pre class="mermaid">
+</pre><figcaption>All nine sensor tasks share I²C0, but only one can use it at a time. This task does not hold the lock between data-ready polls, nor while waiting for its next deadline.</figcaption></figure><figure class="diagram"><pre class="mermaid">
 flowchart TD
- A{Needs initialisation?} -->|yes| B[Lock bus; read serial number]
- B --> C[Stop any existing measurement; start continuous measurement]
- C -->|failure| X[Wait 1 s; retry initialisation]
- C -->|success| D[Poll data-ready flag up to 30 times]
- A -->|no| D
+ A{Needs initialisation?} -->|yes| B[initialize: lock bus; read serial number]
+ B --> C[Stop any existing measurement;<br/>start continuous measurement; release bus]
+ C -->|failure| X[Print error; wait 1 s;<br/>retry initialisation]
+ C -->|success| Y[Reset warm-up counter to 6]
+ Y --> D
+ A -->|no| D[read_once: poll data-ready flag,<br/>up to 30 times, 100 ms apart,<br/>releasing the bus between polls]
  D --> E{Ready flag set?}
- E -->|no after 30 polls| F[Read latest values anyway]
+ E -->|no after 30 polls| F[Lock bus; read latest 10 values; release bus]
  E -->|yes| F
- F -->|read failure| X
- F -->|success| G[Timestamp, store, and print values]
- G --> H[Wait until next five-second deadline]
+ F -->|bus or CRC failure| X
+ F -->|success| G{Warm-up counter above zero?}
+ G -->|yes| K[Decrement counter; do not store]
+ G -->|no| L[Timestamp and store in PSRAM history]
+ K --> M[Print all ten values on three lines]
+ L --> M
+ M --> N[If this pass reinitialised, reset the ticker]
+ N --> H[Wait until next five-second deadline]
  H --> A
-</pre><figcaption>The no-ready branch is intentional: after a three-second polling window, the task performs the read so that a missing ready flag does not prevent all future samples.</figcaption></figure></section>
+</pre><figcaption>The no-ready branch is intentional: after a three-second polling window, the task performs the read anyway, so that a missing ready flag does not suppress every future sample. Only a bus or CRC error reaches the recovery path.</figcaption></figure></section>
 
-<h2 class="section" id="imports">Imports <span class="range">lines 1–8</span></h2><div class="lines"><div class="line"><pre class="code"><code><span class="k">use</span> embassy_time::{<span class="ty">Duration</span>, <span class="ty">Ticker</span>, <span class="ty">Timer</span>};
-<span class="k">use</span> esp_println::println;
-<span class="k">use crate</span>::drivers::i2c_bus::<span class="ty">SharedI2cBus</span>;
-<span class="k">use crate</span>::drivers::sps30::{<span class="ty">Error</span>, <span class="ty">Measurement</span>, <span class="ty">Sps30</span>};
-<span class="k">use crate</span>::utils::shared_state;</code></pre><div class="explain"><span class="tag">Dependencies</span><p><code>Measurement</code> is the ten-value result structure. <code>Error</code> distinguishes a failed I²C transfer from a CRC mismatch. <code>Sps30</code> is the protocol driver, and <code>SharedI2cBus</code> prevents the SPS30 and SCD41 transfers from overlapping.</p><p>The task itself does not allocate memory. Its temporary driver and I²C controller exist only while their local scope holds the bus mutex.</p></div></div></div>
+<h2 class="section" id="moduledoc">Module description <span class="range">line 1</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="cm">//! Periodic SPS30 particulate-matter read-out.</span></code></pre>
+    <div class="explain"><span class="tag alt">Module documentation comment</span>
+      <p><code class="inline">//!</code> documents the file that contains it, not the item below it. One sentence covering the whole module: what is read, and how often.</p>
+      <p>“Periodic” is the operative word. The SPS30 measures <em>continuously</em> once started; it is this task’s read-out that is periodic. The distinction shapes the whole file — there is no per-reading start command, only a poll for freshness followed by a read.</p>
+    </div>
+  </div>
+</div>
 
-<h2 class="section" id="timing">Timing limits <span class="range">lines 10–16</span></h2><div class="lines"><div class="line"><pre class="code"><code><span class="k">pub const</span> <span class="ty">MEASUREMENT_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">5000</span>;
-<span class="k">const</span> <span class="ty">ERROR_RETRY_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">1000</span>;
-<span class="k">const</span> <span class="ty">DATA_READY_POLL_ATTEMPTS</span>: <span class="ty">usize</span> = <span class="nu">30</span>;
-<span class="k">const</span> <span class="ty">DATA_READY_POLL_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">100</span>;</code></pre><div class="explain"><span class="tag alt">Schedule</span><p>The normal interval is five seconds. A one-day history therefore needs 17,280 entries, which is the capacity reserved for SPS30 readings when PSRAM is available.</p><p>At most thirty data-ready checks are made, separated by 100 ms. The check window is therefore about three seconds, plus the short I²C transfers. This is less than the five-second task interval, leaving time to read and store the result.</p><p>Any failed serial-number, start, readiness, or data-read operation enters recovery. The task waits one second before trying initialisation again.</p></div></div></div>
+<h2 class="section" id="imports">Imports <span class="range">lines 3–8</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_time::{<span class="ty">Duration</span>, <span class="ty">Ticker</span>, <span class="ty">Timer</span>};</code></pre>
+    <div class="explain"><span class="tag">Timing primitives</span>
+      <p>All three are used. <code class="inline">Timer</code> supplies one-shot waits — 100 ms between readiness polls, one second after an error. <code class="inline">Ticker</code> supplies the repeating five-second deadlines. <code class="inline">Duration</code> exists only to construct the <code class="inline">Ticker</code>.</p>
+      <p>Every wait built from these yields the processor to other tasks rather than spinning, which is what allows nine sensor tasks to share one core.</p>
+    </div>
+  </div>
 
-<h2 class="section" id="ready">Waiting for fresh data <span class="range">lines 18–38</span></h2><div class="lines"><div class="line"><pre class="code"><code><span class="k">async fn</span> <span class="fn">read_when_ready</span>(bus: &amp;<span class="st">'static</span> <span class="ty">SharedI2cBus</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {
-    <span class="k">for</span> _ <span class="k">in</span> <span class="nu">0</span>..<span class="ty">DATA_READY_POLL_ATTEMPTS</span> {
-        <span class="k">let</span> ready = { <span class="cm">/* lock, recover bus, ask is_data_ready */</span> };
-        <span class="k">if</span> ready { <span class="k">break</span>; }
-        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">DATA_READY_POLL_DELAY_MS</span>).<span class="k">await</span>;
-    }
-    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
-    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
-    <span class="k">let mut</span> sensor = <span class="ty">Sps30</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);
-    sensor.<span class="fn">read_measured_values</span>().<span class="k">await</span>
-}</code></pre><div class="explain"><span class="tag">Polling</span><p>Every readiness check locks the bus only long enough to recover it and exchange the command. If the flag is not set, the closing brace drops the mutex guard before the 100 ms timer wait. The SCD41 task can therefore use I²C0 between checks.</p><p><code>is_data_ready()</code> sends command <code>0x0202</code> (<code>read_data_ready_flag</code>), waits 5 ms, reads one CRC-protected word, and reports true only when its low byte is <code>0x01</code>.</p><p>No-ready after all thirty attempts is not an error. The function still calls <code>read_measured_values()</code>, which returns the latest sensor values. An actual bus or CRC failure during that read remains an error and triggers recovery.</p></div></div></div>
+  <div class="line">
+<pre class="code"><code><span class="k">use</span> esp_println::println;</code></pre>
+    <div class="explain"><span class="tag ext">Serial console output</span>
+      <p>Writes to the USB serial console. This is the only output path in the file besides the history: nothing here reaches the browser directly.</p>
+      <p>It is imported explicitly because this is a <code class="inline">no_std</code> build — there is no standard prelude to supply a <code class="inline">println!</code>.</p>
+    </div>
+  </div>
 
-<h2 class="section" id="initialise">Initialisation and continuous measurement <span class="range">lines 47–91</span></h2><div class="lines"><div class="line"><pre class="code"><code><span class="k">let</span> reinitialized = needs_init;
-<span class="k">let</span> initialized = {
-    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
-    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
-    <span class="k">let mut</span> sensor = <span class="ty">Sps30</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);
-    <span class="k">let</span> initialized = <span class="k">if</span> needs_init {
-        <span class="k">match</span> sensor.<span class="fn">serial_number</span>().<span class="k">await</span> {
-            <span class="ty">Ok</span>((serial, len)) =&gt; { <span class="cm">/* print serial; stop then start measurement */</span> }
-            <span class="ty">Err</span>(error) =&gt; { <span class="cm">/* print error and return false */</span> }
+  <div class="line">
+<pre class="code"><code><span class="k">use crate</span>::drivers::i2c_bus::<span class="ty">SharedI2cBus</span>;</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus</span>
+      <p>The type alias <code class="inline">Mutex&lt;CriticalSectionRawMutex, I2cBus&gt;</code>. It is the only thing this task is given by <code class="inline">main.rs</code>, and the only way it can reach the hardware.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">use crate</span>::drivers::sps30::{<span class="ty">Error</span>, <span class="ty">Measurement</span>, <span class="ty">Sps30</span>};</code></pre>
+    <div class="explain"><span class="tag">Driver</span>
+      <p>Exactly three items, and all three appear in signatures below: <code class="inline">Sps30</code> is constructed in three places, while <code class="inline">Measurement</code> and <code class="inline">Error</code> are the two halves of the <code class="inline">Result</code> that <code class="inline">read_once</code> returns.</p>
+      <p>Unlike the SCD41 task, no timing constant is imported from the driver. The SPS30 needs no post-command conversion wait on the task side — the driver’s own short delays are all that is required, and they happen inside the driver call.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">use crate</span>::utils::shared_state;</code></pre>
+    <div class="explain"><span class="tag ext">Shared state</span>
+      <p>Imported as a module rather than by item, so the call below reads <code class="inline">shared_state::publish_sps30(…)</code>. The prefix makes the destination obvious at the call site: this is the one line in the file that writes to storage.</p>
+    </div>
+  </div>
+</div>
+
+<h2 class="section" id="timing">Timing and warm-up constants <span class="range">lines 10–27</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="cm">/// Time between scheduled read-out deadlines.</span>
+<span class="k">pub const</span> <span class="ty">MEASUREMENT_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">5000</span>;</code></pre>
+    <div class="explain"><span class="tag">Schedule</span>
+      <p>Five seconds, and the only <code class="inline">pub</code> item in this group. It is public because <code class="inline">shared_state</code> imports it to size the history: <code class="inline">SPS30_CAPACITY = HISTORY_WINDOW_MS / MEASUREMENT_INTERVAL_MS</code> = 86,400,000 / 5,000 = <strong>17,280</strong> entries for one day.</p>
+      <p>Changing this number therefore resizes the ring buffer automatically; the two can never disagree.</p>
+      <p>“Scheduled read-out deadlines”, not “time between readings”: the sensor produces a new result about once per second regardless. This task deliberately samples one in five and ignores the rest.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="cm">/// Idle time before retrying after a bus or sensor error.</span>
+<span class="k">const</span> <span class="ty">ERROR_RETRY_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">1000</span>;</code></pre>
+    <div class="explain"><span class="tag">Error handling</span>
+      <p>One second, used on both failure paths — a failed initialisation and a failed read. Private, because nothing outside this file needs it.</p>
+      <p>Its purpose is to stop a missing sensor from spinning the loop at full speed and monopolising the bus. One second is short enough that a sensor plugged in later is picked up almost immediately.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="cm">/// How many readings are dropped after the measurement is started.
+///
+/// The fan and laser need tens of seconds of continuous operation before the
+/// optical measurement settles, so the readings taken right after the start
+/// command are not representative; at the interval above, six of them cover
+/// roughly the first half minute. Discarded readings are still read and
+/// printed, they are only kept out of the published history, so the settling
+/// period cannot distort the charts. The count restarts after every
+/// re-initialisation, including the one following a bus error. Set to 0 to
+/// publish every reading.</span>
+<span class="k">const</span> <span class="ty">DISCARDED_WARMUP_READINGS</span>: <span class="ty">u32</span> = <span class="nu">6</span>;</code></pre>
+    <div class="explain"><span class="tag">Warm-up discard</span>
+      <p>Ten lines of comment for one line of code, because the number is a judgement rather than a datasheet figure and the reasoning cannot be recovered from the value.</p>
+      <p><strong>Why the SPS30 needs six and the SCD41 needs one.</strong> This sensor draws air past a laser with a fan. Both must reach a steady state before the optical count means anything, which takes tens of seconds — far longer than the SCD41’s single settling conversion. Six readings at five seconds each cover about thirty seconds.</p>
+      <p><strong>Discarded is not the same as unread.</strong> The readings are still fetched and still printed, with a marker; only their entry into the published history is withheld. A silent console therefore always means a broken sensor, never a suppressed one.</p>
+      <p>The comment states two operational facts a reader would otherwise have to derive: the count restarts after <em>every</em> initialisation including error recovery, and setting it to 0 disables the mechanism cleanly.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="cm">/// How long to wait for the sensor to flag a fresh result.</span>
+<span class="k">const</span> <span class="ty">DATA_READY_POLL_ATTEMPTS</span>: <span class="ty">usize</span> = <span class="nu">30</span>;</code></pre>
+    <div class="explain"><span class="tag">Poll budget</span>
+      <p>Thirty attempts. The type is <code class="inline">usize</code> rather than <code class="inline">u64</code> because this value is used as the upper bound of a <code class="inline">for</code> range, not as a millisecond count.</p>
+      <p>The doc comment describes the pair of constants together, but a <code class="inline">///</code> comment attaches only to the item immediately below it, so formally it documents this one alone.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">DATA_READY_POLL_DELAY_MS</span>: <span class="ty">u64</span> = <span class="nu">100</span>;</code></pre>
+    <div class="explain"><span class="tag">Poll spacing</span>
+      <p>100 ms between attempts. Together with the constant above this gives a polling window of 30 × 100 ms = <strong>3 seconds</strong>, which fits inside the five-second interval with time to spare for the read itself.</p>
+      <p>The spacing is set against the sensor’s roughly one-second result rate: a fresh result is normally flagged within the first ten or so polls, so the full window is only ever consumed when something is wrong.</p>
+      <p>Written without a doc comment, immediately below the one that describes both. It is the only constant in the file with no documentation of its own.</p>
+    </div>
+  </div>
+</div>
+
+<h2 class="section" id="initialise">initialize — identify the sensor and start continuous measurement <span class="range">lines 29–62</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="cm">/// Bring the sensor into a known state and verify it responds.
+///
+/// Returns `false` if any check failed, in which case the caller should
+/// retry later.</span></code></pre>
+    <div class="explain"><span class="tag alt">Documentation comment</span>
+      <p>Two facts the signature cannot convey: what a known state <em>is</em> here, and what <code class="inline">false</code> obliges the caller to do.</p>
+      <p><code class="inline">false</code> means "try again later", not "give up". The failure is assumed transient, which is why there is no attempt counter anywhere in this file.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">initialize</span>(bus: &amp;<span class="ty">SharedI2cBus</span>) -&gt; <span class="ty">bool</span> {</code></pre>
+    <div class="explain"><span class="tag alt">Internal helper</span>
+      <p>A plain <code class="inline">&amp;SharedI2cBus</code>, without <code class="inline">'static</code>. This function never suspends while holding the reference across a point where the task could be dropped, so the shorter lifetime suffices. <code class="inline">read_once</code> below does, and needs the stronger bound.</p>
+      <p><strong>Why <code class="inline">bool</code> and not <code class="inline">Result</code>.</strong> The caller does nothing with the error value: every failure leads to the same one-second wait and the same retry. The error is printed here, where it is produced, and then discarded.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · takes the lock</span>
+      <p>Waits until no other task holds I²C0, then takes it. This is a suspension point; the executor runs other tasks while waiting.</p>
+      <p>The guard shadows the parameter name, so <code class="inline">bus</code> means the guard from here on. It is released when the guard is dropped, at the closing brace of the function — so the whole sequence below happens under one lock.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · recovery</span>
+      <p><code class="inline">acquire()</code> bit-bangs nine clock pulses and a STOP condition on GPIO5/GPIO6 to force the wires back to idle, then builds a fresh 100 kHz I²C controller on them.</p>
+      <p>Recovery runs unconditionally, not only after a known failure, because <code class="inline">esp-hal</code> abandons a transfer on a NACK without emitting the closing STOP. A device left mid-byte would still be holding SDA low and would block this transfer too.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> sensor = <span class="ty">Sps30</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);</code></pre>
+    <div class="explain"><span class="tag">Driver</span>
+      <p>Borrows the controller and pairs it with <code class="inline">DEFAULT_ADDRESS = 0x69</code>. The driver holds nothing else — no cached settings, no mode flag — which is why it can be built and discarded around every exchange without losing anything.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let</span> (serial, len) = <span class="k">match</span> sensor.<span class="fn">serial_number</span>().<span class="k">await</span> {
+        <span class="ty">Ok</span>(serial) =&gt; serial,
+        <span class="ty">Err</span>(error) =&gt; {
+            println!(<span class="st">"SPS30: initialisation failed: {:?}"</span>, error);
+            <span class="k">return false</span>;
         }
-    } <span class="k">else</span> { <span class="k">true</span> };
-    initialized
-};</code></pre><div class="explain"><span class="tag">Start state</span><p>At boot and after a failed operation, <code>needs_init</code> is true. The task reads the serial number first to confirm device presence. Command <code>0xD033</code> (<code>read_serial_number</code>) returns a 32-byte NUL-terminated ASCII field. The task uses the reported character count, converts only that prefix to UTF-8, and prints <code>&lt;non-ascii&gt;</code> if it is not valid text.</p><p>The SPS30 rejects the start command while it is already measuring. The task consequently sends command <code>0x0104</code> (<code>stop_measurement</code>) first, ignoring its result because an idle sensor may reject the stop command. It then sends command <code>0x0010</code> (<code>start_measurement</code>) with argument <code>0x0300</code> (big-endian IEEE-754 float output format), and waits 20 ms for each control command.</p><p>The start command immediately starts the fan and continuous measuring. The first values normally appear after about one second; the driver notes that values become stable only after roughly thirty seconds. The task records early values too; it does not discard a warm-up period.</p></div></div></div>
+    };</code></pre>
+    <div class="explain"><span class="tag">Presence check</span>
+      <p>The first exchange, and the one that decides whether a sensor is there at all. <code class="inline">serial_number()</code> sends command <code class="inline">0xD033</code>, waits 5 ms, reads 48 raw bytes, validates sixteen CRC bytes, and returns a <code class="inline">([u8; 32], usize)</code> pair: the full field and the length up to the first NUL.</p>
+      <p>Note the <code class="inline">Ok</code> arm binds the whole tuple as one value named <code class="inline">serial</code> and yields it, which the outer <code class="inline">let</code> then destructures into <code class="inline">(serial, len)</code>. The inner name is shadowed immediately.</p>
+      <p><strong>Why a <code class="inline">match</code> with an early <code class="inline">return</code> rather than <code class="inline">?</code>.</strong> The function returns <code class="inline">bool</code>, not <code class="inline">Result</code>, so <code class="inline">?</code> is not available. The error must be turned into a message and a <code class="inline">false</code> here.</p>
+    </div>
+  </div>
 
-<h2 class="section" id="result">Reading, storing, and scheduling <span class="range">lines 93–143</span></h2><div class="lines"><div class="line"><pre class="code"><code><span class="k">match</span> result {
-    <span class="ty">Some</span>(<span class="ty">Ok</span>(measurement)) =&gt; {
-        needs_init = <span class="k">false</span>;
-        shared_state::<span class="fn">publish_sps30</span>(measurement).<span class="k">await</span>;
-        println!(<span class="st">"PM1.0: {} ug/m3, ..."</span>, ...);
-        println!(<span class="st">"NC0.5: {} #/cm3, ..."</span>, ...);
-        println!(<span class="st">"Typical particle size: {} um"</span>, ...);
+  <div class="line">
+<pre class="code"><code>    <span class="k">let</span> serial = core::str::<span class="fn">from_utf8</span>(&amp;serial[..len]).<span class="fn">unwrap_or</span>(<span class="st">"&lt;non-ascii&gt;"</span>);</code></pre>
+    <div class="explain"><span class="tag">Text conversion</span>
+      <p>Slices the 32-byte array down to the reported length, so the trailing NUL and any padding are excluded, then validates the prefix as UTF-8. The name <code class="inline">serial</code> is deliberately reused: the byte array is no longer needed and is shadowed by the string.</p>
+      <p><code class="inline">unwrap_or("&lt;non-ascii&gt;")</code> substitutes a placeholder instead of panicking. <strong>This matters in a <code class="inline">no_std</code> firmware:</strong> a panic here would halt the whole device because one sensor returned an unexpected byte, and a garbled serial number is not a reason to stop measuring. <code class="inline">core::str</code> is named in full rather than imported, since it is used exactly once.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    println!(<span class="st">"SPS30 found, serial number: {}"</span>, serial);</code></pre>
+    <div class="explain"><span class="tag ext">Serial console output</span>
+      <p>Printed only after a successful, CRC-validated exchange, so the appearance of this line is itself the proof that the sensor is present and answering.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="cm">// The sensor rejects start_measurement while it is already measuring,
+    // so return it to idle first.</span>
+    <span class="k">let</span> _ = sensor.<span class="fn">stop_measurement</span>().<span class="k">await</span>;</code></pre>
+    <div class="explain"><span class="tag">Deliberately ignored result</span>
+      <p>Sends command <code class="inline">0x0104</code> and waits 20 ms. <code class="inline">let _ =</code> discards the <code class="inline">Result</code> and, just as importantly, silences the <code class="inline">must_use</code> warning that would otherwise appear — the discard is explicit and reviewable rather than accidental.</p>
+      <p><strong>The result must be ignored, because both outcomes are acceptable.</strong> If the sensor was measuring (a soft reset of the microcontroller alone leaves it running), the stop succeeds and is needed. If it was already idle, it may reject the command — and that rejection is not a fault.</p>
+      <p>Without this line, a firmware restart without a power cycle would leave the sensor measuring, the following start command would be rejected, and the task would loop in recovery forever against perfectly healthy hardware.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">match</span> sensor.<span class="fn">start_measurement</span>().<span class="k">await</span> {
+        <span class="ty">Ok</span>(()) =&gt; {
+            println!(<span class="st">"SPS30: measurement started"</span>);
+            <span class="k">true</span>
+        }
+        <span class="ty">Err</span>(error) =&gt; {
+            println!(<span class="st">"SPS30: initialisation failed: {:?}"</span>, error);
+            <span class="k">false</span>
+        }
+    }</code></pre>
+    <div class="explain"><span class="tag">Start command</span>
+      <p>Sends command <code class="inline">0x0010</code> with the CRC-protected argument <code class="inline">0x0300</code>, which selects big-endian IEEE-754 float output, then waits 20 ms. The fan and laser start here and run continuously until stopped.</p>
+      <p><strong>This is the structural difference from the SCD41 task.</strong> There, every reading is started by its own command. Here one command starts a continuous mode that keeps producing results on its own, and the read-out loop merely samples it.</p>
+      <p>Both arms print, and the <code class="inline">match</code> is the function's tail expression, so its <code class="inline">true</code> or <code class="inline">false</code> is the return value. The error message text is identical to the one on the serial-number path; the two are distinguished by the error variant it carries, not by the wording.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>}</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · releases the lock</span>
+      <p>Driver, controller and lock guard are dropped here in reverse order of creation. The bus was held for three exchanges plus two 20 ms command delays — well under a tenth of a second — and is free again before the caller does anything else.</p>
+      <div class="note">Unlike the SCD41 task, whose initialisation holds the lock for eleven exchanges and a 500 ms idle-mode delay, this sequence is short enough that holding one lock throughout costs the other eight tasks almost nothing.</div>
+    </div>
+  </div>
+</div>
+
+<h2 class="section" id="readonce">read_once — poll for freshness, then read <span class="range">lines 64–87</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="cm">/// Wait for the sensor to flag a fresh result, then read it.
+///
+/// If no flag appears within the poll window the last values are read anyway;
+/// a genuine bus problem still surfaces as an error from the read itself.</span></code></pre>
+    <div class="explain"><span class="tag alt">Documentation comment</span>
+      <p>The second paragraph documents the single most surprising decision in the file: <strong>exhausting the poll window is not treated as an error.</strong></p>
+      <p>The reasoning is that the flag is an optimisation, not a safety check. The sensor holds its most recent values whether or not it has flagged them as new, so reading anyway yields data that is at worst slightly stale. Treating a missing flag as a failure would instead throw away a working sensor's output and force a pointless re-initialisation.</p>
+      <p>Nothing is hidden by this: a real fault still produces a bus or CRC error from the read on the next line, which <em>is</em> reported.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">async fn</span> <span class="fn">read_once</span>(bus: &amp;<span class="k">'static</span> <span class="ty">SharedI2cBus</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Measurement</span>, <span class="ty">Error</span>&gt; {</code></pre>
+    <div class="explain"><span class="tag alt">Internal helper</span>
+      <p><strong>The <code class="inline">'static</code> is required here, unlike in <code class="inline">initialize</code>.</strong> This function suspends at the poll timer in the middle of its body, so the compiler builds a future that stores the <code class="inline">bus</code> reference across that suspension. A future held by a spawned task must be <code class="inline">'static</code>, so the reference it stores must be too.</p>
+      <p>Returns <code class="inline">Result</code> rather than <code class="inline">bool</code>, because the caller does act on the difference: a success is published and printed, a failure sets the re-initialisation flag.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">for</span> _ <span class="k">in</span> <span class="nu">0</span>..<span class="ty">DATA_READY_POLL_ATTEMPTS</span> {</code></pre>
+    <div class="explain"><span class="tag">Bounded poll loop</span>
+      <p>Thirty iterations at most. The binding is <code class="inline">_</code> because the count is never used — only the number of repetitions matters.</p>
+      <p>A bounded <code class="inline">for</code> rather than a <code class="inline">loop</code> with a manual counter: the upper bound cannot be forgotten, so the function cannot hang waiting for a flag that never arrives.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="k">let</span> ready = {</code></pre>
+    <div class="explain"><span class="tag">Scope</span>
+      <p>A block used as an expression: its value becomes <code class="inline">ready</code>. Its real purpose is to bound the lifetimes of the three values declared inside it, so the lock is dropped at the closing brace on line 75.</p>
+      <p><strong>Without this block the bus would stay locked across the 100 ms timer wait below</strong> — and, over thirty attempts, for the full three seconds. The block is what makes the polling cheap for the other eight tasks.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
+            <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
+            <span class="k">let mut</span> sensor = <span class="ty">Sps30</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus</span>
+      <p>The same three steps as in <code class="inline">initialize</code>, repeated for each poll: take the lock, recover the wires and build a fresh 100 kHz controller, borrow it as a driver at <code class="inline">0x69</code>.</p>
+      <p>They are written out rather than factored into a helper because a helper would have to return the guard, the controller and the driver together — three values that borrow from one another — which Rust cannot express as a plain return type.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            sensor.<span class="fn">is_data_ready</span>().<span class="k">await</span>?</code></pre>
+    <div class="explain"><span class="tag">Readiness check</span>
+      <p>Sends command <code class="inline">0x0202</code>, waits 5 ms, reads one CRC-protected word, and returns <code class="inline">true</code> only when its low data byte is <code class="inline">0x01</code>.</p>
+      <p><strong>The question mark distinguishes the two kinds of "not ready".</strong> A valid answer of <em>no</em> yields <code class="inline">Ok(false)</code> and the loop continues; a failed transfer or bad CRC returns from the whole function immediately. The polling window is a budget for the sensor being slow, never for the bus being broken.</p>
+      <p>No semicolon: this is the block's tail expression, so its <code class="inline">bool</code> becomes <code class="inline">ready</code>.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        };</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · releases the lock</span>
+      <p>Driver, controller and guard are dropped here. The semicolon is required because this brace ends a <code class="inline">let</code> statement, not a bare block.</p>
+      <p>The lock was held for one short command-and-read exchange, a few milliseconds at 100 kHz.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="k">if</span> ready {
+            <span class="k">break</span>;
+        }</code></pre>
+    <div class="explain"><span class="tag">Early exit</span>
+      <p>Leaves the loop as soon as the sensor reports fresh data, which normally happens within the first few attempts. The <code class="inline">break</code> is placed after the lock has already been released, so the common path costs one exchange and no waiting at all.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">DATA_READY_POLL_DELAY_MS</span>).<span class="k">await</span>;</code></pre>
+    <div class="explain"><span class="tag">Poll spacing</span>
+      <p>Reached only when the answer was a valid "not ready". The executor runs every other task during these 100 ms, and the bus is unlocked throughout.</p>
+      <p>It sits after the <code class="inline">break</code> rather than at the top of the loop, so a sensor that is ready on the first attempt is never delayed.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    }</code></pre>
+    <div class="explain"><span class="tag">End of the poll loop</span>
+      <p>Execution arrives here either from the <code class="inline">break</code> — fresh data flagged — or by exhausting all thirty attempts. <strong>The two cases are deliberately not distinguished</strong>; both fall through to the same read below.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> bus = bus.<span class="fn">lock</span>().<span class="k">await</span>;
+    <span class="k">let mut</span> i2c = bus.<span class="fn">acquire</span>();
+    <span class="k">let mut</span> sensor = <span class="ty">Sps30</span>::<span class="fn">new</span>(&amp;<span class="k">mut</span> i2c);</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · takes it again</span>
+      <p>A final, independent acquisition. Everything built during the polls has been destroyed; this is a new controller after another bus recovery.</p>
+      <p>These three lines are outside any block, so they live until the function's closing brace. Rebuilding is possible only because the driver is stateless and the sensor holds its own values.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    sensor.<span class="fn">read_measured_values</span>().<span class="k">await</span></code></pre>
+    <div class="explain"><span class="tag">The read</span>
+      <p>Sends command <code class="inline">0x0300</code>, waits 5 ms, then reads <strong>60 bytes</strong> in a second transaction: twenty three-byte groups, each two data bytes plus a CRC-8 byte (polynomial <code class="inline">0x31</code>, initial value <code class="inline">0xFF</code>, no reflection, no final XOR). The driver validates all twenty check bytes, strips them to leave 40 data bytes, and reassembles those into ten big-endian four-byte groups converted with <code class="inline">f32::from_bits()</code>.</p>
+      <p>All ten values arrive in this single exchange; there is no per-value command.</p>
+      <p><strong>No semicolon.</strong> This is the tail expression, so the <code class="inline">Result</code> is returned directly — success and failure alike are handed to the caller unchanged.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>}</code></pre>
+    <div class="explain"><span class="tag ext">Shared bus · releases the lock</span>
+      <p>The final lock is released. Across one cycle the bus is taken for one to thirty brief readiness exchanges plus one 60-byte read, and is free during every 100 ms gap in between.</p>
+    </div>
+  </div>
+</div>
+
+<h2 class="section" id="task">measure_task — the task itself <span class="range">lines 89–163</span></h2>
+<div class="lines">
+  <div class="line">
+<pre class="code"><code><span class="cm">/// Periodically read the SPS30 and print the result.
+///
+/// The shared bus is held only for individual transfers. In particular, it is
+/// released between readiness polls and while waiting for the next deadline.</span></code></pre>
+    <div class="explain"><span class="tag alt">Documentation comment</span>
+      <p>States the locking discipline as a property of the whole task rather than of any one function, because it is enforced in three separate places: the block inside <code class="inline">read_once</code>'s poll loop, the end of <code class="inline">initialize</code>, and the fact that both timer waits happen with no guard alive.</p>
+      <p>The two examples given are the two places where getting it wrong would be most expensive — three seconds of polling and five seconds of idling.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>#[embassy_executor::task]</code></pre>
+    <div class="explain"><span class="tag">Attribute macro</span>
+      <p>Rewrites the function below into something the executor can spawn. With no heap, the future's storage is a <code class="inline">static</code> reserved at compile time; the default pool size is one, so <code class="inline">measure_task</code> may be spawned exactly once. A second spawn returns <code class="inline">SpawnError::Busy</code>, which <code class="inline">main.rs</code> would print as <code class="inline">SPAWN FAILED: sps30</code>.</p>
+      <p>The macro is also what forces the <code class="inline">'static</code> bound on the argument: the generated static must not outlive anything it borrows.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code><span class="k">pub async fn</span> <span class="fn">measure_task</span>(bus: &amp;<span class="k">'static</span> <span class="ty">SharedI2cBus</span>) {</code></pre>
+    <div class="explain"><span class="tag">Task entry point</span>
+      <p><code class="inline">pub</code> so <code class="inline">main.rs</code> can name it. It takes only the shared bus: no configuration, no channel, no handle back to the caller. Everything it produces leaves through <code class="inline">shared_state</code> and <code class="inline">println!</code>.</p>
+      <p>The function never returns; the executor drives it forever.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="cm">// Set on every bus error so the next cycle re-runs the sensor's init
+    // sequence instead of assuming it is still in the idle state.</span>
+    <span class="k">let mut</span> needs_init = <span class="k">true</span>;</code></pre>
+    <div class="explain"><span class="tag">Recovery state</span>
+      <p>The first of three pieces of state. <code class="inline">true</code> at boot, so the first pass identifies the sensor and starts continuous measurement.</p>
+      <p><strong>Why the state lives here and not in the driver.</strong> The driver is destroyed and rebuilt around every exchange, so it cannot remember anything. Whether the sensor is measuring or idle is real and persistent, but only the task is long-lived enough to track it — and after a bus error even the task cannot know, so it re-runs the sequence that forces a known state.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="cm">// Counts down the readings still to be dropped, restarted every time the
+    // sensor is initialised.</span>
+    <span class="k">let mut</span> warmup_remaining = <span class="ty">DISCARDED_WARMUP_READINGS</span>;</code></pre>
+    <div class="explain"><span class="tag">Warm-up state</span>
+      <p>The second piece of state, and the counter that implements the discard rule. It starts at 6 and is reset to 6 after every successful initialisation, not only at boot — because a restart puts the fan and laser through the same settling behaviour as a cold start.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">let mut</span> ticker = <span class="ty">Ticker</span>::<span class="fn">every</span>(<span class="ty">Duration</span>::<span class="fn">from_millis</span>(<span class="ty">MEASUREMENT_INTERVAL_MS</span>));</code></pre>
+    <div class="explain"><span class="tag">Schedule state</span>
+      <p>The third piece of state. A <code class="inline">Ticker</code> holds a deadline and advances it by a fixed step each time it is awaited, rather than measuring from the moment of the call. That is what keeps the five-second spacing from drifting as poll counts and transfer durations vary.</p>
+      <p>It is created before the loop so its deadlines survive across iterations. Creating it inside the loop would make every wait a plain five-second delay measured from that point.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>    <span class="k">loop</span> {</code></pre>
+    <div class="explain"><span class="tag">Main loop</span>
+      <p>An infinite loop with no exit condition and no <code class="inline">break</code>. Every path either continues to the next pass or returns to the top via <code class="inline">continue</code>; there is no state in which the task stops trying.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="k">if</span> needs_init {</code></pre>
+    <div class="explain"><span class="tag">Conditional initialisation</span>
+      <p>Skipped entirely once the sensor is measuring, so the steady-state cost of the loop is one poll-and-read cycle and nothing else. Entered on the first pass and after every failure.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            <span class="k">if</span> !<span class="fn">initialize</span>(bus).<span class="k">await</span> {
+                <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>;
+                <span class="k">continue</span>;
+            }</code></pre>
+    <div class="explain"><span class="tag">Retry path</span>
+      <p>On failure: wait one second, then jump back to the top of the loop. <code class="inline">needs_init</code> is deliberately left <code class="inline">true</code>, so the next pass enters this branch again.</p>
+      <p><strong>There is no attempt counter and no give-up state.</strong> A sensor that is absent at boot and connected an hour later is picked up on the next pass. The cost of retrying forever is one bus acquisition per second, which the other tasks can absorb.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            warmup_remaining = <span class="ty">DISCARDED_WARMUP_READINGS</span>;</code></pre>
+    <div class="explain"><span class="tag">Warm-up reset</span>
+      <p>Reached only after a successful initialisation. The counter is restored to 6, so the next thirty seconds of readings are printed but not stored — whether this is the boot sequence or a recovery hours later.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        }</code></pre>
+    <div class="explain"><span class="tag">End of the initialisation branch</span>
+      <p>Execution continues here either because <code class="inline">needs_init</code> was false, or because initialisation has just succeeded. In both cases the sensor is believed to be measuring continuously.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="k">let</span> reinitialized = needs_init;</code></pre>
+    <div class="explain"><span class="tag">Snapshot</span>
+      <p>Records whether <em>this</em> pass performed an initialisation, before <code class="inline">needs_init</code> is cleared further down. Without the copy, the information would be destroyed by line 115 and unavailable where it is needed at line 149.</p>
+      <p>Note it is <code class="inline">let</code>, not <code class="inline">let mut</code>: written once per pass, only read afterwards.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        <span class="k">match</span> <span class="fn">read_once</span>(bus).<span class="k">await</span> {</code></pre>
+    <div class="explain"><span class="tag">One full cycle</span>
+      <p>This single call covers the readiness polling and the 60-byte read — anything from a few milliseconds to just over three seconds. The task is suspended for nearly all of it.</p>
+      <p>Matching on the returned <code class="inline">Result</code> here — rather than using <code class="inline">?</code> — is what allows the task to keep running after a failure instead of ending.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            <span class="ty">Ok</span>(measurement) =&gt; {</code></pre>
+    <div class="explain"><span class="tag">Success arm</span>
+      <p>Binds the <code class="inline">Measurement</code> by value. It is ten <code class="inline">f32</code> fields, forty bytes, and <code class="inline">Copy</code> — so it can be handed to <code class="inline">publish_sps30</code> and still be read afterwards by all three <code class="inline">println!</code> calls.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                needs_init = <span class="k">false</span>;</code></pre>
+    <div class="explain"><span class="tag">Recovery state</span>
+      <p>Cleared only here, on a complete success. A successful read proves the sensor is present, measuring and answering — exactly what initialisation establishes — so repeating it would tell the task nothing new.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                <span class="cm">// Reported either way, but withheld from the history until the
+                // sensor has settled.</span>
+                <span class="k">let</span> settling = warmup_remaining &gt; <span class="nu">0</span>;</code></pre>
+    <div class="explain"><span class="tag">Warm-up decision</span>
+      <p>One boolean, computed once, used three times below: to decide whether to decrement, whether to publish, and what suffix to print. Computing it once rather than re-testing <code class="inline">warmup_remaining &gt; 0</code> avoids the three uses disagreeing after the counter changes.</p>
+      <p>The comment states the rule exactly: the reading is <strong>printed either way</strong>, and only its entry into the stored history is withheld.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                <span class="k">if</span> settling {
+                    warmup_remaining -= <span class="nu">1</span>;
+                } <span class="k">else</span> {
+                    shared_state::<span class="fn">publish_sps30</span>(measurement).<span class="k">await</span>;
+                }</code></pre>
+    <div class="explain"><span class="tag ext">Shared state</span>
+      <p>Exactly one of the two happens. While settling, the counter is decremented and nothing is stored; once it reaches zero, every reading is stored and the counter is untouched until the next initialisation.</p>
+      <p><code class="inline">publish_sps30()</code> locks the history mutex, writes the sample with its uptime timestamp into the ring buffer in PSRAM, advances the write index, and releases the lock. It is <code class="inline">.await</code>ed because of that lock, not because of slow work.</p>
+      <p>The buffer holds <code class="inline">SPS30_CAPACITY</code> = 17,280 slots, which at one reading per five seconds is exactly 24 hours. When full it overwrites the oldest entry. The <strong>complete</strong> ten-value measurement is stored, even though the web server currently exposes only the mass concentrations and the typical particle size.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                println!(
+                    <span class="st">"PM1.0: {} ug/m3, PM2.5: {} ug/m3, PM4.0: {} ug/m3, PM10: {} ug/m3{}"</span>,
+                    measurement.pm1_0,
+                    measurement.pm2_5,
+                    measurement.pm4_0,
+                    measurement.pm10,
+                    <span class="k">if</span> settling { <span class="st">" (warm-up, discarded)"</span> } <span class="k">else</span> { <span class="st">""</span> }
+                );</code></pre>
+    <div class="explain"><span class="tag ext">Serial console output · mass concentrations</span>
+      <p>The four mass concentrations, in micrograms per cubic metre. Each is cumulative, not a band: <code class="inline">pm2_5</code> counts everything up to 2.5 µm including what <code class="inline">pm1_0</code> already counted, so the four values are non-decreasing in a healthy reading.</p>
+      <p>The unit is written <code class="inline">ug/m3</code> rather than µg/m³ because the serial console output is plain ASCII.</p>
+      <p>The trailing <code class="inline">{}</code> takes either the warning suffix or an empty string, so a settled reading prints with no marker and a discarded one is unmistakable:</p>
+      <pre class="block">PM1.0: 3.1 ug/m3, PM2.5: 3.4 ug/m3, PM4.0: 3.6 ug/m3, PM10: 3.7 ug/m3 (warm-up, discarded)
+PM1.0: 2.8 ug/m3, PM2.5: 3.0 ug/m3, PM4.0: 3.1 ug/m3, PM10: 3.1 ug/m3</pre>
+      <p><strong>Discarded readings are printed rather than hidden</strong> so that a silent console unambiguously means the sensor is not answering, never that its output is being suppressed.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                println!(
+                    <span class="st">"NC0.5: {} #/cm3, NC1.0: {} #/cm3, NC2.5: {} #/cm3, NC4.0: {} #/cm3, NC10: {} #/cm3"</span>,
+                    measurement.nc0_5,
+                    measurement.nc1_0,
+                    measurement.nc2_5,
+                    measurement.nc4_0,
+                    measurement.nc10
+                );</code></pre>
+    <div class="explain"><span class="tag ext">Serial console output · number concentrations</span>
+      <p>The five particle counts, in particles per cubic centimetre — a count of particles rather than an estimate of their mass. Like the mass values these are cumulative, and <code class="inline">nc0_5</code> has no mass counterpart.</p>
+      <p><strong>Note there is no warm-up suffix on this line or the next.</strong> The marker appears once per reading, on the first of the three, which is enough to label the group without repeating it. This is also why this <code class="inline">println!</code> has five arguments for five placeholders while the one above has six for six.</p>
+      <p>It is a separate call rather than part of the first purely so that neither line exceeds a comfortable terminal width.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                println!(
+                    <span class="st">"Typical particle size: {} um"</span>,
+                    measurement.typical_particle_size
+                );</code></pre>
+    <div class="explain"><span class="tag ext">Serial console output · particle size</span>
+      <p>The tenth and last value, in micrometres. It is an average size for the particles currently detected, so it is a summary of the distribution rather than another cumulative total — which is why it is printed alone rather than appended to either group above.</p>
+      <p>All ten fields of <code class="inline">Measurement</code> have now been printed, and all ten were stored.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                <span class="cm">// Begin a fresh fixed schedule after recovery; this read-out
+                // becomes the first deadline of the new schedule.</span>
+                <span class="k">if</span> reinitialized {
+                    ticker.<span class="fn">reset</span>();
+                }</code></pre>
+    <div class="explain"><span class="tag">Schedule repair</span>
+      <p>Uses the snapshot taken before <code class="inline">needs_init</code> was cleared, so it fires only on the first successful read after an initialisation.</p>
+      <p><code class="inline">reset()</code> discards the old deadline and restarts the five-second step from this instant. Without it, the ticker would still hold a deadline calculated before the outage; after a minute down, the next await would return immediately and the twelve missed deadlines would produce a burst of back-to-back reads.</p>
+      <p>It is placed <em>after</em> the read rather than after <code class="inline">initialize()</code> so that the new schedule is anchored to a confirmed working read-out.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>                <span class="cm">// `Ticker` advances from its previous deadline instead of from
+                // this call, equivalent to FreeRTOS `vTaskDelayUntil()`.</span>
+                ticker.<span class="fn">next</span>().<span class="k">await</span>;</code></pre>
+    <div class="explain"><span class="tag">Fixed-rate wait</span>
+      <p>Waits until the next five-second deadline, not for a further five seconds. This matters more here than in the SCD41 task because the preceding work varies so much: a cycle may consume a few milliseconds of polling or the full three seconds, and the read-out spacing stays at five seconds either way.</p>
+      <p>The comparison with FreeRTOS <code class="inline">vTaskDelayUntil()</code> is exact: both compute the wake time from a stored previous deadline. The alternative, <code class="inline">Timer::after_millis(5_000)</code>, is the equivalent of <code class="inline">vTaskDelay()</code> and would let the schedule slip further on every pass.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            }</code></pre>
+    <div class="explain"><span class="tag">End of the success arm</span>
+      <p>Closes the <code class="inline">Ok</code> arm. Note the wait happens <em>inside</em> the arm, not after the <code class="inline">match</code> — the two arms wait for different reasons and for different durations.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>            <span class="ty">Err</span>(error) =&gt; {
+                needs_init = <span class="k">true</span>;
+                println!(<span class="st">"SPS30: measurement failed: {:?}, recovering bus"</span>, error);
+                <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>;
+            }</code></pre>
+    <div class="explain"><span class="tag">Failure arm</span>
+      <p>Three actions, in this order. Setting <code class="inline">needs_init</code> makes the next pass re-run the serial-number check and the start command, because after a failed exchange the sensor's mode is unknown — it may have been reset and stopped measuring. The message prints the error variant, <code class="inline">Bus(…)</code> or <code class="inline">Crc</code>, which distinguishes a wiring or acknowledgement problem from corrupted data on an otherwise working link.</p>
+      <p>The one-second wait replaces <code class="inline">ticker.next()</code>: the ticker is deliberately not advanced here, and its stale deadline is dealt with by the <code class="inline">reset()</code> after the next successful read. Nothing is published, so a failure leaves a visible gap in the history rather than a fabricated value.</p>
+      <p>Note this arm is reached by a genuine bus or CRC error only. An exhausted poll window never gets here.</p>
+    </div>
+  </div>
+
+  <div class="line">
+<pre class="code"><code>        }
     }
-    <span class="ty">Some</span>(<span class="ty">Err</span>(error)) =&gt; { needs_init = <span class="k">true</span>; <span class="cm">/* print recovery error */</span> }
-    <span class="ty">None</span> =&gt; needs_init = <span class="k">true</span>,
-}
-<span class="k">if</span> needs_init { <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">ERROR_RETRY_DELAY_MS</span>).<span class="k">await</span>; }
-<span class="k">else</span> { <span class="k">if</span> reinitialized { ticker.<span class="fn">reset</span>(); } ticker.<span class="fn">next</span>().<span class="k">await</span>; }</code></pre><div class="explain"><span class="tag ext">Complete result</span><p>A successful result is timestamped and appended to history. It is also printed in three groups: four mass concentrations in micrograms per cubic metre, five number concentrations in particles per cubic centimetre, and typical particle size in micrometres.</p><p>In the driver, command <code>0x0300</code> (<code>read_measured_values</code>) returns 60 bytes: twenty CRC-protected 16-bit words. The driver removes the 20 CRC bytes, combines the remaining 40 data bytes into ten four-byte groups, and interprets each group as a big-endian IEEE-754 floating-point value.</p><p>After the first successful read following initialisation, <code>ticker.reset()</code> establishes a new schedule. Then <code>ticker.next().await</code> waits until five seconds after that read’s schedule point, rather than waiting a further five seconds after every operation. This prevents small transfer-time variations from accumulating into schedule drift.</p></div></div></div>
+}</code></pre>
+    <div class="explain"><span class="tag">Closing braces</span>
+      <p>In order: the <code class="inline">match</code>, the <code class="inline">loop</code>, and the function. The last is unreachable — the loop has no exit — but the compiler requires it, and it is what gives the function its <code class="inline">()</code> return type in the eyes of the <code class="inline">#[embassy_executor::task]</code> macro.</p>
+    </div>
+  </div>
+</div>
 
 <section class="card" id="driver"><h2>Dependent component: the SPS30 driver</h2><p>The driver is an allocation-free object containing only a borrowed I²C controller and the fixed SPS30 seven-bit address, <code class="inline">0x69</code>. It sends commands as big-endian 16-bit values. Returned two-byte words are followed by CRC-8 bytes using polynomial <code class="inline">0x31</code>, initial value <code class="inline">0xFF</code>, no reflection, and no final XOR.</p><table><tr><th>Task operation</th><th>Protocol action and output</th></tr><tr><td><code>serial_number()</code></td><td>Sends <code>0xD033</code> (<code>read_serial_number</code>), waits 5 ms, checks 16 returned words, and exposes the NUL-terminated ASCII serial text.</td></tr><tr><td><code>stop_measurement()</code></td><td>Sends <code>0x0104</code> (<code>stop_measurement</code>) and waits 20 ms, returning to idle mode.</td></tr><tr><td><code>start_measurement()</code></td><td>Sends <code>0x0010</code> (<code>start_measurement</code>) plus format argument <code>0x0300</code>, then waits 20 ms.</td></tr><tr><td><code>is_data_ready()</code></td><td>Sends <code>0x0202</code> (<code>read_data_ready_flag</code>), waits 5 ms, and checks the returned flag.</td></tr><tr><td><code>read_measured_values()</code></td><td>Sends <code>0x0300</code> (<code>read_measured_values</code>), waits 5 ms, checks CRC for every word, and returns all ten floats.</td></tr></table><div class="note">Each command-and-response read is intentionally two separate I²C transactions, not a repeated-start combined write/read, because that is what the SPS30 protocol requires.</div></section>
 <section class="card"><h2>Complete SPS30 driver reference</h2><p><code class="inline">Sps30&lt;'a, 'd, T&gt;</code> has two fields: <code class="inline">i2c: &amp;'a mut I2C&lt;'d, T, Blocking&gt;</code> and <code class="inline">address: u8</code>. <code class="inline">new()</code> uses <code class="inline">DEFAULT_ADDRESS = 0x69</code>; <code class="inline">with_address()</code> accepts another seven-bit address.</p><table><tr><th>Command constant</th><th>Driver operation and purpose</th></tr><tr><td><code>CMD_START_MEASUREMENT = 0x0010</code></td><td><code>start_measurement()</code>: starts continuous measurement. It sends the CRC-protected argument <code>MEASUREMENT_FORMAT_FLOAT = 0x0300</code>, selecting big-endian IEEE-754 floating-point output.</td></tr><tr><td><code>CMD_STOP_MEASUREMENT = 0x0104</code></td><td><code>stop_measurement()</code>: stops continuous measurement and returns the sensor to idle.</td></tr><tr><td><code>CMD_READ_DATA_READY_FLAG = 0x0202</code></td><td><code>is_data_ready()</code>: reads the fresh-result flag.</td></tr><tr><td><code>CMD_READ_MEASURED_VALUES = 0x0300</code></td><td><code>read_measured_values()</code>: reads the latest ten values.</td></tr><tr><td><code>CMD_SLEEP = 0x1001</code></td><td><code>sleep()</code>: enters sleep mode while idle.</td></tr><tr><td><code>CMD_WAKE_UP = 0x1103</code></td><td><code>wake_up()</code>: leaves sleep. The first write is intentionally ignored because an asleep sensor does not acknowledge; after 5 ms the second write is checked.</td></tr><tr><td><code>CMD_START_FAN_CLEANING = 0x5607</code></td><td><code>start_fan_cleaning()</code>: starts the ten-second maximum-speed fan cleaning routine.</td></tr><tr><td><code>CMD_READ_SERIAL_NUMBER = 0xD033</code></td><td><code>serial_number()</code>: reads the NUL-terminated ASCII serial field.</td></tr><tr><td><code>CMD_DEVICE_RESET = 0xD304</code></td><td><code>device_reset()</code>: resets the sensor to idle mode.</td></tr></table><table><tr><th>Timing or format constant</th><th>Exact use</th></tr><tr><td><code>MEASUREMENT_CONTROL_DELAY_MS</code></td><td>20 ms after start or stop measurement.</td></tr><tr><td><code>RESET_DELAY_MS</code></td><td>100 ms after device reset.</td></tr><tr><td><code>SHORT_COMMAND_DELAY_MS</code></td><td>5 ms after short read, sleep, and wake commands.</td></tr><tr><td><code>SERIAL_NUMBER_LEN</code></td><td>32 bytes, including the terminating NUL byte.</td></tr><tr><td><code>CRC8_POLYNOMIAL</code> / <code>CRC8_INIT</code></td><td><code>0x31</code> and <code>0xFF</code>; no reflection and no final XOR.</td></tr></table><h3>Private helpers and every public method</h3><table><tr><th>Symbol</th><th>Inputs → operation → output</th></tr><tr><td><code>crc8(data)</code></td><td>Starts from <code>0xFF</code>, processes each byte most-significant-bit first, applies polynomial <code>0x31</code> when the high bit is set, and returns one CRC byte.</td></tr><tr><td><code>strip_crc(raw, data)</code></td><td>Consumes each three-byte wire group as two data bytes plus CRC, validates it with <code>crc8()</code>, and copies only data bytes to the output; it returns <code>Error::Crc</code> on the first mismatch.</td></tr><tr><td><code>send_command()</code></td><td>Writes one big-endian 16-bit command, awaits its supplied delay, and returns <code>Ok(())</code> or <code>Error::Bus(I2cError)</code>.</td></tr><tr><td><code>send_command_with_argument()</code></td><td>Writes command bytes, one big-endian 16-bit argument, and a CRC byte for that argument; used by <code>start_measurement()</code>.</td></tr><tr><td><code>read_response()</code></td><td>Sends a command, waits 5 ms, reads the raw CRC-protected response in a separate I²C transaction, then calls <code>strip_crc()</code>.</td></tr><tr><td><code>start_measurement()</code> / <code>stop_measurement()</code></td><td>Start continuous float measurement or return to idle.</td></tr><tr><td><code>device_reset()</code>, <code>start_fan_cleaning()</code>, <code>sleep()</code>, <code>wake_up()</code></td><td>Public maintenance and power-control methods. This task does not call them, but they are available on the driver and behave as specified above.</td></tr><tr><td><code>is_data_ready()</code></td><td>Reads one checked word and returns true only when its low data byte is <code>0x01</code>.</td></tr><tr><td><code>serial_number()</code></td><td>Reads 32 data bytes through 48 raw bytes, finds the first NUL byte, and returns the full array plus the text length.</td></tr><tr><td><code>read_measured_values()</code></td><td>Reads 60 raw bytes, removes twenty CRC bytes to leave 40 data bytes, combines them into ten big-endian four-byte groups, and converts each with <code>f32::from_bits()</code>.</td></tr></table><p><code class="inline">Error::Bus(I2cError)</code> means the I²C transfer failed; <code class="inline">Error::Crc</code> means the reply’s check byte was invalid. <code class="inline">Measurement</code> contains exactly: <code class="inline">pm1_0</code>, <code class="inline">pm2_5</code>, <code class="inline">pm4_0</code>, <code class="inline">pm10</code>, <code class="inline">nc0_5</code>, <code class="inline">nc1_0</code>, <code class="inline">nc2_5</code>, <code class="inline">nc4_0</code>, <code class="inline">nc10</code>, and <code class="inline">typical_particle_size</code>; every field has type <code class="inline">f32</code>.</p></section>
-<section class="card" id="storage"><h2>Complete I²C, shared-state, history, and PSRAM dependencies</h2><h3>Shared I²C0</h3><p><code class="inline">I2cBus</code> owns <code class="inline">i2c0: I2C0</code>, <code class="inline">sda: SdaPin</code>, <code class="inline">scl: SclPin</code>, <code class="inline">clocks: &amp;'static Clocks&lt;'static&gt;</code>, and <code class="inline">delay: Delay</code>. <code class="inline">SdaPin = GpioPin&lt;I2C_SDA_PIN&gt;</code> and <code class="inline">SclPin = GpioPin&lt;I2C_SCL_PIN&gt;</code>, where <code class="inline">I2C_SDA_PIN = 5</code> and <code class="inline">I2C_SCL_PIN = 6</code>. <code class="inline">SharedI2cBus = Mutex&lt;CriticalSectionRawMutex, I2cBus&gt;</code>. Its <code class="inline">acquire()</code> calls <code class="inline">recover_i2c_bus()</code>, then creates a controller at <code class="inline">I2C_FREQUENCY_KHZ = 100</code>. Recovery configures open-drain pins, pulses SCL nine times at five-microsecond half periods, and produces STOP by releasing SDA high while SCL is high.</p><h3>Shared state and history</h3><p><code class="inline">shared_state::init(psram)</code> reserves <code class="inline">SPS30_CAPACITY = 17,280</code> optional samples for one day, because <code class="inline">HISTORY_WINDOW_MS = 86,400,000</code> and this task’s interval is 5,000 ms. It also reserves the SCD41 history. <code class="inline">Sample&lt;T&gt;</code> contains <code class="inline">value</code> and <code class="inline">taken_at: Instant</code>. <code class="inline">HistoryStatus</code> contains <code class="inline">interval_ms</code>, <code class="inline">capacity</code>, <code class="inline">len</code>, <code class="inline">first_sequence</code>, and <code class="inline">next_sequence</code>.</p><p><code class="inline">publish_sps30()</code> briefly locks shared state and pushes <code class="inline">Sample { value: measurement, taken_at: Instant::now() }</code> when the history exists. <code class="inline">publish_scd41()</code> is the corresponding SCD41 operation. <code class="inline">sps30_status()</code> and <code class="inline">scd41_status()</code> copy their status. <code class="inline">sps30_reading(sequence)</code> and <code class="inline">scd41_reading(sequence)</code> copy one retained sample or return <code class="inline">None</code>.</p><p><code class="inline">MeasurementHistory&lt;T&gt;</code> stores the permanent entry slice plus <code class="inline">next</code>, <code class="inline">len</code>, and <code class="inline">pushed</code>. <code class="inline">new()</code> rejects empty storage; <code class="inline">push()</code> writes, wraps the index, caps length, and increments pushed. <code class="inline">capacity()</code>, <code class="inline">len()</code>, <code class="inline">first_sequence()</code>, <code class="inline">next_sequence()</code>, <code class="inline">get()</code>, and private <code class="inline">get_oldest()</code> provide the exact ring-buffer interface. The sequence formula is <code class="inline">first_sequence = pushed − len</code>; it advances when a full buffer overwrites its oldest entry.</p><h3>PSRAM</h3><p><code class="inline">Psram::init()</code> maps external PSRAM before tasks start. <code class="inline">free_bytes()</code> returns remaining mapped capacity. <code class="inline">alloc_slice&lt;T&gt;(len, value)</code> aligns the next address, checks arithmetic and bounds, fills all elements, advances the permanent allocation pointer, and returns a permanent mutable slice; it returns <code class="inline">None</code> when the request does not fit. If history allocation fails, both <code class="inline">publish_*</code> functions drop readings while sensor measurement and serial output continue.</p></section>
+<section class="card" id="storage"><h2>Complete I²C, shared-state, history, and PSRAM dependencies</h2><h3>Shared I²C0</h3><p><code class="inline">I2cBus</code> owns <code class="inline">i2c0: I2C0</code>, <code class="inline">sda: SdaPin</code>, <code class="inline">scl: SclPin</code>, <code class="inline">clocks: &amp;'static Clocks&lt;'static&gt;</code>, and <code class="inline">delay: Delay</code>. <code class="inline">SdaPin = GpioPin&lt;I2C_SDA_PIN&gt;</code> and <code class="inline">SclPin = GpioPin&lt;I2C_SCL_PIN&gt;</code>, where <code class="inline">I2C_SDA_PIN = 5</code> and <code class="inline">I2C_SCL_PIN = 6</code>. <code class="inline">SharedI2cBus = Mutex&lt;CriticalSectionRawMutex, I2cBus&gt;</code>. Its <code class="inline">acquire()</code> calls <code class="inline">recover_i2c_bus()</code>, then creates a controller at <code class="inline">I2C_FREQUENCY_KHZ = 100</code>. Recovery configures open-drain pins, pulses SCL nine times at five-microsecond half periods, and produces STOP by releasing SDA high while SCL is high.</p><h3>Shared state and history</h3><p><code class="inline">shared_state::init(psram)</code> reserves <code class="inline">SPS30_CAPACITY = 17,280</code> optional samples for one day, because <code class="inline">HISTORY_WINDOW_MS = 86,400,000</code> and this task’s interval is 5,000 ms. It reserves one slice per sensor history — eight in total, for the SPS30, SCD41, BME690, AS7343, BMP581, OPT4048, SHT41 and BMM350 — each sized by the same <code class="inline">HISTORY_WINDOW_MS / interval</code> formula using that task’s own <code class="inline">MEASUREMENT_INTERVAL_MS</code>. <code class="inline">Sample&lt;T&gt;</code> contains <code class="inline">value</code> and <code class="inline">taken_at: Instant</code>. <code class="inline">HistoryStatus</code> contains <code class="inline">interval_ms</code>, <code class="inline">capacity</code>, <code class="inline">len</code>, <code class="inline">first_sequence</code>, and <code class="inline">next_sequence</code>.</p><p><code class="inline">publish_sps30()</code> briefly locks shared state and pushes <code class="inline">Sample { value: measurement, taken_at: Instant::now() }</code> when the history exists. <code class="inline">publish_scd41()</code> through <code class="inline">publish_bmm350()</code> are the corresponding operations for the seven other sensors, and all eight share one state mutex. <code class="inline">sps30_status()</code> and its seven counterparts copy their status. <code class="inline">sps30_reading(sequence)</code> and its seven counterparts copy one retained sample or return <code class="inline">None</code>.</p><p><code class="inline">MeasurementHistory&lt;T&gt;</code> stores the permanent entry slice plus <code class="inline">next</code>, <code class="inline">len</code>, and <code class="inline">pushed</code>. <code class="inline">new()</code> rejects empty storage; <code class="inline">push()</code> writes, wraps the index, caps length, and increments pushed. <code class="inline">capacity()</code>, <code class="inline">len()</code>, <code class="inline">first_sequence()</code>, <code class="inline">next_sequence()</code>, <code class="inline">get()</code>, and private <code class="inline">get_oldest()</code> provide the exact ring-buffer interface. The sequence formula is <code class="inline">first_sequence = pushed − len</code>; it advances when a full buffer overwrites its oldest entry.</p><h3>PSRAM</h3><p><code class="inline">Psram::init()</code> maps external PSRAM before tasks start. <code class="inline">free_bytes()</code> returns remaining mapped capacity. <code class="inline">alloc_slice&lt;T&gt;(len, value)</code> aligns the next address, checks arithmetic and bounds, fills all elements, advances the permanent allocation pointer, and returns a permanent mutable slice; it returns <code class="inline">None</code> when the request does not fit. If history allocation fails, every <code class="inline">publish_*</code> function drops readings while sensor measurement and serial output continue.</p></section>
 <section class="card"><h2>Complete I²C startup scan interface</h2><p>Although the SPS30 task does not call it after startup, the same <code class="inline">I2cBus</code> dependency also provides <code class="inline">scan()</code>. Firmware calls it before the bus enters <code class="inline">SharedI2cBus</code>. <code class="inline">scan()</code> calls public <code class="inline">scan_i2c()</code>, which probes every address from <code class="inline">I2C_FIRST_ADDRESS = 0x03</code> through <code class="inline">I2C_LAST_ADDRESS = 0x77</code>.</p><p><code class="inline">I2C_ADDRESS_COUNT</code> and <code class="inline">MAX_I2C_DEVICES</code> both represent the number of addresses in that inclusive range. Every probe uses an empty address-only write, so it does not select a device register. Each address gets <code class="inline">I2C_SCAN_RETRIES = 3</code> attempts, separated by <code class="inline">I2C_SCAN_RETRY_DELAY_MS = 10</code> ms; recovery and controller reconstruction happen before every attempt. <code class="inline">print_scan_progress()</code> displays a <code class="inline">SCAN_PROGRESS_BAR_WIDTH = 30</code>-character serial progress bar using <code class="inline">#</code> for completed segments and <code class="inline">.</code> for remaining segments.</p><p><code class="inline">I2cScanResult</code> stores <code class="inline">addresses: [u8; MAX_I2C_DEVICES]</code> and <code class="inline">count: usize</code>. Its <code class="inline">addresses()</code> method returns the used prefix as <code class="inline">&amp;[u8]</code>. Public <code class="inline">print_scan_result()</code> prints each returned address or prints that no I²C device acknowledged.</p><p><code class="inline">MeasurementHistory&lt;T&gt;</code> stores <code class="inline">next: usize</code>, <code class="inline">len: usize</code>, and <code class="inline">pushed: u64</code> in addition to its permanent entry slice. These exact types allow the ring buffer to use an array index for current position and length while retaining a non-repeating 64-bit sequence count for its entire uptime.</p></section>
-<section class="card" id="failure"><h2>Failure behaviour</h2><table><tr><th>Situation</th><th>Task behaviour</th></tr><tr><td>Sensor absent or I²C transfer fails</td><td>Prints the error, marks the sensor as needing initialisation, waits one second, recovers I²C0, and retries the serial-number and start sequence.</td></tr><tr><td>Returned word has an invalid CRC</td><td>The driver returns <code>Crc</code>; the task prints a measurement failure and performs the same reinitialisation path.</td></tr><tr><td>Fresh-data flag stays false</td><td>After 30 checks, reads the latest available result anyway. This alone does not enter recovery.</td></tr><tr><td>SCD41 currently uses I²C0</td><td>Waits for the shared mutex. Transfers cannot overlap. The mutex is released between SPS30 readiness polls and during timer waits.</td></tr><tr><td>Sensor already measuring during recovery</td><td>The task attempts <code>stop_measurement()</code> before <code>start_measurement()</code>, so the start command is issued from the expected idle state.</td></tr><tr><td>History storage is unavailable</td><td>Measurement and console output continue; only retention and web-history output are absent.</td></tr></table></section>
-<section class="card" id="glossary"><h2>Glossary</h2><table><tr><th>Term</th><th>Meaning in this document</th></tr><tr><td>SPS30</td><td>A Sensirion sensor that continuously measures airborne particle mass, number concentration, and typical particle size.</td></tr><tr><td>Mass concentration</td><td>The estimated mass of particles up to a stated size per cubic metre of air, reported here in micrograms per cubic metre.</td></tr><tr><td>Number concentration</td><td>The estimated number of particles up to a stated size per cubic centimetre of air.</td></tr><tr><td>Data-ready flag</td><td>A sensor value indicating that a new measurement result is available for reading.</td></tr><tr><td>CRC-8</td><td>An eight-bit check value used to detect corrupted sensor words.</td></tr><tr><td>Ticker</td><td>An Embassy time object that provides fixed recurring deadlines.</td></tr></table></section>
+<section class="card" id="failure"><h2>Failure behaviour</h2><table><tr><th>Situation</th><th>Task behaviour</th></tr><tr><td>Sensor absent or I²C transfer fails</td><td>Prints the error, marks the sensor as needing initialisation, waits one second, recovers I²C0, and retries the serial-number and start sequence.</td></tr><tr><td>Returned word has an invalid CRC</td><td>The driver returns <code>Crc</code>; the task prints a measurement failure and performs the same reinitialisation path.</td></tr><tr><td>Fresh-data flag stays false</td><td>After 30 checks, reads the latest available result anyway. This alone does not enter recovery, and the reading is stored and printed like any other.</td></tr><tr><td>Another sensor task currently uses I²C0</td><td>Waits for the shared mutex. Transfers cannot overlap. The mutex is released between SPS30 readiness polls and during every timer wait.</td></tr><tr><td>Sensor already measuring during recovery</td><td>The task attempts <code>stop_measurement()</code> before <code>start_measurement()</code> and ignores its result, so the start command is issued from the expected idle state. Without this, a firmware restart without a power cycle would loop in recovery against healthy hardware.</td></tr><tr><td>First six readings after boot or after any recovery</td><td>Printed with a <code>(warm-up, discarded)</code> marker and not stored. The counter is reset to 6 by every successful initialisation, so about thirty seconds of settling is dropped per recovery, not only at boot.</td></tr><tr><td>Serial number is not valid UTF-8</td><td><code>&lt;non-ascii&gt;</code> is printed in its place and initialisation continues. The text is never parsed, so a garbled serial cannot stop measurement — and <code>unwrap_or</code> avoids a panic that would halt the whole device.</td></tr><tr><td>Sensor fails, then recovers minutes later</td><td>The history contains a gap for the outage; no values are interpolated or repeated. After the first successful read the ticker is reset, so the missed deadlines do not produce a burst of back-to-back reads.</td></tr><tr><td>History storage is unavailable</td><td>Measurement and console output continue; only retention and web-history output are absent.</td></tr></table></section>
+<section class="card" id="glossary"><h2>Glossary</h2><table><tr><th>Term</th><th>Meaning in this document</th></tr><tr><td>SPS30</td><td>A Sensirion sensor that continuously measures airborne particle mass, number concentration, and typical particle size.</td></tr><tr><td>Mass concentration</td><td>The estimated mass of particles up to a stated size per cubic metre of air, reported here in micrograms per cubic metre.</td></tr><tr><td>Number concentration</td><td>The estimated number of particles up to a stated size per cubic centimetre of air.</td></tr><tr><td>Data-ready flag</td><td>A sensor value indicating that a new measurement result is available for reading.</td></tr><tr><td>CRC-8</td><td>An eight-bit check value used to detect corrupted sensor words.</td></tr><tr><td>Ticker</td><td>An Embassy time object that provides fixed recurring deadlines.</td></tr><tr><td>Continuous measurement mode</td><td>The state the SPS30 enters after one start command, in which it keeps producing results by itself until stopped. This is why the task has no per-reading start command, unlike the SCD41 task.</td></tr><tr><td>Warm-up reading</td><td>A reading taken so soon after the fan and laser started that it reflects the sensor settling rather than the air. Here, the first six readings after each initialisation are treated as such.</td></tr><tr><td>Cumulative concentration</td><td>Each PM or NC value counts everything up to its stated size, including the smaller categories. <code>pm10</code> therefore includes <code>pm1_0</code>, and the four mass values are non-decreasing in a healthy reading.</td></tr><tr><td>Tail expression</td><td>The last expression in a Rust block, written without a trailing semicolon, whose value becomes the value of the block. <code>initialize</code>, <code>read_once</code> and the readiness block all return this way.</td></tr><tr><td>Suspension point</td><td>An <code>.await</code> at which a task can be paused so the executor can run another. Any reference held across one must live long enough to survive the pause, which is why <code>read_once</code> requires <code>&amp;'static</code> and <code>initialize</code> does not.</td></tr><tr><td>Task slot</td><td>The compile-time storage that <code>#[embassy_executor::task]</code> reserves for one running copy of a task. The default pool size is one, so a second spawn of the same task fails.</td></tr></table></section>
 <footer>Generated documentation for software/src/tasks/sps30_task.rs — Home Environmental Sensor.</footer>
 </main><script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral",flowchart:{htmlLabels:true}});</script></body></html>

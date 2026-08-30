@@ -40,6 +40,7 @@
     <h2>What this file does</h2>
     <p>This file defines one Embassy task: <code>blink_task</code>. The task receives exclusive control of an already-configured general-purpose output pin, raises the output level for 500 milliseconds, lowers it for 500 milliseconds, and repeats indefinitely.</p>
     <p>The LED is not used to control sensors, Wi-Fi, data storage, or the web server. It is an independent health indicator. If it continues to blink, the Embassy executor is still scheduling this task and the timer service is operating.</p>
+    <p><code class="inline">main.rs</code> spawns this task <strong>first</strong> — before Wi-Fi is started and before any of the nine sensor tasks — precisely so that a hang inside one of those subsystems still leaves a visible signal that the executor itself is alive.</p>
     <div class="note">A blinking LED does <strong>not</strong> prove that every other firmware component is working. For example, an I²C sensor may fail while this task continues normally. It proves only that this task can run and wait on its timer.</div>
   </section>
 
@@ -49,9 +50,9 @@
       <tr><th>Item</th><th>Defined by</th><th>Role in this file</th></tr>
       <tr><td><code>Output&lt;'static, AnyPin&lt;'static&gt;&gt;</code></td><td><code>esp_hal::gpio</code></td><td>An output-pin controller. It is created and configured by <code>main.rs</code>, then moved into this task so no other task can drive the LED pin.</td></tr>
       <tr><td><code>Timer::after_millis()</code></td><td><code>embassy_time</code></td><td>Waits for a specified time without consuming the processor while the task is paused.</td></tr>
-      <tr><td><code>blink_task(led)</code></td><td>This file</td><td>Started once by <code>main.rs</code>. The current board configuration passes GPIO21 as an output whose initial level is low.</td></tr>
+      <tr><td><code>blink_task(led)</code></td><td>This file</td><td>Spawned once by <code>main.rs</code> as <code>spawner.spawn(blink_task::blink_task(led))</code>, wrapped in that file's <code>spawn_task</code> helper so a failure prints <code>SPAWN FAILED: blink</code> instead of being silently discarded. The argument is <code>Output::new(AnyPin::new(io.pins.gpio21), Level::Low)</code>: GPIO21, starting low.</td></tr>
     </table>
-    <p>The task has no return value and no network, storage, or sensor inputs. After it receives the output controller, it owns that controller for the rest of the program run.</p>
+    <p>The task has no return value and no network, storage, or sensor inputs. It does not touch the shared I²C bus, so it can never be delayed by a sensor and can never delay one. After it receives the output controller, it owns that controller for the rest of the program run.</p>
   </section>
 
   <section class="card" id="flow">
@@ -87,35 +88,130 @@ sequenceDiagram
   </section>
 
   <h2 class="section" id="imports">Imports <span class="range">lines 1–2</span></h2>
-  <div class="line">
-    <pre class="code"><code><span class="k">use</span> embassy_time::<span class="ty">Timer</span>;
-  <span class="k">use</span> esp_hal::gpio::{<span class="ty">AnyPin</span>, <span class="ty">Output</span>};</code></pre>
-    <div class="explain"><span class="tag">Dependencies</span><p><code>Timer</code> provides the asynchronous delay used between level changes. The delay is tied to the time service initialized by the firmware entry point.</p><p><code>Output</code> is the type that can drive a pin high or low. <code>AnyPin</code> allows the task to accept an output for any physical GPIO pin, rather than only a pin number fixed in this file.</p><p>Pin selection belongs outside this task. In the current firmware, <code>main.rs</code> selects GPIO21 and creates the <code>Output</code> before spawning this task.</p></div>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> embassy_time::<span class="ty">Timer</span>;</code></pre>
+      <div class="explain"><span class="tag">Dependency</span>
+        <p><code class="inline">Timer</code> is the asynchronous delay type from <code class="inline">embassy_time</code>. It is the only thing this file needs from that crate.</p>
+        <p>It does not measure time itself. It reads the hardware timer that <code class="inline">main.rs</code> installed with <code class="inline">esp_hal_embassy::init(clocks, timers)</code>, which is driven by the first timer of timer group 0. If that initialisation had not happened before this task was spawned, the waits below could not complete.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">use</span> esp_hal::gpio::{<span class="ty">AnyPin</span>, <span class="ty">Output</span>};</code></pre>
+      <div class="explain"><span class="tag">Dependency</span>
+        <p><code class="inline">Output</code> is the type that drives one pin electrically high or low. Owning an <code class="inline">Output</code> is what gives this task the right to change the pin; there is no global "set pin 21" function.</p>
+        <p><code class="inline">AnyPin</code> is the type-erased form of a GPIO pin. Pins normally carry their number in their type, for example <code class="inline">GpioPin&lt;21&gt;</code>, which would fix the LED pin inside this file. <code class="inline">AnyPin</code> moves that choice out to the caller, so the same task can blink any pin.</p>
+        <p>Both names appear only in the task's parameter type. Neither is constructed here; <code class="inline">main.rs</code> builds the value and hands it over.</p>
+      </div>
+    </div>
   </div>
 
   <h2 class="section" id="constant">Blink timing <span class="range">lines 4–5</span></h2>
-  <div class="line">
-    <pre class="code"><code><span class="cm">/// Half period of the liveness blink.</span>
-  <span class="k">const</span> <span class="ty">LED_BLINK_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">500</span>;</code></pre>
-    <div class="explain"><span class="tag alt">Configuration</span><p>This constant is the duration of each visible state: high for 500 milliseconds, then low for 500 milliseconds.</p><p>A complete blink takes one second: the LED remains at each output level for half a second. Its output level changes twice during that second.</p><p>Using a named constant prevents the two waits in the task from diverging accidentally. Changing the constant changes both halves of the cycle together.</p></div>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Half period of the liveness blink.</span></code></pre>
+      <div class="explain"><span class="tag alt">Documentation comment</span>
+        <p>Three slashes make this a documentation comment attached to the item on the next line, rather than an ordinary <code class="inline">//</code> comment. It is compiled into the crate's generated API documentation.</p>
+        <p>It states the meaning precisely: this is the <em>half</em> period, not the full blink period. The value is used twice per cycle, so the full cycle is twice this number.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">const</span> <span class="ty">LED_BLINK_INTERVAL_MS</span>: <span class="ty">u64</span> = <span class="nu">500</span>;</code></pre>
+      <div class="explain"><span class="tag alt">Configuration</span>
+        <p>500 milliseconds at each output level: high for half a second, then low for half a second. One complete cycle therefore takes 1,000 milliseconds, and the pin changes level twice per second.</p>
+        <p><code class="inline">const</code> means the value is substituted wherever the name appears when the program is compiled. It occupies no memory of its own at run time and cannot be changed while the firmware runs.</p>
+        <p>The type is <code class="inline">u64</code> because that is what <code class="inline">Timer::after_millis</code> accepts. Writing it as a typed constant means the two call sites below cannot drift apart: changing this one number changes both halves of the cycle together.</p>
+        <p>It is not marked <code class="inline">pub</code>, so nothing outside this file can read it. No other file needs to know the blink rate.</p>
+      </div>
+    </div>
   </div>
 
-  <h2 class="section" id="task">The task <span class="range">lines 7–18</span></h2>
-  <div class="line">
-    <pre class="code"><code><span class="cm">/// Blink the configured user LED.
-  ///
-  /// On boards where the LED is wired active-low, the visible on/off states are
-  /// reversed, but the blink still confirms that the executor keeps running.</span>
-  <span class="at">#[embassy_executor::task]</span>
-  <span class="k">pub async fn</span> <span class="fn">blink_task</span>(<span class="k">mut</span> led: <span class="ty">Output</span>&lt;<span class="st">'static</span>, <span class="ty">AnyPin</span>&lt;<span class="st">'static</span>&gt;&gt;) {
-    <span class="k">loop</span> {
-      led.<span class="fn">set_high</span>();
-      <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;
-      led.<span class="fn">set_low</span>();
-      <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;
-    }
-  }</code></pre>
-    <div class="explain"><span class="tag">Task body</span><p><code>#[embassy_executor::task]</code> allows the Embassy executor to start this asynchronous function as a task. It is not an operating-system thread. On this single-core firmware, it runs until it reaches an <code>await</code>, then allows other ready tasks to execute.</p><p>The <code>mut led</code> parameter is mutable because both <code>set_high()</code> and <code>set_low()</code> change the output controller's state. Its <code>'static</code> lifetime means the controller remains valid for the entire firmware run.</p><p>The <code>loop</code> has no exit path. The task alternates the electrical level, waiting after each change. No memory is allocated and no shared lock is acquired.</p><p><code>Timer::after_millis(...).await</code> is a waiting point. The task is dormant until the interval has elapsed; it does not run a busy loop and does not intentionally occupy the processor during the 500 ms delay.</p></div>
+  <h2 class="section" id="task">The task <span class="range">lines 7–19</span></h2>
+  <div class="lines">
+    <div class="line">
+<pre class="code"><code><span class="cm">/// Blink the configured user LED.
+///
+/// On boards where the LED is wired active-low, the visible on/off states are
+/// reversed, but the blink still confirms that the executor keeps running.</span></code></pre>
+      <div class="explain"><span class="tag alt">Documentation comment</span>
+        <p>The first line is the summary. The blank comment line separates it from the body, which is the convention Rust's documentation tool expects.</p>
+        <p>The body records the one thing a reader could get wrong. <strong>Active-low</strong> wiring means the LED is connected between the supply and the pin, so it lights when the pin is pulled <em>low</em>. On such a board the LED is lit during the <code class="inline">set_low()</code> half, which is the opposite of what the code appears to say.</p>
+        <p>The comment then makes the point that this does not matter: the purpose of the task is to prove the executor is still scheduling work, and an inverted blink proves that just as well as an upright one. This file deliberately does not try to detect or correct the wiring polarity.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="at">#[embassy_executor::task]</span></code></pre>
+      <div class="explain"><span class="tag">Attribute</span>
+        <p>This attribute rewrites the function below into something the Embassy executor can start. Without it, <code class="inline">spawner.spawn(blink_task::blink_task(led))</code> in <code class="inline">main.rs</code> would not compile.</p>
+        <p>What it generates is a fixed-size storage slot for this task's state. The firmware has no heap, so the memory a task needs while it is suspended cannot be allocated on demand; it has to be reserved when the program is compiled. The attribute reserves exactly one slot here, because the default pool size is one, which means this task may be spawned only once. A second spawn would fail at run time, not at compile time.</p>
+        <p>That failure would be reported. <code class="inline">main.rs</code> does not discard the spawn result: it passes it to its <code class="inline">spawn_task</code> helper, which prints <code class="inline">SPAWN FAILED: blink (…)</code> on the console.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code><span class="k">pub async fn</span> <span class="fn">blink_task</span>(<span class="k">mut</span> led: <span class="ty">Output</span>&lt;<span class="st">'static</span>, <span class="ty">AnyPin</span>&lt;<span class="st">'static</span>&gt;&gt;) {</code></pre>
+      <div class="explain"><span class="tag ext">External interface · called by main.rs</span>
+        <p><code class="inline">pub</code> is required because <code class="inline">main.rs</code> spawns it from another module.</p>
+        <p><code class="inline">async</code> means the function can suspend at an <code class="inline">await</code> and be resumed later. It returns nothing and, because of the endless loop below, never returns at all.</p>
+        <p><code class="inline">mut led</code> — the parameter is taken <strong>by value</strong>, not by reference. The <code class="inline">Output</code> is moved into the task and stays there for the rest of the program run. Once <code class="inline">main.rs</code> has passed it, <code class="inline">main.rs</code> no longer holds it, and any attempt to drive the same pin elsewhere is rejected when the program is compiled. This is what enforces single ownership of the LED pin. It must be <code class="inline">mut</code> because <code class="inline">set_high</code> and <code class="inline">set_low</code> take <code class="inline">&amp;mut self</code>.</p>
+        <p>The two <code class="inline">'static</code> lifetimes say the pin and its type-erased handle are valid for the whole run. A spawned task can outlive whatever spawned it, so it may not hold anything shorter-lived; <code class="inline">'static</code> is the only lifetime that satisfies that.</p>
+        <div class="note">In the current firmware <code class="inline">main.rs</code> constructs the argument as <code class="inline">Output::new(AnyPin::new(io.pins.gpio21), Level::Low)</code> — GPIO21, starting low — and spawns this task <em>before</em> Wi-Fi and before any sensor task, so that a later hang in one of those subsystems still leaves a visible signal that the executor itself is alive.</div>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    <span class="k">loop</span> {</code></pre>
+      <div class="explain"><span class="tag">Control flow</span>
+        <p>An endless loop with no exit condition and no <code class="inline">break</code>. Rust knows it never finishes, so no value has to be returned after it.</p>
+        <p>This is the normal shape of an Embassy task. A task that returned would free its slot and simply stop existing, and the LED would freeze at whatever level it last held.</p>
+        <p>Nothing is allocated and no lock is taken inside the loop, so this task can never run out of memory and can never block another task by holding a resource. It is the cheapest possible proof of life.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        led.<span class="fn">set_high</span>();</code></pre>
+      <div class="explain"><span class="tag">Pin write</span>
+        <p>Drives the pin to the supply voltage. This is a direct write to a hardware register: it takes a handful of processor cycles, cannot fail, and returns nothing.</p>
+        <p>There is no <code class="inline">await</code> here, so the task does not yield; it continues straight to the next line.</p>
+        <p>Whether this lights the LED depends on the wiring, as the documentation comment above explains.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;</code></pre>
+      <div class="explain"><span class="tag">Yield point</span>
+        <p>Waits 500 milliseconds. This is the first of the two suspension points in the task, and the pin stays high throughout.</p>
+        <p><code class="inline">Timer::after_millis(500)</code> only <em>describes</em> the wait; it does nothing on its own. The <code class="inline">.await</code> is what hands control back to the executor, which registers a wake-up 500 ms from now and then runs whichever other task is ready. Nothing here spins or counts cycles, so the nine sensor tasks and the web server are not delayed.</p>
+        <p>The delay is measured from the moment the timer is created, not from the last blink, so a busy executor makes the cycle slightly longer than one second rather than accumulating a fixed drift.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        led.<span class="fn">set_low</span>();</code></pre>
+      <div class="explain"><span class="tag">Pin write</span>
+        <p>Drives the pin to 0 V — the mirror of <code class="inline">set_high()</code> above, and equally immediate.</p>
+        <p>This runs only after the executor has resumed the task, which is the fact the blink actually demonstrates: the task was suspended, the timer fired, and it was scheduled again.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>        <span class="ty">Timer</span>::<span class="fn">after_millis</span>(<span class="ty">LED_BLINK_INTERVAL_MS</span>).<span class="k">await</span>;</code></pre>
+      <div class="explain"><span class="tag">Yield point</span>
+        <p>The second wait, identical to the first, with the pin held low. Using the same constant for both is what makes the cycle symmetrical — a 50 % duty cycle.</p>
+        <p>After this the loop restarts. The total period is 500 ms + 500 ms = 1,000 ms, of which the task is suspended for essentially all of it; its own execution time per cycle is two register writes.</p>
+      </div>
+    </div>
+
+    <div class="line">
+<pre class="code"><code>    }
+}</code></pre>
+      <div class="explain"><span class="tag">Block ends</span>
+        <p>The first brace closes the <code class="inline">loop</code>, sending control back to <code class="inline">led.set_high()</code>. The second closes the function body, which is never reached.</p>
+      </div>
+    </div>
   </div>
 
   <section class="card" id="behaviour">
@@ -128,6 +224,8 @@ sequenceDiagram
       <tr><td>Another task is ready while this task waits</td><td>The executor can run that task. The timer wait is asynchronous rather than a processor-blocking delay.</td></tr>
       <tr><td>LED wiring fault or failed LED</td><td>The firmware may still be running even though no visible blink occurs. Serial diagnostics and the web interface must be used to distinguish this from a stopped device.</td></tr>
       <tr><td>Timer service is not initialized</td><td>The waits cannot complete correctly. The firmware entry point initializes Embassy time before it starts this task.</td></tr>
+      <tr><td>The task is spawned a second time</td><td>The second spawn fails at run time, because the attribute reserves exactly one storage slot. <code>main.rs</code> prints <code>SPAWN FAILED: blink</code>. The first task is unaffected.</td></tr>
+      <tr><td>The executor is busy with other work</td><td>Each half-cycle becomes slightly longer than 500 ms. The delay is measured from when each timer is created, so the error does not accumulate into a growing drift.</td></tr>
     </table>
     <div class="note warn">The task assumes that it is spawned once and is the sole owner of the output controller. Creating a second controller for the same pin elsewhere would violate the intended hardware ownership model.</div>
   </section>
@@ -141,6 +239,10 @@ sequenceDiagram
       <tr><td>Active-low</td><td>A wiring arrangement in which a low output level turns the device on and a high level turns it off.</td></tr>
       <tr><td>Task</td><td>An independently scheduled asynchronous function. Tasks share the processor and cooperate at waiting points.</td></tr>
       <tr><td><code>await</code></td><td>A point at which an asynchronous task pauses until an operation, here a timer, is ready.</td></tr>
+      <tr><td>Yield</td><td>To give control back to the executor at an <code>await</code>, allowing other ready tasks to run.</td></tr>
+      <tr><td>Duty cycle</td><td>The fraction of one period spent at the high level. Both waits use the same constant, so this task's duty cycle is 50 %.</td></tr>
+      <tr><td>Type-erased pin</td><td>A pin whose number is no longer part of its type. <code>AnyPin</code> is the type-erased form, which is what lets this file work with any GPIO number.</td></tr>
+      <tr><td>Task slot</td><td>The fixed block of memory reserved when the program is compiled to hold a task's state while it is suspended. There is no heap, so these cannot be created on demand; <code>#[embassy_executor::task]</code> reserves one per task by default.</td></tr>
     </table>
   </section>
   <footer>Generated documentation for software/src/tasks/blink_task.rs — Home Environmental Sensor.</footer>
