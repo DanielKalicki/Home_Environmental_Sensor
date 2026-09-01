@@ -158,9 +158,9 @@
   <div class="card" id="overview">
     <h2>What this file does</h2>
     <p>
-      Both sensors on this board — the SCD41 carbon dioxide sensor and the SPS30 particle sensor — are wired to
-      the same pair of signal wires, GPIO5 and GPIO6. Only one of them may be spoken to at a time. This file owns
-      those two wires and the hardware block that drives them, and provides three services:
+      Every sensor on this board is wired to the same pair of signal wires, GPIO5 and GPIO6. There are nine of
+      them, and only one may be spoken to at a time. This file owns those two wires and the hardware block that
+      drives them, and provides three services:
     </p>
     <ol>
       <li><strong>Exclusive access.</strong> It packages the hardware in a lock, so a sensor task can claim the
@@ -173,8 +173,8 @@
 
     <h3>What this file does not do</h3>
     <ul>
-      <li>It does not know any sensor command. The byte sequences for the SCD41 and the SPS30 live in
-          <code class="inline">src/drivers/scd41.rs</code> and <code class="inline">src/drivers/sps30.rs</code>.</li>
+      <li>It does not know any sensor command. The byte sequences for each device live in that device's own file
+          under <code class="inline">src/drivers/</code>.</li>
       <li>It does not decide when a measurement is taken. That timing lives in
           <code class="inline">src/tasks/</code>.</li>
       <li>It does not store readings. Storage lives in <code class="inline">src/utils/shared_state.rs</code>.</li>
@@ -196,7 +196,7 @@
     <h2>How I2C works, in the detail needed to read this file</h2>
     <p>
       I2C is a two-wire connection shared by one controller (here, the microcontroller) and any number of
-      peripheral devices (here, the two sensors).
+      peripheral devices (here, the nine sensors listed below).
     </p>
     <table>
       <tr><th>Wire</th><th>Name</th><th>Purpose</th><th>On this board</th></tr>
@@ -291,10 +291,10 @@
           <td>Runs the start-up address scan, before the tasks are started.</td></tr>
       <tr><td><code>print_scan_result</code></td><td><code>main.rs</code></td>
           <td>Prints the addresses that answered.</td></tr>
-      <tr><td><code>SharedI2cBus</code></td><td><code>main.rs</code>, both sensor tasks</td>
-          <td>The bus wrapped in a lock. <code>main.rs</code> stores it permanently and gives both sensor tasks a
-              reference to the same one.</td></tr>
-      <tr><td><code>I2cBus::acquire</code></td><td>both sensor tasks</td>
+      <tr><td><code>SharedI2cBus</code></td><td><code>main.rs</code>, every sensor task</td>
+          <td>The bus wrapped in a lock. <code>main.rs</code> stores it permanently and gives all nine sensor
+              tasks a reference to the same one.</td></tr>
+      <tr><td><code>I2cBus::acquire</code></td><td>every sensor task</td>
           <td>Recovers the wires and builds a working I2C block for one exchange.</td></tr>
       <tr><td><code>recover_i2c_bus</code>, <code>scan_i2c</code></td><td>this file</td>
           <td>Public so they can be called directly with loose pins, but within this project they are only used
@@ -304,20 +304,43 @@
     <h3>3. The devices expected on this bus</h3>
     <table>
       <tr><th>Address</th><th>Device</th><th>Declared in</th></tr>
+      <tr><td><code>0x14</code></td><td>BMM350 — three-axis magnetometer</td><td><code>src/drivers/bmm350.rs</code></td></tr>
+      <tr><td><code>0x33</code></td><td>MLX90640 — 32×24 far-infrared thermal array</td><td><code>src/drivers/mlx90640.rs</code></td></tr>
+      <tr><td><code>0x39</code></td><td>AS7343 — 14-channel spectral sensor</td><td><code>src/drivers/as7343.rs</code></td></tr>
+      <tr><td><code>0x44</code></td><td>SHT41 — temperature, humidity</td><td><code>src/drivers/sht41.rs</code></td></tr>
+      <tr><td><code>0x45</code></td><td>OPT4048 — tristimulus XYZ colour sensor</td><td><code>src/drivers/opt4048.rs</code></td></tr>
+      <tr><td><code>0x46</code></td><td>BMP581 — barometric pressure, temperature</td><td><code>src/drivers/bmp581.rs</code></td></tr>
       <tr><td><code>0x62</code></td><td>SCD41 — carbon dioxide, temperature, humidity</td><td><code>src/drivers/scd41.rs</code></td></tr>
       <tr><td><code>0x69</code></td><td>SPS30 — particle mass concentration</td><td><code>src/drivers/sps30.rs</code></td></tr>
+      <tr><td><code>0x77</code></td><td>BME690 — temperature, pressure, humidity, heated gas-sensing film</td><td><code>src/drivers/bme690.rs</code></td></tr>
     </table>
     <p>
-      A healthy board therefore prints exactly two lines from the scan. Any other outcome points at the wiring:
-      no lines at all usually means a missing supply or missing pull-up resistors; one line means one sensor is
-      not connected.
+      Every one of these addresses is the driver's <code class="inline">DEFAULT_ADDRESS</code>; no task uses
+      <code class="inline">with_address</code>, so the table is the complete set. A healthy board therefore
+      prints exactly nine lines from the scan. Any other outcome points at the wiring: no lines at all usually
+      means a missing supply or missing pull-up resistors, and a missing line identifies which device is not
+      connected.
     </p>
+    <div class="note warn">The OPT4048 can be strapped to four different addresses
+      (<code class="inline">0x44</code>, <code class="inline">0x45</code>, <code class="inline">0x46</code> or
+      <code class="inline">0x47</code>) depending on which signal its address pin is tied to. Two of those
+      collide with the SHT41 at <code class="inline">0x44</code> and the BMP581 at
+      <code class="inline">0x46</code>. The board straps it to <code class="inline">0x45</code> for that reason.
+      A scan that shows <code class="inline">0x44</code> or <code class="inline">0x46</code> but not
+      <code class="inline">0x45</code> means the strap is wrong, not that a device is missing.</div>
 
     <h4>Serial output produced by a scan</h4>
 <pre class="block"><code>Scanning I2C0 at 100 kHz (SDA GPIO5, SCL GPIO6)...
 Scanning I2C0: [##############################] 0x77 (117/117)
+I2C device found at 0x14
+I2C device found at 0x33
+I2C device found at 0x39
+I2C device found at 0x44
+I2C device found at 0x45
+I2C device found at 0x46
 I2C device found at 0x62
-I2C device found at 0x69</code></pre>
+I2C device found at 0x69
+I2C device found at 0x77</code></pre>
     <p>
       The progress line is rewritten in place while the scan runs; only its final state remains on screen. The
       first line above is printed by <code class="inline">main.rs</code>, not by this file.
@@ -345,21 +368,18 @@ flowchart LR
     F3["acquire<br/>recover, then build a fresh I2C block"]
   end
 
-  subgraph TASKS["Sensor tasks (other files)"]
-    T1["scd41_task"]
-    T2["sps30_task"]
+  subgraph TASKS["Sensor tasks (other files), nine in total"]
+    T1["scd41_task, sps30_task,<br/>bme690_task, as7343_task,<br/>bmp581_task, opt4048_task,<br/>sht41_task, bmm350_task,<br/>mlx90640_task"]
   end
 
   M1 --> M2 --> M3 --> M4 --> M5
   M2 -.creates.-> F1
   M3 -.calls.-> F2
-  M5 -- "one shared reference each" --> T1
-  M5 -- "one shared reference each" --> T2
+  M5 -- "the same shared reference to each of the nine" --> T1
   T1 -- "lock, then acquire" --> F3
-  T2 -- "lock, then acquire" --> F3
   F3 --> F2
       </pre>
-      <figcaption>The bus is built and scanned once at start-up, then shared by both sensor tasks for the rest of the run.</figcaption>
+      <figcaption>The bus is built and scanned once at start-up, then shared by all nine sensor tasks for the rest of the run.</figcaption>
     </figure>
 
     <figure class="diagram">
@@ -391,7 +411,7 @@ sequenceDiagram
   A->>W: read the finished measurement
   A->>L: release the lock
       </pre>
-      <figcaption>The lock is held for one exchange only. Long sensor delays happen with the lock released, so the two tasks do not block each other.</figcaption>
+      <figcaption>Two of the nine tasks, shown as an example. The lock is held for one exchange only. Long sensor delays happen with the lock released, so the tasks do not block each other.</figcaption>
     </figure>
   </div>
 
@@ -582,12 +602,12 @@ sequenceDiagram
 <pre class="code"><code><span class="cm">/// The single I2C bus, shared by every sensor task.
 ///
 /// A task holds the lock for a whole transaction, including the awaited
-/// datasheet delays, so the two sensors can never interleave transfers.</span>
+/// datasheet delays, so transfers from different sensors can never interleave.</span>
 <span class="k">pub type</span> <span class="ty">SharedI2cBus</span> = <span class="ty">Mutex</span>&lt;<span class="ty">CriticalSectionRawMutex</span>, <span class="ty">I2cBus</span>&gt;;</code></pre>
       <div class="explain">
         <span class="tag ext">External interface · to the sensor tasks</span>
-        <p>A short name for "an <code class="inline">I2cBus</code> behind a lock". This is the form both sensor
-           tasks receive.</p>
+        <p>A short name for "an <code class="inline">I2cBus</code> behind a lock". This is the form all nine
+           sensor tasks receive.</p>
         <p><strong>Mutex</strong> is short for mutual exclusion. The value inside cannot be reached at all except
            by calling <code class="inline">lock()</code>. If another task already holds the lock, the caller is
            suspended until the holder releases it; it does not spin or waste processor time. Because the value is
@@ -598,7 +618,7 @@ sequenceDiagram
         <p><strong>Duration of the lock.</strong> A task takes the lock, performs one exchange, and releases it.
            The multi-second waits while a sensor produces a measurement happen with the lock released — see the
            sequence diagram above. The comment describes the guarantee this provides: an exchange is never cut in
-           half by the other task.</p>
+           half by another task, no matter which of the nine is holding the lock.</p>
       </div>
     </div>
   </div>
@@ -1073,7 +1093,7 @@ flowchart TD
     <h2>Glossary</h2>
     <table>
       <tr><th>Term</th><th>Meaning in this file</th></tr>
-      <tr><td>I2C</td><td>The two-wire connection shared by both sensors.</td></tr>
+      <tr><td>I2C</td><td>The two-wire connection shared by all nine sensors.</td></tr>
       <tr><td>SDA / SCL</td><td>The data wire and the clock wire; GPIO5 and GPIO6 on this board.</td></tr>
       <tr><td>Controller / device</td><td>The microcontroller starts every exchange; the sensors only answer.</td></tr>
       <tr><td>Open drain</td><td>An output that can pull a wire low or release it, but never drives it high. Required so several devices can share one wire.</td></tr>
@@ -1082,7 +1102,7 @@ flowchart TD
       <tr><td>ACK / NACK</td><td>A device pulling SDA low to confirm it heard the address, or the absence of that confirmation.</td></tr>
       <tr><td>Bit-banging</td><td>Producing a signal by setting a pin in software rather than with a hardware block.</td></tr>
       <tr><td>Bus recovery</td><td>The nine clock pulses and STOP that return the wires to idle.</td></tr>
-      <tr><td>Mutex</td><td>A lock allowing one holder at a time; here it makes the bus usable by two tasks safely.</td></tr>
+      <tr><td>Mutex</td><td>A lock allowing one holder at a time; here it makes the bus usable by the nine sensor tasks safely.</td></tr>
       <tr><td>Peripheral</td><td>A hardware block inside the chip. <code>I2C0</code> is the first of the two I2C blocks.</td></tr>
       <tr><td>7-bit address</td><td>The number identifying a device on the bus. 0x03 to 0x77 are usable; the rest are reserved.</td></tr>
       <tr><td>Busy-wait</td><td>Waiting by counting processor cycles rather than by handing the processor to another task.</td></tr>

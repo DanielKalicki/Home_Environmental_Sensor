@@ -202,8 +202,9 @@
 
     <h3>Constraints that shaped the implementation</h3>
     <ul>
-      <li>The bus is shared with a second sensor, so the driver is deliberately split: starting a measurement and
-          collecting it are two separate calls, and the five seconds in between belong to nobody.</li>
+      <li>The bus is shared with eight other sensor tasks — the SPS30, BME690, AS7343, BMP581, OPT4048, SHT41,
+          BMM350 and MLX90640 — so the driver is deliberately split: starting a measurement and collecting it
+          are two separate calls, and the five seconds in between belong to nobody.</li>
       <li>The firmware has no heap. The largest buffer here is nine bytes on the stack.</li>
       <li>Floating-point arithmetic is used only in the two conversion functions, and only when a caller asks for
           a converted value. The stored reading remains an exact integer.</li>
@@ -343,7 +344,8 @@
 
     <h3>3. Where a reading goes after this file</h3>
 <pre class="block"><code>scd41.rs            read_measurement()  ->  Measurement { co2_ppm, temperature_raw, humidity_raw }
-scd41_task.rs       publish_scd41(measurement)
+scd41_task.rs       printed on the console, always
+scd41_task.rs       publish_scd41(measurement), except for the warm-up readings
 shared_state.rs     stored in a ring buffer in external memory, with a timestamp and a sequence number
 web_server_task.rs  converted to degrees Celsius and percent, written into the JSON reply
 browser             plotted</code></pre>
@@ -351,6 +353,14 @@ browser             plotted</code></pre>
       The two raw words survive unchanged all the way to the web server, which performs the conversion at the
       last possible moment. Nothing between here and there interprets them.
     </p>
+    <div class="note">Not every reading reaches the history. The task discards the first
+      <code class="inline">DISCARDED_WARMUP_READINGS</code> readings — one, at present — after each
+      initialisation, because the first conversion runs before the sensor's own temperature has settled.
+      Discarded readings are still fetched by this file and still printed, marked
+      <code class="inline">(warm-up, discarded)</code>; they are only withheld from
+      <code class="inline">publish_scd41</code>. The count restarts after every re-initialisation, including
+      the one that follows a bus error. This file has no part in that decision and cannot tell the two cases
+      apart.</div>
   </div>
 
   <!-- ================= FLOW ================= -->
@@ -394,7 +404,7 @@ sequenceDiagram
   D->>S: write 0x219D
   D-->>T: returns at once, no waiting
   T->>B: release the lock
-  Note over T,S: Five seconds pass. The sensor converts.<br/>No lock is held, so the other sensor can use the bus.
+  Note over T,S: Five seconds pass. The sensor converts.<br/>No lock is held, so the other eight sensor tasks can use the bus.
   T->>B: take the lock, acquire the bus
   T->>D: read_measurement()
   D->>S: write 0xEC05, wait 1 ms, read 9 bytes
@@ -756,7 +766,9 @@ flowchart TD
            cannot be made about floating-point numbers, and therefore could not be derived if the conversions were
            applied here.</p>
         <p>Storing six bytes rather than the twelve a converted form would need is what allows the history in
-           external memory to hold 8640 readings per sensor.</p>
+           external memory to hold 8640 SCD41 readings, which is a full day at one reading every ten seconds.
+           Each sensor's capacity is computed the same way — the retained window divided by that sensor's own
+           measurement interval — so 8640 is the SCD41 figure, not a figure shared by all of them.</p>
       </div>
     </div>
 
@@ -871,8 +883,9 @@ flowchart TD
            about the sensor, which means creating one costs nothing and there is no possibility of the driver's
            idea of the sensor drifting away from reality.</p>
         <p>This is why the task creates a fresh <code class="inline">Scd41</code> for every exchange rather than
-           keeping one. The task does hold one piece of state itself — whether the sensor still needs
-           initialising — but that belongs to the schedule, not to the protocol.</p>
+           keeping one. The task does hold two pieces of state itself — whether the sensor still needs
+           initialising, and how many warm-up readings remain to be discarded — but both belong to the schedule,
+           not to the protocol.</p>
         <p><strong>The comment describes the timing behaviour precisely.</strong> Sending the bytes occupies the
            processor until the transfer finishes, which at 100 kHz is a few hundred microseconds. Waiting out the
            execution time does not: the task is suspended and other tasks run, which is what allows a five-second
@@ -1430,9 +1443,11 @@ flowchart TD
            sensor needs are left entirely to the caller.</p>
         <p>The reason is the shared bus, and the comment states it. The task's sequence is: take the lock, call
            this, release the lock, wait five seconds, take the lock again, call
-           <code class="inline">read_measurement</code>. During those five seconds the bus is free, and the
-           particle sensor — which measures every five seconds — uses it. If the wait happened inside this
-           function, the lock would be held throughout and the other sensor would be blocked.</p>
+           <code class="inline">read_measurement</code>. During those five seconds the bus is free, and the eight
+           other sensor tasks use it: the SPS30 particle sensor and the AS7343 spectral sensor measure every five
+           seconds, the BME690, BMP581, OPT4048, SHT41 and BMM350 every ten, and the MLX90640 thermal camera
+           takes an image every ten seconds in transfers long enough to matter on their own. If the wait happened
+           inside this function, the lock would be held throughout and every one of them would be blocked.</p>
         <p><code class="inline">map_err(Error::from)</code> converts the hardware error, as in
            <code class="inline">wake_up</code>, because there is no question-mark operator here to do it
            automatically.</p>
@@ -1452,8 +1467,8 @@ flowchart TD
         <span class="tag ext">Not used by this firmware</span>
         <p>The convenient form: start a conversion, wait, collect the result, in one call.</p>
         <p>It is correct and would work, but it holds the driver — and therefore the borrowed bus — for the whole
-           five seconds. On a bus with a second sensor that is unacceptable, so the task uses the split form
-           instead. This version remains for a board where the SCD41 is the only device.</p>
+           five seconds. On a bus carrying nine sensor tasks that is unacceptable, so the task uses the split
+           form instead. This version remains for a board where the SCD41 is the only device.</p>
         <p>The three lines are exactly what the task does, with the difference that the task releases the bus
            across the middle line. Reading them together is the clearest statement of what the split form is
            for.</p>
