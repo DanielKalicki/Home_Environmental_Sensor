@@ -57,7 +57,7 @@ pub struct I2cBus {
 /// The single I2C bus, shared by every sensor task.
 ///
 /// A task holds the lock for a whole transaction, including the awaited
-/// datasheet delays, so the two sensors can never interleave transfers.
+/// datasheet delays, so transfers from different sensors can never interleave.
 pub type SharedI2cBus = Mutex<CriticalSectionRawMutex, I2cBus>;
 
 impl I2cBus {

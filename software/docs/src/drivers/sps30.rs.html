@@ -203,6 +203,19 @@
       <li>It does not schedule fan cleaning, and it does not use the sensor's sleep mode, although both commands
           are implemented.</li>
     </ul>
+
+    <h3>Constraints that shaped the implementation</h3>
+    <ul>
+      <li>The bus is shared with eight other sensor tasks — the SCD41, BME690, AS7343, BMP581, OPT4048, SHT41,
+          BMM350 and MLX90640 — so no function here holds the bus for longer than one exchange. The readiness
+          polling is a loop in the task, not in this file, precisely so that the lock is dropped between
+          attempts.</li>
+      <li>The firmware has no heap. The largest buffer here is sixty bytes on the stack, and it exists only for
+          the duration of one call.</li>
+      <li>The sensor reports its values already in their final units, so this file performs no arithmetic on a
+          reading at all — it only reinterprets bytes. That is the opposite of the carbon dioxide driver, which
+          stores raw words and converts them later.</li>
+    </ul>
   </div>
 
   <!-- ================= QUANTITIES ================= -->
@@ -266,7 +279,7 @@
       computation is written out again in this file so that each driver can be read on its own.
     </p>
     <p>
-      As with the other sensor, a command and its answer must be two separate exchanges. The combined
+      As with the SCD41, a command and its answer must be two separate exchanges. The combined
       write-then-read form is not accepted.
     </p>
 
@@ -353,7 +366,8 @@
 
     <h3>3. Where a reading goes after this file</h3>
 <pre class="block"><code>sps30.rs            read_measured_values()  ->  Measurement { ten floating-point values, 40 bytes }
-sps30_task.rs       publish_sps30(measurement)
+sps30_task.rs       printed on the console, always
+sps30_task.rs       publish_sps30(measurement), except for the warm-up readings
 shared_state.rs     stored whole in a ring buffer in external memory,
                     with a timestamp and a sequence number
 web_server_task.rs  four mass values and the typical particle size are written into the JSON reply;
@@ -363,6 +377,14 @@ browser             plotted</code></pre>
       All ten values are retained in the history even though only five are published, so a future change to the
       web page can show the number concentrations without any change to the storage.
     </p>
+    <div class="note">Not every reading reaches the history. The task discards the first
+      <code class="inline">DISCARDED_WARMUP_READINGS</code> readings — six, at present — after each
+      initialisation. The fan and laser need tens of seconds of continuous running before the optical measurement
+      settles, and six readings five seconds apart cover roughly the first half minute. Discarded readings are
+      still fetched by this file and still printed, marked <code class="inline">(warm-up, discarded)</code>; they
+      are only withheld from <code class="inline">publish_sps30</code>. The count restarts after every
+      re-initialisation, including the one that follows a bus error. This file has no part in that decision and
+      cannot tell a warm-up reading from a settled one.</div>
   </div>
 
   <!-- ================= FLOW ================= -->
@@ -407,7 +429,7 @@ sequenceDiagram
   D-->>T: Measurement, or an error
   T->>B: release the lock
       </pre>
-      <figcaption>The bus is released between every readiness poll, so the carbon dioxide sensor can use it during the waiting.</figcaption>
+      <figcaption>The bus is released between every readiness poll, so the other eight sensor tasks can use it during the waiting.</figcaption>
     </figure>
 
     <figure class="diagram">
@@ -1137,7 +1159,7 @@ flowchart LR
   </div>
 
   <!-- ================= SERIAL ================= -->
-  <h2 class="section" id="s-serial">The serial number <span class="range">lines 243–254</span></h2>
+  <h2 class="section" id="s-serial">The serial number <span class="range">lines 243–257</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Read the ASCII serial number; useful as a presence check.
@@ -1149,7 +1171,10 @@ flowchart LR
         <span class="k">self</span>.<span class="fn">read_response</span>(<span class="ty">CMD_READ_SERIAL_NUMBER</span>, &amp;<span class="k">mut</span> raw, &amp;<span class="k">mut</span> data)
             .<span class="k">await</span>?;
 
-        <span class="k">let</span> len = data.<span class="fn">iter</span>().<span class="fn">position</span>(|&amp;byte| byte == <span class="nu">0</span>).<span class="fn">unwrap_or</span>(data.<span class="fn">len</span>());
+        <span class="k">let</span> len = data
+            .<span class="fn">iter</span>()
+            .<span class="fn">position</span>(|&amp;byte| byte == <span class="nu">0</span>)
+            .<span class="fn">unwrap_or</span>(data.<span class="fn">len</span>());
         <span class="ty">Ok</span>((data, len))
     }</code></pre>
       <div class="explain">
@@ -1168,14 +1193,14 @@ flowchart LR
         <p>Both the buffer and the length are returned, because the buffer has a fixed size and only the caller's
            use of the length makes the unused remainder harmless. The task combines them into text and prints
            <code class="inline">SPS30 found, serial number: ...</code>.</p>
-        <p>As with the other sensor, the value itself is not used. Reading it successfully proves the sensor is
+        <p>As with the SCD41, the value itself is not used. Reading it successfully proves the sensor is
            powered, holds the expected address, accepts commands, and produces correct checksums.</p>
       </div>
     </div>
   </div>
 
   <!-- ================= VALUES ================= -->
-  <h2 class="section" id="s-values">Reading the ten values <span class="range">lines 256–283</span></h2>
+  <h2 class="section" id="s-values">Reading the ten values <span class="range">lines 259–287</span></h2>
   <div class="lines">
     <div class="line">
 <pre class="code"><code>    <span class="cm">/// Read the latest set of measured values.
@@ -1278,7 +1303,8 @@ flowchart LR
       <tr><td>Values are read while the sensor is idle</td><td>The last result, or zeros, reported as success</td>
           <td>Nothing detects this. Ensuring a measurement is running is the caller's responsibility.</td></tr>
       <tr><td>Values are read within thirty seconds of starting the fan</td><td>Real but not yet settled values, reported as success</td>
-          <td>Published as normal. The first few readings after a restart may be inaccurate.</td></tr>
+          <td>Printed, but withheld from the history: the task discards the first six readings after every
+              initialisation, which covers roughly the first half minute.</td></tr>
       <tr><td>The 5 volt supply is missing</td><td><code>Error::Bus</code> for every command</td>
           <td>The sensor also does not appear in the start-up address scan, which identifies this case.</td></tr>
     </table>
@@ -1306,6 +1332,9 @@ flowchart LR
       <tr><td>IEEE-754</td><td>The standard arrangement of bits used for decimal numbers by both the sensor and the microcontroller.</td></tr>
       <tr><td>NUL</td><td>A zero byte, used here to mark the end of the serial number text.</td></tr>
       <tr><td>Fan cleaning</td><td>Ten seconds at full fan speed to clear dust from the optics.</td></tr>
+      <tr><td>Execution time</td><td>The published period after a command during which the sensor cannot answer.</td></tr>
+      <tr><td>Yield</td><td>Suspending the current task so others may run, instead of occupying the processor while waiting.</td></tr>
+      <tr><td>Warm-up reading</td><td>One of the first six readings after the fan is started. Read and printed by the firmware, but deliberately kept out of the retained history because the optics have not settled.</td></tr>
       <tr><td>Repeated START</td><td>Joining a write and a read into one exchange. Not permitted by this sensor.</td></tr>
     </table>
   </div>
